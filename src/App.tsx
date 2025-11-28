@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { AuthContext } from "./context/AuthContext"
-import { LoginPage } from "./pages/LoginPage"
+import LoginPage from "./pages/login"
 import { DashboardLayout } from "./layouts/DashboardLayout"
 import { mockUsers } from "./data/mockData"
 import { hasPermission } from "./types/permissions"

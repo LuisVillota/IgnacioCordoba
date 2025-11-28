@@ -4,7 +4,6 @@ import { useState } from "react"
 import { Plus, Edit2, Eye, Trash2, Scissors } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { ProgramacionForm } from "../components/ProgramacionForm"
-import { ProgramacionModal } from "../components/ProgramacionModal"
 import { mockPacientes } from "../data/mockData"
 
 export interface Programacion {
