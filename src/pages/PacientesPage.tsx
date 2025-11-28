@@ -16,6 +16,7 @@ export interface Paciente {
   tipo_documento: string
   documento: string
   fecha_nacimiento: string
+  genero?: string // Agregar campo opcional
   telefono: string
   email: string
   direccion: string
@@ -118,6 +119,7 @@ export function PacientesPage() {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nombre Completo</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Documento</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Teléfono</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Género</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Estado</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Registro</th>
                 <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Acciones</th>
@@ -126,7 +128,7 @@ export function PacientesPage() {
             <tbody className="divide-y divide-gray-200">
               {filteredPacientes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     No se encontraron pacientes
                   </td>
                 </tr>
@@ -142,6 +144,9 @@ export function PacientesPage() {
                       {paciente.tipo_documento}: {paciente.documento}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{paciente.telefono}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600 capitalize">
+                      {paciente.genero || "No especificado"}
+                    </td>
                     <td className="px-6 py-4 text-sm">
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-semibold ${

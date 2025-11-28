@@ -1,11 +1,18 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Edit2, Eye, Trash2 } from "lucide-react"
+import { Plus, Edit2, Eye, Trash2, Download } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { CotizacionForm } from "../components/CotizacionForm"
 import { CotizacionModal } from "../components/CotizacionModal"
 import { mockPacientes } from "../data/mockData"
+import { generarPDFCotizacion } from "../utils/cotizacionPdfGenerator"
+
+export interface ServicioIncluido {
+  id: string
+  nombre: string
+  requiere: boolean
+}
 
 export interface CotizacionItem {
   id: string
@@ -14,6 +21,7 @@ export interface CotizacionItem {
   cantidad: number
   precio_unitario: number
   subtotal: number
+  tipo?: string
 }
 
 export interface Cotizacion {
@@ -22,13 +30,26 @@ export interface Cotizacion {
   fecha_creacion: string
   estado: "pendiente" | "aceptada" | "rechazada" | "facturada"
   items: CotizacionItem[]
+  serviciosIncluidos: ServicioIncluido[]
   total: number
-  impuesto: number
-  total_con_impuesto: number
+  subtotalProcedimientos: number
+  subtotalAdicionales: number
+  subtotalOtrosAdicionales: number
   observaciones: string
   validez_dias: number
   fecha_vencimiento: string
 }
+
+// Servicios incluidos base
+const serviciosIncluidosBase: ServicioIncluido[] = [
+  { id: "inc1", nombre: "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", requiere: false },
+  { id: "inc2", nombre: "ANESTESIOLOGO", requiere: false },
+  { id: "inc3", nombre: "CONTROLES CON MEDICO Y ENFERMERA", requiere: false },
+  { id: "inc4", nombre: "VALORACION CON ANESTESIOLOGO", requiere: false },
+  { id: "inc5", nombre: "HEMOGRAMA DE CONTROL", requiere: false },
+  { id: "inc6", nombre: "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", requiere: false },
+  { id: "inc7", nombre: "IMPLANTES", requiere: false },
+]
 
 const mockCotizaciones: Cotizacion[] = [
   {
@@ -39,27 +60,75 @@ const mockCotizaciones: Cotizacion[] = [
     items: [
       {
         id: "1",
-        nombre: "Rinoplastia",
-        descripcion: "Cirugía de nariz",
+        nombre: "ABDOMINOPLASTIA + PEXIA SIN IMPLANTES",
+        descripcion: "Procedimiento quirúrgico",
         cantidad: 1,
-        precio_unitario: 4500000,
-        subtotal: 4500000,
+        precio_unitario: 20000000,
+        subtotal: 20000000,
       },
       {
         id: "2",
-        nombre: "Anestesia",
-        descripcion: "Honorarios de anestesiólogo",
+        nombre: "SEGURO PARA COMPLICACIONES QUIRURGICAS",
+        descripcion: "Seguro médico",
         cantidad: 1,
-        precio_unitario: 800000,
-        subtotal: 800000,
+        precio_unitario: 75200,
+        subtotal: 75200,
       },
     ],
-    total: 5300000,
-    impuesto: 795000,
-    total_con_impuesto: 6095000,
-    observaciones: "Valido por 7 días",
+    serviciosIncluidos: serviciosIncluidosBase.map(servicio => ({
+      ...servicio,
+      requiere: true
+    })),
+    total: 20075200,
+    subtotalProcedimientos: 20000000,
+    subtotalAdicionales: 75200,
+    subtotalOtrosAdicionales: 0,
+    observaciones: "Valido por 7 días. Se requiere depósito del 50% para programar.",
     validez_dias: 7,
     fecha_vencimiento: "2024-11-27",
+  },
+  {
+    id: "2",
+    id_paciente: "2",
+    fecha_creacion: "2024-11-21",
+    estado: "pendiente",
+    items: [
+      {
+        id: "1",
+        nombre: "LIPOESCULTURA 3 HORAS",
+        descripcion: "Procedimiento de liposucción",
+        cantidad: 1,
+        precio_unitario: 12000000,
+        subtotal: 12000000,
+      },
+      {
+        id: "2",
+        nombre: "CAMARA HIPERBARICA (5 SESIONES)",
+        descripcion: "Terapia complementaria",
+        cantidad: 1,
+        precio_unitario: 700000,
+        subtotal: 700000,
+      },
+      {
+        id: "3",
+        nombre: "FAJA RIGIDA",
+        descripcion: "Post-operatorio",
+        cantidad: 1,
+        precio_unitario: 290000,
+        subtotal: 290000,
+      },
+    ],
+    serviciosIncluidos: serviciosIncluidosBase.map(servicio => ({
+      ...servicio,
+      requiere: true
+    })),
+    total: 12990000,
+    subtotalProcedimientos: 12000000,
+    subtotalAdicionales: 700000,
+    subtotalOtrosAdicionales: 290000,
+    observaciones: "Incluye todas las sesiones de cámara hiperbárica programadas.",
+    validez_dias: 7,
+    fecha_vencimiento: "2024-11-28",
   },
 ]
 
@@ -69,6 +138,7 @@ export function CotizacionesPage() {
   const [selectedCotizacion, setSelectedCotizacion] = useState<Cotizacion | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterEstado, setFilterEstado] = useState<string>("todas")
+  const [descargandoPDF, setDescargandoPDF] = useState<string | null>(null)
 
   const filteredCotizaciones = cotizaciones.filter((c) => filterEstado === "todas" || c.estado === filterEstado)
 
@@ -100,6 +170,32 @@ export function CotizacionesPage() {
   const handleDelete = (id: string) => {
     if (confirm("¿Estás seguro de que deseas eliminar esta cotización?")) {
       setCotizaciones(cotizaciones.filter((c) => c.id !== id))
+    }
+  }
+
+  const handleDescargarPDF = async (cotizacion: Cotizacion) => {
+    const paciente = mockPacientes.find((p) => p.id === cotizacion.id_paciente)
+    if (!paciente) {
+      alert("No se encontró información del paciente")
+      return
+    }
+
+    setDescargandoPDF(cotizacion.id)
+    try {
+      await generarPDFCotizacion({
+        cotizacion: {
+          ...cotizacion,
+          total: cotizacion.total
+        },
+        paciente,
+        items: cotizacion.items,
+        serviciosIncluidos: cotizacion.serviciosIncluidos
+      })
+    } catch (error) {
+      console.error("Error descargando PDF:", error)
+      alert("Error al descargar el PDF. Por favor, intente nuevamente.")
+    } finally {
+      setDescargandoPDF(null)
     }
   }
 
@@ -181,13 +277,13 @@ export function CotizacionesPage() {
                       <tr key={cot.id} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-4 text-sm font-medium text-gray-600">CZ-{cot.id}</td>
                         <td className="px-6 py-4 text-sm">
-                          <p className="font-medium text-gray-800">{paciente?.nombres}</p>
+                          <p className="font-medium text-gray-800">{paciente?.nombres} {paciente?.apellidos}</p>
                           <p className="text-xs text-gray-600">{paciente?.documento}</p>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">{cot.fecha_creacion}</td>
                         <td className="px-6 py-4 text-sm text-right">
                           <p className="font-semibold text-gray-800">
-                            ${cot.total_con_impuesto.toLocaleString("es-CO")}
+                            ${cot.total.toLocaleString("es-CO")}
                           </p>
                         </td>
                         <td className="px-6 py-4 text-sm">
@@ -199,6 +295,14 @@ export function CotizacionesPage() {
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <div className="flex items-center justify-center space-x-2">
+                            <button
+                              onClick={() => handleDescargarPDF(cot)}
+                              disabled={descargandoPDF === cot.id}
+                              className="p-2 text-[#1a6b32] hover:bg-blue-50 rounded-lg transition disabled:opacity-50"
+                              title="Descargar PDF"
+                            >
+                              <Download size={18} />
+                            </button>
                             <button
                               onClick={() => setSelectedCotizacion(cot)}
                               className="p-2 text-[#1a6b32] hover:bg-blue-50 rounded-lg transition"
@@ -215,13 +319,15 @@ export function CotizacionesPage() {
                                 <Edit2 size={18} />
                               </button>
                             </ProtectedRoute>
-                            <button
-                              onClick={() => handleDelete(cot.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Eliminar"
-                            >
-                              <Trash2 size={18} />
-                            </button>
+                            <ProtectedRoute permissions={["editar_cotizacion"]}>
+                              <button
+                                onClick={() => handleDelete(cot.id)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                                title="Eliminar"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </ProtectedRoute>
                           </div>
                         </td>
                       </tr>

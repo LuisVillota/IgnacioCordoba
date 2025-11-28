@@ -1,8 +1,10 @@
 "use client"
 
-import { X, Calendar } from "lucide-react"
+import { X, Calendar, Download } from "lucide-react"
 import type { Cotizacion } from "../pages/CotizacionesPage"
 import type { Paciente } from "../pages/PacientesPage"
+import { generarPDFCotizacion } from "../utils/cotizacionPdfGenerator"
+import { useState } from "react"
 
 interface CotizacionModalProps {
   cotizacion: Cotizacion
@@ -12,11 +14,50 @@ interface CotizacionModalProps {
 }
 
 export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: CotizacionModalProps) {
+  const [descargando, setDescargando] = useState(false)
+
   const estadoColors: Record<string, string> = {
     pendiente: "bg-yellow-100 text-yellow-800",
     aceptada: "bg-green-100 text-green-800",
     rechazada: "bg-red-100 text-red-800",
     facturada: "bg-blue-100 text-blue-800",
+  }
+
+  const handleDescargarPDF = async () => {
+    if (!paciente) {
+      alert("No se encontró información del paciente")
+      return
+    }
+
+    setDescargando(true)
+    try {
+      // Calcular subtotales para el PDF
+      const subtotalProcedimientos = cotizacion.items
+        .filter(item => item.nombre.includes('ABDOMINOPLASTIA') || item.nombre.includes('LIPOESCULTURA') || item.nombre.includes('GLUTEOPLASTIA') || item.nombre.includes('CORRECCION'))
+        .reduce((sum, item) => sum + item.subtotal, 0)
+      
+      const subtotalAdicionales = cotizacion.items
+        .filter(item => !item.nombre.includes('ABDOMINOPLASTIA') && !item.nombre.includes('LIPOESCULTURA') && !item.nombre.includes('GLUTEOPLASTIA') && !item.nombre.includes('CORRECCION'))
+        .reduce((sum, item) => sum + item.subtotal, 0)
+
+      await generarPDFCotizacion({
+        cotizacion: {
+          ...cotizacion,
+          subtotalProcedimientos,
+          subtotalAdicionales,
+          subtotalOtrosAdicionales: 0, // Puedes ajustar esto según tu lógica
+          total: cotizacion.total
+        },
+        paciente,
+        items: cotizacion.items,
+        serviciosIncluidos: cotizacion.serviciosIncluidos || []
+      })
+    } catch (error) {
+      console.error("Error descargando PDF:", error)
+      alert("Error al descargar el PDF. Por favor, intente nuevamente.")
+    } finally {
+      setDescargando(false)
+    }
   }
 
   return (
@@ -107,6 +148,14 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
 
         {/* Actions */}
         <div className="flex items-center space-x-3 p-6 border-t border-gray-200">
+          <button
+            onClick={handleDescargarPDF}
+            disabled={descargando}
+            className="flex items-center space-x-2 bg-[#1a6b32] hover:bg-[#155529] disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-lg transition"
+          >
+            <Download size={18} />
+            <span>{descargando ? "Descargando..." : "Descargar PDF"}</span>
+          </button>
           <button
             onClick={onEdit}
             className="flex-1 bg-[#669933] hover:bg-[#5a8a2a] text-white font-medium py-2 rounded-lg transition"

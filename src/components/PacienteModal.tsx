@@ -1,7 +1,9 @@
 "use client"
 
-import { X, Mail, Phone, MapPin, Calendar } from "lucide-react"
+import { X, Mail, Phone, MapPin, Calendar, Download } from "lucide-react"
 import type { Paciente } from "../pages/PacientesPage"
+import { generarPDFPaciente } from "../utils/pacientePdfGenerator"
+import { useState } from "react"
 
 interface PacienteModalProps {
   paciente: Paciente
@@ -9,6 +11,20 @@ interface PacienteModalProps {
 }
 
 export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
+  const [descargando, setDescargando] = useState(false)
+
+  const handleDescargarPDF = async () => {
+    setDescargando(true)
+    try {
+      await generarPDFPaciente(paciente)
+    } catch (error) {
+      console.error("Error descargando PDF:", error)
+      alert("Error al descargar el PDF. Por favor, intente nuevamente.")
+    } finally {
+      setDescargando(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full">
@@ -64,6 +80,10 @@ export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
                   <p className="font-medium text-gray-800">{paciente.fecha_nacimiento}</p>
                 </div>
                 <div>
+                  <p className="text-xs text-gray-600">Género</p>
+                  <p className="font-medium text-gray-800 capitalize">{paciente.genero}</p>
+                </div>
+                <div>
                   <p className="text-xs text-gray-600">Estado</p>
                   <span
                     className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
@@ -104,7 +124,15 @@ export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end p-6 border-t border-gray-200">
+        <div className="flex items-center justify-between p-6 border-t border-gray-200">
+          <button
+            onClick={handleDescargarPDF}
+            disabled={descargando}
+            className="flex items-center space-x-2 bg-[#1a6b32] hover:bg-[#155529] disabled:bg-gray-400 text-white font-medium px-4 py-2 rounded-lg transition"
+          >
+            <Download size={18} />
+            <span>{descargando ? "Descargando..." : "Descargar PDF"}</span>
+          </button>
           <button
             onClick={onClose}
             className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium px-4 py-2 rounded-lg transition"

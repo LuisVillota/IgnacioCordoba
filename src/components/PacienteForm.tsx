@@ -19,6 +19,7 @@ export function PacienteForm({ paciente, onSave, onClose }: PacienteFormProps) {
     tipo_documento: paciente?.tipo_documento || "CC",
     documento: paciente?.documento || "",
     fecha_nacimiento: paciente?.fecha_nacimiento || "",
+    genero: paciente?.genero || "",
     telefono: paciente?.telefono || "",
     email: paciente?.email || "",
     direccion: paciente?.direccion || "",
@@ -116,14 +117,30 @@ export function PacienteForm({ paciente, onSave, onClose }: PacienteFormProps) {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Nacimiento</label>
-            <input
-              type="date"
-              value={formData.fecha_nacimiento}
-              onChange={(e) => setFormData({ ...formData, fecha_nacimiento: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8]"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Nacimiento</label>
+              <input
+                type="date"
+                value={formData.fecha_nacimiento}
+                onChange={(e) => setFormData({ ...formData, fecha_nacimiento: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Género</label>
+              <select
+                value={formData.genero}
+                onChange={(e) => setFormData({ ...formData, genero: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8]"
+              >
+                <option value="">Seleccionar género</option>
+                <option value="masculino">Masculino</option>
+                <option value="femenino">Femenino</option>
+                <option value="otro">Otro</option>
+                <option value="prefiero no decir">Prefiero no decir</option>
+              </select>
+            </div>
           </div>
 
           <div>
