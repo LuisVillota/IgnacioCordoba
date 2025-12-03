@@ -5,6 +5,7 @@ import { Plus, Edit2, Eye, Trash2, Download } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { CotizacionForm } from "../components/CotizacionForm"
 import { CotizacionModal } from "../components/CotizacionModal"
+import { PagoModal } from "../components/PagoModal"
 import { mockPacientes } from "../data/mockData"
 import { generarPDFCotizacion } from "../utils/cotizacionPdfGenerator"
 
@@ -25,6 +26,23 @@ export interface CotizacionItem {
 }
 
 export interface Cotizacion {
+  id: string
+  id_paciente: string
+  fecha_creacion: string
+  estado: "pendiente" | "aceptada" | "rechazada" | "facturada"
+  items: CotizacionItem[]
+  serviciosIncluidos: ServicioIncluido[]
+  total: number
+  subtotalProcedimientos: number
+  subtotalAdicionales: number
+  subtotalOtrosAdicionales: number
+  observaciones: string
+  validez_dias: number
+  fecha_vencimiento: string
+}
+
+
+export interface Pago {
   id: string
   id_paciente: string
   fecha_creacion: string
@@ -139,6 +157,8 @@ export function CotizacionesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterEstado, setFilterEstado] = useState<string>("todas")
   const [descargandoPDF, setDescargandoPDF] = useState<string | null>(null)
+  const [selectedPago, setSelectedPago] = useState<Cotizacion | null>(null)
+
 
   const filteredCotizaciones = cotizaciones.filter((c) => filterEstado === "todas" || c.estado === filterEstado)
 
@@ -160,6 +180,8 @@ export function CotizacionesPage() {
     }
     setShowForm(false)
   }
+
+  
 
   const handleEdit = (cotizacion: Cotizacion) => {
     setEditingId(cotizacion.id)
@@ -328,6 +350,21 @@ export function CotizacionesPage() {
                                 <Trash2 size={18} />
                               </button>
                             </ProtectedRoute>
+                            
+                            <ProtectedRoute permissions={["editar_cotizacion"]}>
+                              <button
+                                onClick={() => setSelectedPago(cot)}
+                                className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition"
+                                title="Realizar Pago"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/>
+                                  <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/>
+                                  <path d="M12 18V6"/>
+                                </svg>
+                              </button>
+                            </ProtectedRoute>
+                            
                           </div>
                         </td>
                       </tr>
@@ -340,6 +377,16 @@ export function CotizacionesPage() {
         </div>
 
         {/* Modals */}
+
+        {selectedPago && (
+          <PagoModal
+            cotizacion={selectedPago}
+            paciente={mockPacientes.find((p) => p.id === selectedPago.id_paciente)}
+            onClose={() => setSelectedPago(null)}
+            onEdit={() => {}}
+          />
+        )}
+
         {showForm && (
           <CotizacionForm
             cotizacion={selectedCotizacion || undefined}
@@ -354,7 +401,6 @@ export function CotizacionesPage() {
         {selectedCotizacion && !showForm && (
           <CotizacionModal
             cotizacion={selectedCotizacion}
-            paciente={mockPacientes.find((p) => p.id === selectedCotizacion.id_paciente)}
             onClose={() => setSelectedCotizacion(null)}
             onEdit={() => handleEdit(selectedCotizacion)}
           />

@@ -1,20 +1,30 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from "react"
+
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import { PlanQuirurgico } from "../types/planQuirurgico"
+import EsquemaModal from "./EsquemaModal";
+
+type ProcedureType = 'lipo' | 'lipotras' | 'musculo' | 'incision';
 
 interface Props {
   plan?: PlanQuirurgico
   onGuardar: (plan: PlanQuirurgico) => void
 }
 
-// Interface para guardar las acciones de dibujo
 interface DibujoAccion {
-  tipo: "lipo" | "lipotras" | "musculo" | "incision"
-  x: number
-  y: number
-  timestamp: number
-  tamaño: number
+  tipo: ProcedureType; // Usamos el tipo ProcedureType
+  x: number;
+  y: number;
+  timestamp: number;
+  tamaño: number;
+}
+
+type ZoneMarkingsSVG = { [zoneId: string]: ProcedureType | null; };
+
+interface Props {
+  plan?: PlanQuirurgico;
+  onGuardar: (plan: PlanQuirurgico) => void;
 }
 
 export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
@@ -562,7 +572,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
       <section className="p-4 border rounded bg-white">
         <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Datos del Paciente</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <input 
+          <input g
             className="border p-2" 
             placeholder="Identificación" 
             value={datosPaciente.identificacion}
