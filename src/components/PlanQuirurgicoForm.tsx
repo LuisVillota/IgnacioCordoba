@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react"
 import { PlanQuirurgico } from "../types/planQuirurgico"
-import EsquemaModal from "./EsquemaModal";
+
 
 type ProcedureType = 'lipo' | 'lipotras' | 'musculo' | 'incision';
 
@@ -655,6 +655,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
             </button>
             <button onClick={resetZoom} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600">
               Reset Zoom
+            </button>
+
+          <button onClick={resetZoom} className="px-3 py-1 bg-red-500 text-white rounded hover:bg-gray-600">
+              ABRIR ESQUEMA
             </button>
           </div>
           

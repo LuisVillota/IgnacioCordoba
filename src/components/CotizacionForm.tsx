@@ -277,7 +277,7 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
                   </option>
                 ))}
               </select>
-              <button
+              <button  
                 type="button"
                 onClick={() => handleAddItem("procedimiento")}
                 className="bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition"
