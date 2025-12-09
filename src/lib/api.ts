@@ -22,6 +22,18 @@ const formatDateTimeForDB = (fecha: string, hora: string): string => {
   return `${fechaFormateada} ${horaFormateada}`;
 };
 
+// Función helper para formatear fecha de consulta
+const formatDateForDB = (fecha: string): string => {
+  if (!fecha) return new Date().toISOString().split('T')[0];
+  
+  let fechaFormateada = fecha;
+  if (fecha.includes('T')) {
+    fechaFormateada = fecha.split('T')[0];
+  }
+  
+  return fechaFormateada;
+};
+
 // Cliente HTTP reutilizable
 export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -196,6 +208,80 @@ export const api = {
   
   deleteCita: (id: number) =>
     fetchAPI(`/api/citas/${id}`, { method: 'DELETE' }),
+  
+  // ===== HISTORIA CLÍNICA =====
+  getHistoriasClinicas: (limit?: number, offset?: number) =>
+    fetchAPI(`/api/historias-clinicas?limit=${limit || 100}&offset=${offset || 0}`),
+  
+  getHistoriasByPaciente: (pacienteId: number) =>
+    fetchAPI(`/api/historias-clinicas/paciente/${pacienteId}`),
+  
+  getHistoriaClinica: (id: number) => fetchAPI(`/api/historias-clinicas/${id}`),
+  
+  createHistoriaClinica: (data: any) => {
+    console.log("📤 Creando historia clínica con datos:", data);
+    
+    // Convertir antecedentes en un objeto JSON
+    const antecedentesData = {
+      medicos: data.antecedentes_medicos || '',
+      quirurgicos: data.antecedentes_quirurgicos || '',
+      alergicos: data.antecedentes_alergicos || '',
+      farmacologicos: data.antecedentes_farmacologicos || ''
+    };
+    
+    const backendData = {
+      paciente_id: parseInt(data.paciente_id),
+      usuario_id: parseInt(data.medico_id) || 1,
+      fecha_consulta: data.fecha_consulta ? `${formatDateForDB(data.fecha_consulta)} 00:00:00` : new Date().toISOString().split('T')[0] + ' 00:00:00',
+      motivo_consulta: data.motivo_consulta || '',
+      antecedentes: JSON.stringify(antecedentesData),
+      exploracion_fisica: data.exploracion_fisica || '',
+      diagnostico: data.diagnostico || '',
+      tratamiento: data.tratamiento || '',
+      recomendaciones: data.recomendaciones || ''
+    };
+    
+    console.log("📤 Enviando al backend:", backendData);
+    
+    return fetchAPI('/api/historias-clinicas', {
+      method: 'POST',
+      body: JSON.stringify(backendData)
+    });
+  },
+  
+  updateHistoriaClinica: (id: number, data: any) => {
+    console.log("📤 Actualizando historia clínica ID:", id, "con datos:", data);
+    
+    // Convertir antecedentes en un objeto JSON
+    const antecedentesData = {
+      medicos: data.antecedentes_medicos || '',
+      quirurgicos: data.antecedentes_quirurgicos || '',
+      alergicos: data.antecedentes_alergicos || '',
+      farmacologicos: data.antecedentes_farmacologicos || ''
+    };
+    
+    const backendData = {
+      paciente_id: parseInt(data.paciente_id),
+      usuario_id: parseInt(data.medico_id) || 1,
+      fecha_consulta: data.fecha_consulta ? `${formatDateForDB(data.fecha_consulta)} 00:00:00` : new Date().toISOString().split('T')[0] + ' 00:00:00',
+      motivo_consulta: data.motivo_consulta || '',
+      antecedentes: JSON.stringify(antecedentesData),
+      exploracion_fisica: data.exploracion_fisica || '',
+      diagnostico: data.diagnostico || '',
+      tratamiento: data.tratamiento || '',
+      recomendaciones: data.recomendaciones || ''
+    };
+    
+    console.log("📤 Enviando al backend:", backendData);
+    
+    return fetchAPI(`/api/historias-clinicas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(backendData)
+    });
+  },
+  
+  deleteHistoriaClinica: (id: number) =>
+    fetchAPI(`/api/historias-clinicas/${id}`, { method: 'DELETE' }),
   
   // ===== ESTADOS =====
   getEstadosCitas: () => fetchAPI('/api/estados/citas'),
@@ -430,6 +516,67 @@ export const transformBackendToFrontend = {
     };
   },
   
+  // Transformar historia clínica del backend al formato del frontend
+  historiaClinica: (backendHistoria: any) => {
+    // Parsear antecedentes JSON
+    let antecedentes = {
+      medicos: '',
+      quirurgicos: '',
+      alergicos: '',
+      farmacologicos: ''
+    };
+    
+    try {
+      if (backendHistoria.antecedentes) {
+        if (typeof backendHistoria.antecedentes === 'string') {
+          antecedentes = JSON.parse(backendHistoria.antecedentes);
+        } else {
+          antecedentes = backendHistoria.antecedentes;
+        }
+      }
+    } catch (error) {
+      console.warn('Error parseando antecedentes:', error);
+    }
+    
+    // Extraer fecha de fecha_consulta
+    let fechaCreacion = '';
+    if (backendHistoria.fecha_consulta) {
+      const fechaStr = backendHistoria.fecha_consulta.toString();
+      if (fechaStr.includes(' ')) {
+        fechaCreacion = fechaStr.split(' ')[0];
+      } else if (fechaStr.includes('T')) {
+        fechaCreacion = fechaStr.split('T')[0];
+      } else {
+        fechaCreacion = fechaStr;
+      }
+    } else if (backendHistoria.fecha_creacion) {
+      const fechaStr = backendHistoria.fecha_creacion.toString();
+      if (fechaStr.includes(' ')) {
+        fechaCreacion = fechaStr.split(' ')[0];
+      } else if (fechaStr.includes('T')) {
+        fechaCreacion = fechaStr.split('T')[0];
+      } else {
+        fechaCreacion = fechaStr;
+      }
+    }
+    
+    return {
+      id: backendHistoria.id?.toString() || '',
+      id_paciente: backendHistoria.paciente_id?.toString() || '',
+      fecha_creacion: fechaCreacion || new Date().toISOString().split('T')[0],
+      motivo_consulta: backendHistoria.motivo_consulta || '',
+      antecedentes_medicos: antecedentes.medicos || '',
+      antecedentes_quirurgicos: antecedentes.quirurgicos || '',
+      antecedentes_alergicos: antecedentes.alergicos || '',
+      antecedentes_farmacologicos: antecedentes.farmacologicos || '',
+      exploracion_fisica: backendHistoria.exploracion_fisica || '',
+      diagnostico: backendHistoria.diagnostico || '',
+      tratamiento: backendHistoria.tratamiento || '',
+      recomendaciones: backendHistoria.recomendaciones || '',
+      medico_id: backendHistoria.usuario_id?.toString() || '',
+    };
+  },
+  
   // Transformar procedimiento del backend al formato del frontend
   procedimiento: (backendProcedimiento: any) => ({
     id: backendProcedimiento.id?.toString() || '',
@@ -439,7 +586,7 @@ export const transformBackendToFrontend = {
     tiempo_promedio: 90,
   }),
   
-  // Transformación inversa
+  // Transformación inversa - Paciente
   pacienteToBackend: (frontendPaciente: any) => {
     let genero = frontendPaciente.genero;
     if (genero) {
@@ -468,6 +615,29 @@ export const transformBackendToFrontend = {
       ciudad: frontendPaciente.ciudad,
     };
   },
+  
+  // Transformación inversa - Historia Clínica
+  historiaClinicaToBackend: (frontendHistoria: any) => {
+    // Convertir antecedentes en un objeto JSON
+    const antecedentesData = {
+      medicos: frontendHistoria.antecedentes_medicos || '',
+      quirurgicos: frontendHistoria.antecedentes_quirurgicos || '',
+      alergicos: frontendHistoria.antecedentes_alergicos || '',
+      farmacologicos: frontendHistoria.antecedentes_farmacologicos || ''
+    };
+    
+    return {
+      paciente_id: parseInt(frontendHistoria.paciente_id),
+      usuario_id: parseInt(frontendHistoria.medico_id) || 1,
+      fecha_consulta: frontendHistoria.fecha_consulta ? `${formatDateForDB(frontendHistoria.fecha_consulta)} 00:00:00` : new Date().toISOString().split('T')[0] + ' 00:00:00',
+      motivo_consulta: frontendHistoria.motivo_consulta || '',
+      antecedentes: JSON.stringify(antecedentesData),
+      exploracion_fisica: frontendHistoria.exploracion_fisica || '',
+      diagnostico: frontendHistoria.diagnostico || '',
+      tratamiento: frontendHistoria.tratamiento || '',
+      recomendaciones: frontendHistoria.recomendaciones || ''
+    };
+  },
 };
 
 // Helper para debugging
@@ -494,6 +664,7 @@ export const debugAPI = {
       { name: 'Usuarios', fn: () => api.getUsuarios() },
       { name: 'Pacientes', fn: () => api.getPacientes(5, 0) },
       { name: 'Citas', fn: () => api.getCitas(5, 0) },
+      { name: 'Historia Clínica', fn: () => api.getHistoriasClinicas(5, 0) },
       { name: 'Procedimientos', fn: () => api.getProcedimientos() },
       { name: 'Dashboard Stats', fn: () => api.getDashboardStats() },
     ];
