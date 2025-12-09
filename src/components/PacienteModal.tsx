@@ -3,7 +3,7 @@
 import { X, Mail, Phone, MapPin, Calendar, Download } from "lucide-react"
 import type { Paciente } from "../pages/PacientesPage"
 import { generarPDFPaciente } from "../utils/pacientePdfGenerator"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 interface PacienteModalProps {
   paciente: Paciente
@@ -12,11 +12,17 @@ interface PacienteModalProps {
 
 export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
   const [descargando, setDescargando] = useState(false)
+  const [currentPaciente, setCurrentPaciente] = useState(paciente)
+
+  // Actualizar el estado local cuando cambie el prop paciente
+  useEffect(() => {
+    setCurrentPaciente(paciente)
+  }, [paciente])
 
   const handleDescargarPDF = async () => {
     setDescargando(true)
     try {
-      await generarPDFPaciente(paciente)
+      await generarPDFPaciente(currentPaciente)
     } catch (error) {
       console.error("Error descargando PDF:", error)
       alert("Error al descargar el PDF. Por favor, intente nuevamente.")
@@ -41,10 +47,10 @@ export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
           {/* Name */}
           <div className="border-b border-gray-200 pb-6">
             <h3 className="text-2xl font-bold text-[#1a6b32]">
-              {paciente.nombres} {paciente.apellidos}
+              {currentPaciente.nombres} {currentPaciente.apellidos}
             </h3>
             <p className="text-gray-600 text-sm mt-1">
-              {paciente.tipo_documento}: {paciente.documento}
+              {currentPaciente.tipo_documento}: {currentPaciente.documento}
             </p>
           </div>
 
@@ -58,14 +64,14 @@ export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
                   <Phone size={18} className="text-[#669933] mt-1" />
                   <div>
                     <p className="text-xs text-gray-600">Teléfono</p>
-                    <p className="font-medium text-gray-800">{paciente.telefono}</p>
+                    <p className="font-medium text-gray-800">{currentPaciente.telefono}</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <Mail size={18} className="text-[#99d6e8] mt-1" />
                   <div>
                     <p className="text-xs text-gray-600">Email</p>
-                    <p className="font-medium text-gray-800">{paciente.email}</p>
+                    <p className="font-medium text-gray-800">{currentPaciente.email}</p>
                   </div>
                 </div>
               </div>
@@ -77,22 +83,22 @@ export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-gray-600">Fecha de Nacimiento</p>
-                  <p className="font-medium text-gray-800">{paciente.fecha_nacimiento}</p>
+                  <p className="font-medium text-gray-800">{currentPaciente.fecha_nacimiento}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-600">Género</p>
-                  <p className="font-medium text-gray-800 capitalize">{paciente.genero}</p>
+                  <p className="font-medium text-gray-800 capitalize">{currentPaciente.genero}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-600">Estado</p>
                   <span
                     className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                      paciente.estado_paciente === "activo"
+                      currentPaciente.estado_paciente === "activo"
                         ? "bg-[#99d6e8]/30 text-[#1a6b32]"
                         : "bg-gray-200 text-gray-600"
                     }`}
                   >
-                    {paciente.estado_paciente === "activo" ? "Activo" : "Inactivo"}
+                    {currentPaciente.estado_paciente === "activo" ? "Activo" : "Inactivo"}
                   </span>
                 </div>
               </div>
@@ -105,8 +111,8 @@ export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
               <MapPin size={18} className="text-[#1a6b32] mt-1" />
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Dirección</p>
-                <p className="text-gray-800">{paciente.direccion}</p>
-                <p className="text-gray-600 text-sm">{paciente.ciudad}</p>
+                <p className="text-gray-800">{currentPaciente.direccion}</p>
+                <p className="text-gray-600 text-sm">{currentPaciente.ciudad}</p>
               </div>
             </div>
           </div>
@@ -117,7 +123,7 @@ export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
               <Calendar size={18} className="text-blue-600 mt-1" />
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Registro</p>
-                <p className="text-gray-800 font-medium">{paciente.fecha_registro}</p>
+                <p className="text-gray-800 font-medium">{currentPaciente.fecha_registro}</p>
               </div>
             </div>
           </div>

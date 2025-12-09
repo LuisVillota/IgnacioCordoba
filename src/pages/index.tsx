@@ -1,5 +1,4 @@
-﻿// src/pages/index.tsx
-import { useContext, useEffect } from 'react'
+﻿import { useContext, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { AuthContext } from '../context/AuthContext'
 import { DashboardLayout } from '../layouts/DashboardLayout'

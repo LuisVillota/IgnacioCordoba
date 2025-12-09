@@ -5,7 +5,7 @@ load_dotenv()
 
 class Settings:
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "mysql+pymysql://root:@localhost:3306/consultorio_db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "mysql+pymysql://root:@localhost:3306/prueba_consultorio_db")
     
     # Security
     SECRET_KEY: str = os.getenv("SECRET_KEY", "clave_secreta_para_desarrollo_cambiar_en_produccion")
