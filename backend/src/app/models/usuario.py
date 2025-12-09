@@ -1,8 +1,9 @@
-from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Table
+from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, DateTime
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
-# Tabla intermedia para Rol-Permiso
+# Tabla intermedia Rol_Permiso
 rol_permiso = Table(
     'rol_permiso',
     BaseModel.metadata,
@@ -11,34 +12,32 @@ rol_permiso = Table(
 )
 
 class Rol(BaseModel):
-    __tablename__ = "rol"
+    __tablename__ = "rol"  # Nota: en SQL es "Rol" con mayúscula
     
-    nombre = Column(String(50), unique=True, nullable=False)
-    descripcion = Column(String(200))
+    nombre = Column(String(50), nullable=False)
+    descripcion = Column(String(255))
     
-    # Relaciones
     usuarios = relationship("Usuario", back_populates="rol")
     permisos = relationship("Permiso", secondary=rol_permiso, back_populates="roles")
 
 class Permiso(BaseModel):
     __tablename__ = "permiso"
     
-    codigo = Column(String(20), unique=True, nullable=False)  # RF01, RF07, etc.
-    nombre = Column(String(100), nullable=False)
-    descripcion = Column(String(200))
+    codigo = Column(String(10), unique=True, nullable=False)
+    nombre = Column(String(50), nullable=False)
+    descripcion = Column(String(255))
     
-    # Relaciones
     roles = relationship("Rol", secondary=rol_permiso, back_populates="permisos")
 
 class Usuario(BaseModel):
     __tablename__ = "usuario"
     
     username = Column(String(50), unique=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=False)  # En SQL es "password"
     nombre = Column(String(100), nullable=False)
-    email = Column(String(100), unique=True)
+    email = Column(String(100), unique=True, nullable=False)
     rol_id = Column(Integer, ForeignKey("rol.id"), nullable=False)
     activo = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, server_default=func.now())
     
-    # Relaciones
     rol = relationship("Rol", back_populates="usuarios")
