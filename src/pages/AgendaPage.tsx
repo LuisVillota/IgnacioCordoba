@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Plus, Edit2, Trash2, Calendar, Clock, User, 
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { CitaForm } from "../components/CitaForm"
 import { CitaModal } from "../components/CitaModal"
-import { api, handleApiError, debugAPI } from "@/lib/api"
+import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
 
 export interface Cita {
@@ -74,6 +74,21 @@ const formatTime = (timeString: string): string => {
   return match ? match[1] : '09:00'
 }
 
+// Función para limpiar y formatear hora a HH:MM (sin segundos)
+const cleanTimeFormat = (timeString: string): string => {
+  if (!timeString) return '09:00'
+  
+  // Extraer solo horas y minutos
+  const match = timeString.match(/^(\d{2}):(\d{2})/)
+  if (match) {
+    const horas = match[1]
+    const minutos = match[2]
+    return `${horas}:${minutos}`
+  }
+  
+  return '09:00'
+}
+
 // Función para transformar cita del backend al frontend
 const transformBackendCita = (backendCita: any): Cita => {
   console.log("🔧 Transformando cita del backend:", backendCita)
@@ -121,7 +136,16 @@ const transformBackendCita = (backendCita: any): Cita => {
 
   // Determinar estado
   let estado: Cita["estado"] = "pendiente"
-  if (backendCita.estado_nombre) {
+  if (backendCita.estado_id) {
+    // Mapear ID de estado a nombre
+    switch(backendCita.estado_id) {
+      case 1: estado = "cancelada"; break;
+      case 2: estado = "confirmada"; break;
+      case 3: estado = "completada"; break;
+      case 4: estado = "pendiente"; break;
+      default: estado = "pendiente";
+    }
+  } else if (backendCita.estado_nombre) {
     const estadoLower = backendCita.estado_nombre.toLowerCase()
     if (estadoLower.includes('confirm')) estado = "confirmada"
     else if (estadoLower.includes('complet')) estado = "completada"
@@ -209,6 +233,17 @@ const ordenarCitasPorFechaHoraAscendente = (citasArray: Cita[]): Cita[] => {
   
   console.log("✅ Citas ordenadas:", citasOrdenadas.map(c => `${c.fecha} ${c.hora} - ${c.paciente_nombre}`))
   return citasOrdenadas
+}
+
+// Función para convertir estado a ID
+const getEstadoId = (estado: string): number => {
+  switch(estado) {
+    case 'pendiente': return 4;  // ID 4 = pendiente según el backend
+    case 'confirmada': return 2; // ID 2 = confirmada
+    case 'completada': return 3; // ID 3 = completada
+    case 'cancelada': return 1;  // ID 1 = cancelada
+    default: return 4; // Por defecto pendiente
+  }
 }
 
 // Componente de modal para conflictos de horario
@@ -618,9 +653,15 @@ export function AgendaPage() {
       console.log("💾 handleSaveCita llamado con datos:", data)
       
       // Validar datos requeridos
-      if (!data.id_paciente || !data.fecha || !data.hora) {
+      if (!data.id_paciente || !data.fecha || !data.hora || !data.id_usuario) {
         toast.error("Por favor completa todos los campos requeridos")
         return
+      }
+      
+      // Convertir id_usuario a número
+      const usuarioId = parseInt(data.id_usuario);
+      if (isNaN(usuarioId)) {
+        data.id_usuario = "1"; // Usar valor por defecto
       }
       
       // Verificar formato de fecha
@@ -660,14 +701,18 @@ export function AgendaPage() {
       
       // Usar API real (sin datos mockeados)
       try {
-        // Preparar datos para API
+        // Limpiar y formatear la hora para asegurar formato HH:MM
+        const horaFormateada = cleanTimeFormat(data.hora)
+        
+        // Preparar datos para API en el formato correcto
         const citaData = {
-          ...data,
-          // Asegurar formato correcto para API
-          fecha: data.fecha,
-          hora: data.hora.includes(':') && data.hora.split(':').length === 2 
-            ? data.hora + ":00" 
-            : data.hora,
+          paciente_id: parseInt(data.id_paciente),
+          usuario_id: parseInt(data.id_usuario) || 1, // Usar usuario por defecto
+          fecha_hora: `${data.fecha}T${horaFormateada}:00`, // Formato: YYYY-MM-DDTHH:MM:SS (CORREGIDO)
+          tipo: data.tipo_cita === "programacion_quirurgica" ? "program_quir" : data.tipo_cita,
+          duracion_minutos: data.duracion,
+          estado_id: getEstadoId(data.estado),
+          notas: data.observaciones || ''
         };
         
         console.log("📤 Enviando a API:", citaData)
@@ -948,12 +993,6 @@ export function AgendaPage() {
                   >
                     <RefreshCw size={14} className={`mr-1 ${testingConnection ? "animate-spin" : ""}`} />
                     {testingConnection ? 'Probando...' : 'Reintentar conexión'}
-                  </button>
-                  <button
-                    onClick={() => debugAPI.testAllEndpoints()}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200 transition"
-                  >
-                    Debug API
                   </button>
                 </div>
               </div>

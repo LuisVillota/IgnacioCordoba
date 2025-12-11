@@ -23,17 +23,47 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     
     if (!response.ok) {
       let errorMessage = `Error HTTP ${response.status}`;
-      let errorDetail = '';
       
       try {
         const errorData = await response.json();
-        errorDetail = errorData.detail || errorData.message || JSON.stringify(errorData);
-        errorMessage = errorDetail;
-      } catch {
+        console.error('❌ Error data from backend (RAW):', errorData);
+        
+        // FastAPI devuelve errores de validación como {detail: [...]} o {detail: string}
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            // Es un array de errores de validación de Pydantic
+            // Ejemplo: [{"loc": ["body", "fecha_hora"], "msg": "field required", "type": "value_error.missing"}]
+            errorMessage = errorData.detail.map((err: any) => {
+              if (typeof err === 'object' && err.msg) {
+                const field = err.loc?.join('.') || 'campo';
+                return `${field}: ${err.msg}`;
+              }
+              return String(err);
+            }).join(', ');
+          } else if (typeof errorData.detail === 'string') {
+            // Es un string simple
+            errorMessage = errorData.detail;
+          } else {
+            errorMessage = JSON.stringify(errorData.detail);
+          }
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else {
+          errorMessage = JSON.stringify(errorData);
+        }
+        
+        console.error('❌ API Error parsed:', errorMessage);
+      } catch (jsonError) {
+        console.error('❌ Error parsing JSON:', jsonError);
         // Si no se puede parsear como JSON, intentar como texto
         try {
           const text = await response.text();
-          if (text) errorMessage = text;
+          if (text) {
+            errorMessage = text;
+            console.error('❌ Error text:', text);
+          }
         } catch {
           // Si falla todo, usar el mensaje por defecto
         }

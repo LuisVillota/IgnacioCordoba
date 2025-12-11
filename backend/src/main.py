@@ -479,8 +479,146 @@ def delete_paciente(paciente_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ========================================
-# ENDPOINTS DE CITAS
+# ENDPOINTS DE CITAS (CORREGIDO - EL ERROR ESTÁ AQUÍ)
 # ========================================
+
+@app.post("/api/citas", response_model=dict)
+def create_cita(cita: CitaCreate):
+    """Crear una nueva cita con validación detallada"""
+    try:
+        print("=" * 50)
+        print("📅 RECIBIENDO SOLICITUD PARA CREAR CITA")
+        print("=" * 50)
+        print(f"📋 Datos recibidos del frontend:")
+        print(f"   paciente_id: {cita.paciente_id} (tipo: {type(cita.paciente_id)})")
+        print(f"   usuario_id: {cita.usuario_id} (tipo: {type(cita.usuario_id)})")
+        print(f"   fecha_hora: '{cita.fecha_hora}'")
+        print(f"   tipo: '{cita.tipo}'")
+        print(f"   duracion_minutos: {cita.duracion_minutos} (tipo: {type(cita.duracion_minutos)})")
+        print(f"   estado_id: {cita.estado_id} (tipo: {type(cita.estado_id)})")
+        print(f"   notas: '{cita.notas}'")
+        
+        # Validar que fecha_hora tenga el formato correcto
+        from datetime import datetime
+        try:
+            # Limpiar la fecha_hora si tiene 'Z' al final
+            fecha_hora_limpia = cita.fecha_hora.replace('Z', '')
+            if len(fecha_hora_limpia) == 16:  # Formato: YYYY-MM-DDTHH:MM
+                fecha_hora_limpia += ":00"  # Agregar segundos
+            fecha_parseada = datetime.fromisoformat(fecha_hora_limpia)
+            print(f"✅ Fecha parseada correctamente: {fecha_parseada}")
+        except ValueError as e:
+            print(f"❌ ERROR: Formato de fecha inválido")
+            print(f"   Valor recibido: '{cita.fecha_hora}'")
+            print(f"   Error: {e}")
+            raise HTTPException(
+                status_code=422, 
+                detail=f"Formato de fecha/hora inválido. Use: YYYY-MM-DDTHH:MM:SS. Recibido: '{cita.fecha_hora}'"
+            )
+        
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el paciente existe - ¡CORREGIDO!
+                cursor.execute("SELECT id, nombre, apellido FROM Paciente WHERE id = %s", (cita.paciente_id,))
+                resultado = cursor.fetchone()
+                if not resultado:
+                    print(f"❌ ERROR: Paciente ID {cita.paciente_id} no encontrado")
+                    raise HTTPException(status_code=404, detail=f"Paciente con ID {cita.paciente_id} no encontrado")
+                
+                # Acceder correctamente a los datos de la tupla
+                # Si cursor.fetchone() devuelve una tupla, accedemos por índice
+                # Si devuelve un diccionario, accedemos por clave
+                paciente_nombre = ""
+                paciente_apellido = ""
+                
+                if isinstance(resultado, dict):
+                    # Es un diccionario (porque usamos cursorclass=pymysql.cursors.DictCursor en otras funciones)
+                    paciente_nombre = resultado['nombre']
+                    paciente_apellido = resultado['apellido']
+                else:
+                    # Es una tupla
+                    paciente_nombre = resultado[1]  # índice 1 = nombre
+                    paciente_apellido = resultado[2]  # índice 2 = apellido
+                
+                print(f"✅ Paciente encontrado: {paciente_nombre} {paciente_apellido}")
+                
+                # Verificar que el usuario existe
+                cursor.execute("SELECT id, nombre FROM Usuario WHERE id = %s", (cita.usuario_id,))
+                resultado_usuario = cursor.fetchone()
+                if not resultado_usuario:
+                    print(f"❌ ERROR: Usuario ID {cita.usuario_id} no encontrado")
+                    raise HTTPException(status_code=404, detail=f"Usuario con ID {cita.usuario_id} no encontrado")
+                
+                # Acceder correctamente al nombre del usuario
+                usuario_nombre = ""
+                if isinstance(resultado_usuario, dict):
+                    usuario_nombre = resultado_usuario['nombre']
+                else:
+                    usuario_nombre = resultado_usuario[1]  # índice 1 = nombre
+                
+                print(f"✅ Usuario encontrado: {usuario_nombre}")
+                
+                # Verificar si ya existe una cita a la misma hora
+                cursor.execute("""
+                    SELECT id FROM Cita 
+                    WHERE usuario_id = %s 
+                    AND fecha_hora = %s
+                    AND estado_id != 4  # No contar canceladas
+                """, (cita.usuario_id, fecha_hora_limpia))
+                
+                if cursor.fetchone():
+                    print(f"⚠️ ADVERTENCIA: Ya existe una cita programada para este doctor a las {fecha_hora_limpia}")
+                    # Podemos permitirlo o rechazarlo, por ahora solo mostramos advertencia
+                
+                # Insertar la cita
+                cursor.execute("""
+                    INSERT INTO Cita (
+                        paciente_id, usuario_id, fecha_hora, tipo,
+                        duracion_minutos, estado_id, notas
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    cita.paciente_id,
+                    cita.usuario_id,
+                    fecha_hora_limpia,  # Usar la fecha limpia
+                    cita.tipo,
+                    cita.duracion_minutos,
+                    cita.estado_id,
+                    cita.notas
+                ))
+                cita_id = cursor.lastrowid
+                conn.commit()
+                
+                print(f"✅ CITA CREADA EXITOSAMENTE")
+                print(f"   ID de cita: {cita_id}")
+                print(f"   Paciente: {paciente_nombre} {paciente_apellido}")
+                print(f"   Doctor: {usuario_nombre}")
+                print(f"   Fecha/Hora: {fecha_parseada}")
+                print("=" * 50)
+                
+                return {
+                    "success": True,
+                    "message": "Cita creada exitosamente",
+                    "cita_id": cita_id,
+                    "paciente_nombre": f"{paciente_nombre} {paciente_apellido}",
+                    "doctor_nombre": usuario_nombre,
+                    "fecha_hora": fecha_hora_limpia
+                }
+                
+    except HTTPException as he:
+        print(f"❌ ERROR HTTP: {he.detail}")
+        raise he
+    except Exception as e:
+        print(f"❌ ERROR INESPERADO creando cita: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 @app.get("/api/citas")
 def get_citas(limit: int = 50, offset: int = 0):
@@ -551,44 +689,6 @@ def get_cita(cita_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/citas", response_model=dict)
-def create_cita(cita: CitaCreate):
-    """Crear una nueva cita"""
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    INSERT INTO Cita (
-                        paciente_id, usuario_id, fecha_hora, tipo,
-                        duracion_minutos, estado_id, notas
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    cita.paciente_id,
-                    cita.usuario_id,
-                    cita.fecha_hora,
-                    cita.tipo,
-                    cita.duracion_minutos,
-                    cita.estado_id,
-                    cita.notas
-                ))
-                cita_id = cursor.lastrowid
-                conn.commit()
-                
-                return {
-                    "success": True,
-                    "message": "Cita creada exitosamente",
-                    "cita_id": cita_id
-                }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.put("/api/citas/{cita_id}", response_model=dict)
 def update_cita(cita_id: int, cita: CitaUpdate):
     """Actualizar una cita existente"""
@@ -598,7 +698,8 @@ def update_cita(cita_id: int, cita: CitaUpdate):
             user='root',
             password='root',
             database='prueba_consultorio_db',
-            port=3306
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor  # ¡AGREGAR ESTO!
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1023,7 +1124,7 @@ def delete_historia_clinica(historia_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ========================================
-# ENDPOINTS DE SUBIDA DE ARCHIVOS
+# ENDPOINTS DE SUBIDA DE ARCHIVOS (CORREGIDO)
 # ========================================
 
 @app.post("/api/upload/historia/{historia_id}", response_model=FileUploadResponse)
@@ -1125,7 +1226,7 @@ async def upload_historia_foto(
                 port=3306
             )
             with conn2.cursor() as cursor:
-                # Obtener fotos actuales
+                # Obtener fotos actuales - ¡CORREGIDO!
                 cursor.execute("SELECT fotos FROM historial_clinico WHERE id = %s", (historia_id,))
                 resultado = cursor.fetchone()
                 fotos_actuales = ""
