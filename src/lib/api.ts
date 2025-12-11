@@ -1,38 +1,4 @@
-// src/lib/api.ts
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-// Función helper para formatear fecha/hora para MySQL
-const formatDateTimeForDB = (fecha: string, hora: string): string => {
-  // Asegurar que la fecha esté en formato YYYY-MM-DD
-  let fechaFormateada = fecha;
-  if (fecha.includes('T')) {
-    // Si viene como '2025-12-09T00:00:00.000Z', extraer solo la fecha
-    fechaFormateada = fecha.split('T')[0];
-  }
-  
-  // Asegurar que la hora esté en formato HH:MM:SS
-  let horaFormateada = hora;
-  if (!hora.includes(':')) {
-    horaFormateada = '09:00:00';
-  } else if (hora.split(':').length === 2) {
-    // Si es HH:MM, agregar segundos
-    horaFormateada = `${hora}:00`;
-  }
-  
-  return `${fechaFormateada} ${horaFormateada}`;
-};
-
-// Función helper para formatear fecha de consulta
-const formatDateForDB = (fecha: string): string => {
-  if (!fecha) return new Date().toISOString().split('T')[0];
-  
-  let fechaFormateada = fecha;
-  if (fecha.includes('T')) {
-    fechaFormateada = fecha.split('T')[0];
-  }
-  
-  return fechaFormateada;
-};
 
 // Cliente HTTP reutilizable
 export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
@@ -57,17 +23,47 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     
     if (!response.ok) {
       let errorMessage = `Error HTTP ${response.status}`;
-      let errorDetail = '';
       
       try {
         const errorData = await response.json();
-        errorDetail = errorData.detail || errorData.message || JSON.stringify(errorData);
-        errorMessage = errorDetail;
-      } catch {
+        console.error('❌ Error data from backend (RAW):', errorData);
+        
+        // FastAPI devuelve errores de validación como {detail: [...]} o {detail: string}
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            // Es un array de errores de validación de Pydantic
+            // Ejemplo: [{"loc": ["body", "fecha_hora"], "msg": "field required", "type": "value_error.missing"}]
+            errorMessage = errorData.detail.map((err: any) => {
+              if (typeof err === 'object' && err.msg) {
+                const field = err.loc?.join('.') || 'campo';
+                return `${field}: ${err.msg}`;
+              }
+              return String(err);
+            }).join(', ');
+          } else if (typeof errorData.detail === 'string') {
+            // Es un string simple
+            errorMessage = errorData.detail;
+          } else {
+            errorMessage = JSON.stringify(errorData.detail);
+          }
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else {
+          errorMessage = JSON.stringify(errorData);
+        }
+        
+        console.error('❌ API Error parsed:', errorMessage);
+      } catch (jsonError) {
+        console.error('❌ Error parsing JSON:', jsonError);
         // Si no se puede parsear como JSON, intentar como texto
         try {
           const text = await response.text();
-          if (text) errorMessage = text;
+          if (text) {
+            errorMessage = text;
+            console.error('❌ Error text:', text);
+          }
         } catch {
           // Si falla todo, usar el mensaje por defecto
         }
@@ -85,15 +81,14 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
   }
 };
 
-// Función para acortar tipos de cita para la BD
-const shortenCitaType = (tipo: string): string => {
-  const typeMap: Record<string, string> = {
-    "programacion_quirurgica": "program_quir",
-    "consulta": "consulta",
-    "control": "control",
-    "valoracion": "valoracion"
-  };
-  return typeMap[tipo] || "consulta";
+// Helper para convertir archivo a base64
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = error => reject(error);
+  });
 };
 
 // Funciones específicas de la API
@@ -129,116 +124,55 @@ export const api = {
   // ===== CITAS =====
   getCitas: (limit?: number, offset?: number) =>
     fetchAPI(`/api/citas?limit=${limit || 100}&offset=${offset || 0}`),
-  
   getCita: (id: number) => fetchAPI(`/api/citas/${id}`),
-  
-  createCita: (data: any) => {
-    console.log("📤 Creando cita con datos:", data);
-    
-    // Validar y formatear fecha_hora
-    if (!data.fecha || !data.hora) {
-      throw new Error("Fecha y hora son requeridas");
-    }
-    
-    const fecha_hora = formatDateTimeForDB(data.fecha, data.hora);
-    console.log("🔄 Formateado fecha_hora:", fecha_hora);
-    
-    // Mapear estado a estado_id según tu tabla Estado_Cita
-    const estadoMap: Record<string, number> = {
-      "pendiente": 1,      // ID del estado "Pendiente"
-      "confirmada": 2,     // ID del estado "Confirmada"
-      "completada": 3,     // ID del estado "Completada"
-      "cancelada": 4       // ID del estado "Cancelada"
-    };
-    
-    const backendData = {
-      paciente_id: parseInt(data.id_paciente),
-      usuario_id: parseInt(data.id_usuario) || 1,
-      fecha_hora: fecha_hora,
-      tipo: shortenCitaType(data.tipo_cita), // Usar tipo acortado
-      duracion_minutos: data.duracion,
-      estado_id: estadoMap[data.estado] || 1, // Default a "Pendiente"
-      notas: data.observaciones || ''
-    };
-    
-    console.log("📤 Enviando al backend:", backendData);
-    
-    return fetchAPI('/api/citas', { 
-      method: 'POST', 
-      body: JSON.stringify(backendData) 
-    });
-  },
-  
-  updateCita: (id: number, data: any) => {
-    console.log("📤 Actualizando cita ID:", id, "con datos:", data);
-    
-    // Validar y formatear fecha_hora
-    if (!data.fecha || !data.hora) {
-      throw new Error("Fecha y hora son requeridas");
-    }
-    
-    const fecha_hora = formatDateTimeForDB(data.fecha, data.hora);
-    console.log("🔄 Formateado fecha_hora:", fecha_hora);
-    
-    // Mapear estado a estado_id
-    const estadoMap: Record<string, number> = {
-      "pendiente": 1,
-      "confirmada": 2,
-      "completada": 3,
-      "cancelada": 4
-    };
-    
-    const backendData = {
-      paciente_id: parseInt(data.id_paciente),
-      usuario_id: parseInt(data.id_usuario) || 1,
-      fecha_hora: fecha_hora,
-      tipo: shortenCitaType(data.tipo_cita), // Usar tipo acortado
-      duracion_minutos: data.duracion,
-      estado_id: estadoMap[data.estado] || 1,
-      notas: data.observaciones || ''
-    };
-    
-    console.log("📤 Enviando al backend:", backendData);
-    
-    return fetchAPI(`/api/citas/${id}`, { 
-      method: 'PUT', 
-      body: JSON.stringify(backendData) 
-    });
-  },
-  
-  deleteCita: (id: number) =>
-    fetchAPI(`/api/citas/${id}`, { method: 'DELETE' }),
+  createCita: (data: any) => fetchAPI('/api/citas', { method: 'POST', body: JSON.stringify(data) }),
+  updateCita: (id: number, data: any) => fetchAPI(`/api/citas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCita: (id: number) => fetchAPI(`/api/citas/${id}`, { method: 'DELETE' }),
   
   // ===== HISTORIA CLÍNICA =====
   getHistoriasClinicas: (limit?: number, offset?: number) =>
     fetchAPI(`/api/historias-clinicas?limit=${limit || 100}&offset=${offset || 0}`),
   
-  getHistoriasByPaciente: (pacienteId: number) =>
-    fetchAPI(`/api/historias-clinicas/paciente/${pacienteId}`),
+  getHistoriasByPaciente: async (pacienteId: number) => {
+    console.log(`📋 Obteniendo historias para paciente ${pacienteId}...`);
+    
+    try {
+      // Intentar endpoint específico primero
+      return await fetchAPI(`/api/historias-clinicas/paciente/${pacienteId}`);
+    } catch (error) {
+      console.log(`⚠️ Endpoint específico falló, usando endpoint general para paciente ${pacienteId}`);
+      const allHistorias = await api.getHistoriasClinicas(100, 0);
+      
+      // Filtrar por paciente_id
+      if (Array.isArray(allHistorias.historias)) {
+        return allHistorias.historias.filter((historia: any) => {
+          const matches = historia.paciente_id === pacienteId;
+          console.log(`🔍 Historia ${historia.id}: paciente_id=${historia.paciente_id}, matches=${matches}`);
+          return matches;
+        });
+      }
+      
+      return [];
+    }
+  },
   
   getHistoriaClinica: (id: number) => fetchAPI(`/api/historias-clinicas/${id}`),
   
   createHistoriaClinica: (data: any) => {
     console.log("📤 Creando historia clínica con datos:", data);
     
-    // Convertir antecedentes en un objeto JSON
-    const antecedentesData = {
-      medicos: data.antecedentes_medicos || '',
-      quirurgicos: data.antecedentes_quirurgicos || '',
-      alergicos: data.antecedentes_alergicos || '',
-      farmacologicos: data.antecedentes_farmacologicos || ''
-    };
-    
     const backendData = {
-      paciente_id: parseInt(data.paciente_id),
-      usuario_id: parseInt(data.medico_id) || 1,
-      fecha_consulta: data.fecha_consulta ? `${formatDateForDB(data.fecha_consulta)} 00:00:00` : new Date().toISOString().split('T')[0] + ' 00:00:00',
+      paciente_id: parseInt(data.paciente_id || data.id_paciente),
       motivo_consulta: data.motivo_consulta || '',
-      antecedentes: JSON.stringify(antecedentesData),
+      antecedentes_medicos: data.antecedentes_medicos || '',
+      antecedentes_quirurgicos: data.antecedentes_quirurgicos || '',
+      antecedentes_alergicos: data.antecedentes_alergicos || '',
+      antecedentes_farmacologicos: data.antecedentes_farmacologicos || '',
       exploracion_fisica: data.exploracion_fisica || '',
       diagnostico: data.diagnostico || '',
       tratamiento: data.tratamiento || '',
-      recomendaciones: data.recomendaciones || ''
+      recomendaciones: data.recomendaciones || '',
+      fotos: ""  // Inicialmente vacío, las fotos se suben después
     };
     
     console.log("📤 Enviando al backend:", backendData);
@@ -252,24 +186,17 @@ export const api = {
   updateHistoriaClinica: (id: number, data: any) => {
     console.log("📤 Actualizando historia clínica ID:", id, "con datos:", data);
     
-    // Convertir antecedentes en un objeto JSON
-    const antecedentesData = {
-      medicos: data.antecedentes_medicos || '',
-      quirurgicos: data.antecedentes_quirurgicos || '',
-      alergicos: data.antecedentes_alergicos || '',
-      farmacologicos: data.antecedentes_farmacologicos || ''
-    };
-    
     const backendData = {
-      paciente_id: parseInt(data.paciente_id),
-      usuario_id: parseInt(data.medico_id) || 1,
-      fecha_consulta: data.fecha_consulta ? `${formatDateForDB(data.fecha_consulta)} 00:00:00` : new Date().toISOString().split('T')[0] + ' 00:00:00',
+      paciente_id: parseInt(data.paciente_id || data.id_paciente),
       motivo_consulta: data.motivo_consulta || '',
-      antecedentes: JSON.stringify(antecedentesData),
+      antecedentes_medicos: data.antecedentes_medicos || '',
+      antecedentes_quirurgicos: data.antecedentes_quirurgicos || '',
+      antecedentes_alergicos: data.antecedentes_alergicos || '',
+      antecedentes_farmacologicos: data.antecedentes_farmacologicos || '',
       exploracion_fisica: data.exploracion_fisica || '',
       diagnostico: data.diagnostico || '',
       tratamiento: data.tratamiento || '',
-      recomendaciones: data.recomendaciones || ''
+      recomendaciones: data.recomendaciones || '',
     };
     
     console.log("📤 Enviando al backend:", backendData);
@@ -280,8 +207,136 @@ export const api = {
     });
   },
   
-  deleteHistoriaClinica: (id: number) =>
-    fetchAPI(`/api/historias-clinicas/${id}`, { method: 'DELETE' }),
+  deleteHistoriaClinica: async (id: number) => {
+    console.log(`🗑️ Eliminando historia clínica ID: ${id}`)
+    
+    try {
+      const response = await fetch(`${API_URL}/api/historias-clinicas/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+      })
+      
+      console.log(`📥 Delete response: ${response.status} ${response.statusText}`)
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        
+        // Si es 404, no lanzar error crítico
+        if (response.status === 404) {
+          console.log(`ℹ️ Historia ${id} no encontrada (posiblemente ya eliminada)`)
+          return { success: true, message: "Historia ya eliminada" }
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      const responseData = await response.json();
+      console.log(`✅ Historia eliminada exitosamente:`, responseData);
+      return responseData;
+    } catch (error) {
+      console.error('❌ Error eliminando historia:', error);
+      throw error;
+    }
+  },
+  
+  // ===== SUBIDA DE ARCHIVOS =====
+  uploadHistoriaFoto: async (historiaId: number, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    
+    try {
+      console.log("📤 Subiendo foto para historia:", historiaId);
+      console.log("📁 Detalles del archivo:", {
+        nombre: file.name,
+        tipo: file.type,
+        tamaño: file.size,
+        ultimaModificacion: new Date(file.lastModified).toISOString()
+      });
+      
+      // Subir el archivo real
+      console.log("🚀 Iniciando upload real...");
+      const response = await fetch(`${API_URL}/api/upload/historia/${historiaId}`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+      
+      console.log("📥 Upload response status:", response.status, response.statusText);
+      
+      if (!response.ok) {
+        let errorDetail = `Error ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || errorData.message || JSON.stringify(errorData);
+          console.error("❌ Error detallado:", errorData);
+        } catch {
+          // Si no se puede parsear como JSON, usar el texto
+          try {
+            const text = await response.text();
+            if (text) {
+              errorDetail = text;
+              console.error("❌ Error texto:", text);
+            }
+          } catch {
+            // Ignorar
+          }
+        }
+        
+        throw new Error(errorDetail);
+      }
+      
+      const result = await response.json();
+      console.log("✅ Foto subida exitosamente:", result);
+      
+      // Convertir URL relativa a absoluta
+      if (result.url && result.url.startsWith('/uploads/')) {
+        result.url = `${API_URL}${result.url}`;
+        console.log("🔗 URL convertida a absoluta:", result.url);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Error subiendo foto:', error);
+      
+      // En desarrollo, usar Data URL como fallback
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️ En modo desarrollo, usando Data URL como fallback');
+        try {
+          const dataUrl = await fileToBase64(file);
+          return {
+            success: true,
+            message: "Foto subida (modo simulación - desarrollo)",
+            url: dataUrl,
+            filename: file.name
+          };
+        } catch (base64Error) {
+          console.error('❌ Error creando Data URL:', base64Error);
+        }
+      }
+      
+      throw error;
+    }
+  },
   
   // ===== ESTADOS =====
   getEstadosCitas: () => fetchAPI('/api/estados/citas'),
@@ -294,27 +349,23 @@ export const api = {
   // ===== DASHBOARD =====
   async getDashboardStats() {
     try {
-      // Obtener pacientes y citas en paralelo para mejor rendimiento
       const [pacientesResponse, citasResponse] = await Promise.all([
         this.getPacientes(10000),
         this.getCitas(1000)
       ]);
       
       const totalPacientes = pacientesResponse.pacientes?.length || 0;
-      
-      // Contar citas de hoy
       const today = new Date().toISOString().split('T')[0];
       let citasHoy = 0;
       
-      if (citasResponse && citasResponse.length) {
-        citasHoy = citasResponse.filter((cita: any) => {
+      if (citasResponse && citasResponse.citas) {
+        citasHoy = citasResponse.citas.filter((cita: any) => {
           if (cita.fecha_hora) {
             try {
               const citaDate = new Date(cita.fecha_hora);
               const citaDateStr = citaDate.toISOString().split('T')[0];
               return citaDateStr === today;
-            } catch (dateError) {
-              console.warn('Error procesando fecha de cita:', cita.fecha_hora, dateError);
+            } catch {
               return false;
             }
           }
@@ -330,40 +381,18 @@ export const api = {
       };
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
-      throw error;
+      return {
+        totalPacientes: 0,
+        citasHoy: 0,
+        totalCotizaciones: 0,
+        ingresosMes: "$0"
+      };
     }
-  },
-  
-  async getTotalPacientesCount() {
-    const response = await this.getPacientes(10000);
-    return response.pacientes?.length || 0;
-  },
-  
-  async getCitasHoyCount() {
-    const today = new Date().toISOString().split('T')[0];
-    const response = await this.getCitas(1000);
-    
-    if (!response || !response.length) return 0;
-    
-    return response.filter((cita: any) => {
-      if (cita.fecha_hora) {
-        try {
-          const citaDate = new Date(cita.fecha_hora);
-          const citaDateStr = citaDate.toISOString().split('T')[0];
-          return citaDateStr === today;
-        } catch (dateError) {
-          console.warn('Error procesando fecha de cita:', cita.fecha_hora, dateError);
-          return false;
-        }
-      }
-      return false;
-    }).length;
   },
   
   // ===== TEST =====
   testBackend: () => fetchAPI('/api/test-frontend'),
   
-  // ===== DIAGNÓSTICO =====
   testConnection: async () => {
     try {
       const response = await fetch(`${API_URL}/api/test-frontend`);
@@ -384,31 +413,31 @@ export const api = {
     }
   },
   
-  testLoginDirect: async (username: string, password: string) => {
+  // ===== DEBUG =====
+  debugUploadDir: () => fetchAPI('/api/debug/upload-dir'),
+  
+  // Nueva función para debug de fotos
+  debugHistoriaFotos: async (historiaId: number) => {
     try {
-      const encodedUsername = encodeURIComponent(username);
-      const encodedPassword = encodeURIComponent(password);
-      const response = await fetch(
-        `${API_URL}/api/login?username=${encodedUsername}&password=${encodedPassword}`
-      );
-      
-      if (!response.ok) {
-        const text = await response.text();
-        return {
-          success: false,
-          status: response.status,
-          message: `Login falló: ${response.status} ${response.statusText}`,
-          body: text
-        };
-      }
-      
-      return await response.json();
+      const historia = await api.getHistoriaClinica(historiaId);
+      console.log("🔍 Debug historia fotos:", {
+        historiaId,
+        rawFotos: historia.fotos,
+        parsedFotos: historia.fotos ? historia.fotos.split(',').filter(f => f.trim()) : [],
+        urls: historia.fotos ? historia.fotos.split(',').map((url: string) => {
+          const trimmed = url.trim();
+          return {
+            original: trimmed,
+            isRelative: trimmed.startsWith('/uploads/'),
+            absoluteUrl: trimmed.startsWith('/uploads/') ? `${API_URL}${trimmed}` : trimmed,
+            willLoad: trimmed.startsWith('http') || trimmed.startsWith('/uploads/')
+          };
+        }) : []
+      });
+      return historia;
     } catch (error) {
-      return {
-        success: false,
-        message: `Error en login: ${error}`,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
+      console.error("❌ Debug error:", error);
+      throw error;
     }
   }
 };
@@ -437,6 +466,9 @@ export const handleApiError = (error: any): string => {
     }
     if (message.includes('network') || message.includes('failed to fetch')) {
       return 'No se puede conectar con el servidor. Verifica que el backend esté corriendo.';
+    }
+    if (message.includes('upload') && message.includes('directory')) {
+      return 'Error de configuración del servidor. El directorio de uploads no está configurado correctamente.';
     }
     
     return error.message || 'Error desconocido';
@@ -472,28 +504,23 @@ export const transformBackendToFrontend = {
     if (backendCita.fecha_hora) {
       const fechaHoraStr = backendCita.fecha_hora.toString();
       
-      // Si es string como '2024-01-15 14:30:00'
       if (fechaHoraStr.includes(' ')) {
         const [datePart, timePart] = fechaHoraStr.split(' ');
         fecha = datePart;
         hora = timePart ? timePart.substring(0, 5) : '09:00';
-      }
-      // Si es string como '2024-01-15T14:30:00.000Z'
-      else if (fechaHoraStr.includes('T')) {
+      } else if (fechaHoraStr.includes('T')) {
         const dateObj = new Date(fechaHoraStr);
         fecha = dateObj.toISOString().split('T')[0];
         hora = dateObj.toTimeString().substring(0, 5);
       }
     }
     
-    // Mapear tipo acortado a tipo completo
     let tipoCompleto = "consulta";
     if (backendCita.tipo === "program_quir") tipoCompleto = "programacion_quirurgica";
     else if (backendCita.tipo === "consulta") tipoCompleto = "consulta";
     else if (backendCita.tipo === "control") tipoCompleto = "control";
     else if (backendCita.tipo === "valoracion") tipoCompleto = "valoracion";
     
-    // Mapear estado_id a estado nombre
     let estadoNombre = "pendiente";
     if (backendCita.estado_id === 1) estadoNombre = "pendiente";
     else if (backendCita.estado_id === 2) estadoNombre = "confirmada";
@@ -516,40 +543,11 @@ export const transformBackendToFrontend = {
     };
   },
   
-  // Transformar historia clínica del backend al formato del frontend
+  // Transformar historia clínica del backend al formato del frontend - CORREGIDO
   historiaClinica: (backendHistoria: any) => {
-    // Parsear antecedentes JSON
-    let antecedentes = {
-      medicos: '',
-      quirurgicos: '',
-      alergicos: '',
-      farmacologicos: ''
-    };
-    
-    try {
-      if (backendHistoria.antecedentes) {
-        if (typeof backendHistoria.antecedentes === 'string') {
-          antecedentes = JSON.parse(backendHistoria.antecedentes);
-        } else {
-          antecedentes = backendHistoria.antecedentes;
-        }
-      }
-    } catch (error) {
-      console.warn('Error parseando antecedentes:', error);
-    }
-    
-    // Extraer fecha de fecha_consulta
+    // Extraer fecha de fecha_creacion
     let fechaCreacion = '';
-    if (backendHistoria.fecha_consulta) {
-      const fechaStr = backendHistoria.fecha_consulta.toString();
-      if (fechaStr.includes(' ')) {
-        fechaCreacion = fechaStr.split(' ')[0];
-      } else if (fechaStr.includes('T')) {
-        fechaCreacion = fechaStr.split('T')[0];
-      } else {
-        fechaCreacion = fechaStr;
-      }
-    } else if (backendHistoria.fecha_creacion) {
+    if (backendHistoria.fecha_creacion) {
       const fechaStr = backendHistoria.fecha_creacion.toString();
       if (fechaStr.includes(' ')) {
         fechaCreacion = fechaStr.split(' ')[0];
@@ -560,20 +558,41 @@ export const transformBackendToFrontend = {
       }
     }
     
+    // Procesar URLs de fotos - CORREGIDO
+    let fotosString = '';
+    if (backendHistoria.fotos) {
+      // Asegurarnos de que sea string
+      fotosString = backendHistoria.fotos.toString();
+      
+      // Si la cadena ya tiene URLs completas, dejarla como está
+      // Si tiene URLs relativas (/uploads/...), convertirlas a absolutas
+      if (fotosString.includes('/uploads/')) {
+        const urls = fotosString.split(',').map((url: string) => {
+          const trimmedUrl = url.trim();
+          if (trimmedUrl && trimmedUrl.startsWith('/uploads/')) {
+            return `${API_URL}${trimmedUrl}`;
+          }
+          return trimmedUrl;
+        });
+        fotosString = urls.filter((url: string) => url).join(',');
+      }
+    }
+    
     return {
       id: backendHistoria.id?.toString() || '',
       id_paciente: backendHistoria.paciente_id?.toString() || '',
       fecha_creacion: fechaCreacion || new Date().toISOString().split('T')[0],
       motivo_consulta: backendHistoria.motivo_consulta || '',
-      antecedentes_medicos: antecedentes.medicos || '',
-      antecedentes_quirurgicos: antecedentes.quirurgicos || '',
-      antecedentes_alergicos: antecedentes.alergicos || '',
-      antecedentes_farmacologicos: antecedentes.farmacologicos || '',
+      antecedentes_medicos: backendHistoria.antecedentes_medicos || '',
+      antecedentes_quirurgicos: backendHistoria.antecedentes_quirurgicos || '',
+      antecedentes_alergicos: backendHistoria.antecedentes_alergicos || '',
+      antecedentes_farmacologicos: backendHistoria.antecedentes_farmacologicos || '',
       exploracion_fisica: backendHistoria.exploracion_fisica || '',
       diagnostico: backendHistoria.diagnostico || '',
       tratamiento: backendHistoria.tratamiento || '',
       recomendaciones: backendHistoria.recomendaciones || '',
-      medico_id: backendHistoria.usuario_id?.toString() || '',
+      medico_id: '3', // Mantenemos un valor por defecto para compatibilidad
+      fotos: fotosString
     };
   },
   
@@ -618,70 +637,18 @@ export const transformBackendToFrontend = {
   
   // Transformación inversa - Historia Clínica
   historiaClinicaToBackend: (frontendHistoria: any) => {
-    // Convertir antecedentes en un objeto JSON
-    const antecedentesData = {
-      medicos: frontendHistoria.antecedentes_medicos || '',
-      quirurgicos: frontendHistoria.antecedentes_quirurgicos || '',
-      alergicos: frontendHistoria.antecedentes_alergicos || '',
-      farmacologicos: frontendHistoria.antecedentes_farmacologicos || ''
-    };
-    
     return {
-      paciente_id: parseInt(frontendHistoria.paciente_id),
-      usuario_id: parseInt(frontendHistoria.medico_id) || 1,
-      fecha_consulta: frontendHistoria.fecha_consulta ? `${formatDateForDB(frontendHistoria.fecha_consulta)} 00:00:00` : new Date().toISOString().split('T')[0] + ' 00:00:00',
+      paciente_id: parseInt(frontendHistoria.paciente_id || frontendHistoria.id_paciente),
       motivo_consulta: frontendHistoria.motivo_consulta || '',
-      antecedentes: JSON.stringify(antecedentesData),
+      antecedentes_medicos: frontendHistoria.antecedentes_medicos || '',
+      antecedentes_quirurgicos: frontendHistoria.antecedentes_quirurgicos || '',
+      antecedentes_alergicos: frontendHistoria.antecedentes_alergicos || '',
+      antecedentes_farmacologicos: frontendHistoria.antecedentes_farmacologicos || '',
       exploracion_fisica: frontendHistoria.exploracion_fisica || '',
       diagnostico: frontendHistoria.diagnostico || '',
       tratamiento: frontendHistoria.tratamiento || '',
-      recomendaciones: frontendHistoria.recomendaciones || ''
+      recomendaciones: frontendHistoria.recomendaciones || '',
+      fotos: frontendHistoria.fotos || ''
     };
   },
-};
-
-// Helper para debugging
-export const debugAPI = {
-  logRequest: (endpoint: string, options?: any) => {
-    console.log('🔍 API Debug - Request:', {
-      url: `${API_URL}${endpoint}`,
-      method: options?.method || 'GET',
-      headers: options?.headers,
-      body: options?.body ? JSON.parse(options.body as string) : undefined
-    });
-  },
-  
-  logResponse: (response: any) => {
-    console.log('🔍 API Debug - Response:', response);
-  },
-  
-  testAllEndpoints: async () => {
-    console.log('🧪 Probando conexión con backend...');
-    
-    const tests = [
-      { name: 'Test Backend', fn: () => api.testBackend() },
-      { name: 'Login (admin/admin123)', fn: () => api.login('admin', 'admin123') },
-      { name: 'Usuarios', fn: () => api.getUsuarios() },
-      { name: 'Pacientes', fn: () => api.getPacientes(5, 0) },
-      { name: 'Citas', fn: () => api.getCitas(5, 0) },
-      { name: 'Historia Clínica', fn: () => api.getHistoriasClinicas(5, 0) },
-      { name: 'Procedimientos', fn: () => api.getProcedimientos() },
-      { name: 'Dashboard Stats', fn: () => api.getDashboardStats() },
-    ];
-    
-    const results = [];
-    for (const test of tests) {
-      try {
-        console.log(`\n🧪 Probando: ${test.name}`);
-        const result = await test.fn();
-        console.log(`✅ ${test.name}: OK`);
-        results.push({ test: test.name, success: true, data: result });
-      } catch (error) {
-        console.error(`❌ ${test.name}: ${error}`);
-        results.push({ test: test.name, success: false, error });
-      }
-    }
-    
-    return results;
-  }
 };
