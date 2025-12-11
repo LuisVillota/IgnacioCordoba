@@ -69,7 +69,7 @@ export function Sidebar({ user, onNavigate }: SidebarProps) {
             <Stethoscope size={20} className="text-[#1a6b32]" />
           </div>
           <div>
-            <h1 className="font-bold text-lg">ClinicaRX</h1>
+            <h1 className="font-bold text-lg">Hernán Ignacio Córdoba</h1>
             <p className="text-xs text-[#99d6e8]">Cirugía Plástica</p>
           </div>
         </div>

@@ -1,20 +1,22 @@
 "use client"
 
-import { X, Calendar, FileText } from "lucide-react"
+import { X, Calendar, FileText, Image as ImageIcon } from "lucide-react"
 import type { HistoriaClinica } from "../pages/HistoriaClinicaPage"
-import type { Paciente } from "../pages/PacientesPage"
+import type { PacienteFrontend } from "../pages/HistoriaClinicaPage"
 
 interface HistoriaModalProps {
   historia: HistoriaClinica
-  paciente?: Paciente
+  paciente?: PacienteFrontend
   onClose: () => void
   onEdit: () => void
 }
 
 export function HistoriaModal({ historia, paciente, onClose, onEdit }: HistoriaModalProps) {
+  const fotos = historia.fotos ? historia.fotos.split(',').filter(url => url.trim()) : []
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
           <div>
@@ -23,7 +25,11 @@ export function HistoriaModal({ historia, paciente, onClose, onEdit }: HistoriaM
               {paciente?.nombres} {paciente?.apellidos}
             </p>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
+          <button 
+            onClick={onClose} 
+            className="p-1 hover:bg-gray-100 rounded-lg"
+            type="button"
+          >
             <X size={20} />
           </button>
         </div>
@@ -88,6 +94,40 @@ export function HistoriaModal({ historia, paciente, onClose, onEdit }: HistoriaM
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Recomendaciones</h3>
             <p className="text-gray-700 bg-orange-50 p-4 rounded-lg">{historia.recomendaciones}</p>
           </section>
+
+          {/* Fotos */}
+          {fotos.length > 0 && (
+            <section>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                <ImageIcon className="mr-2 text-[#1a6b32]" size={20} />
+                Fotos Clínicas ({fotos.length})
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {fotos.map((foto, index) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={foto}
+                      alt={`Foto clínica ${index + 1}`}
+                      className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                      onError={(e) => {
+                        // Si la imagen no carga, mostrar un placeholder
+                        e.currentTarget.src = '/placeholder-image.jpg';
+                        e.currentTarget.alt = 'Imagen no disponible';
+                      }}
+                    />
+                    <a 
+                      href={foto} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white p-1 rounded text-xs hover:bg-opacity-70"
+                    >
+                      Ampliar
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
         {/* Actions */}
@@ -95,12 +135,14 @@ export function HistoriaModal({ historia, paciente, onClose, onEdit }: HistoriaM
           <button
             onClick={onEdit}
             className="flex-1 bg-[#669933] hover:bg-[#5a8a2a] text-white font-medium py-2 rounded-lg transition"
+            type="button"
           >
             Editar
           </button>
           <button
             onClick={onClose}
             className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 rounded-lg transition"
+            type="button"
           >
             Cerrar
           </button>

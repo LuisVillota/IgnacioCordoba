@@ -1,10 +1,18 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from .core.config import settings
 import pymysql
+import os
+import shutil
 from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional
+
+# Configurar directorio para archivos subidos
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_DIR, "historias"), exist_ok=True)
 
 # PRIMERO definir la aplicación
 app = FastAPI(
@@ -16,11 +24,14 @@ app = FastAPI(
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=[settings.FRONTEND_URL, "http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Montar directorio de archivos estáticos
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # ========================================
 # MODELOS PYDANTIC (deben ir antes de los endpoints)
@@ -73,6 +84,35 @@ class MessageResponse(BaseModel):
     message: str
 
 # ========================================
+# MODELOS PYDANTIC PARA HISTORIAS CLÍNICAS
+# ========================================
+
+class HistorialClinicoBase(BaseModel):
+    paciente_id: int
+    motivo_consulta: Optional[str] = None
+    antecedentes_medicos: Optional[str] = None
+    antecedentes_quirurgicos: Optional[str] = None
+    antecedentes_alergicos: Optional[str] = None
+    antecedentes_farmacologicos: Optional[str] = None
+    exploracion_fisica: Optional[str] = None
+    diagnostico: Optional[str] = None
+    tratamiento: Optional[str] = None
+    recomendaciones: Optional[str] = None
+    fotos: Optional[str] = None
+
+class HistorialClinicoCreate(HistorialClinicoBase):
+    pass
+
+class HistorialClinicoUpdate(HistorialClinicoBase):
+    pass
+
+class FileUploadResponse(BaseModel):
+    success: bool
+    message: str
+    url: Optional[str] = None
+    filename: Optional[str] = None
+
+# ========================================
 # ENDPOINTS BÁSICOS
 # ========================================
 
@@ -85,7 +125,7 @@ def health_check():
     return {"status": "healthy", "database": "MySQL"}
 
 # ========================================
-# ENDPOINTS DE USUARIOS
+# ENDPOINTS DE USUARIOS (CORREGIDOS)
 # ========================================
 
 @app.get("/api/usuarios")
@@ -103,7 +143,7 @@ def get_usuarios():
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT u.id, u.username, u.nombre, u.email, r.nombre as rol, u.activo
+                    SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
                     FROM Usuario u 
                     JOIN Rol r ON u.rol_id = r.id
                     ORDER BY u.id
@@ -128,7 +168,7 @@ def get_usuario(usuario_id: int):
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT u.id, u.username, u.nombre, u.email, r.nombre as rol, u.activo
+                    SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
                     FROM Usuario u 
                     JOIN Rol r ON u.rol_id = r.id
                     WHERE u.id = %s
@@ -143,7 +183,7 @@ def get_usuario(usuario_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ========================================
-# ENDPOINTS DE LOGIN
+# ENDPOINTS DE LOGIN (CORREGIDOS)
 # ========================================
 
 @app.get("/api/login")
@@ -164,7 +204,7 @@ def login(username: str, password: str):
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT u.id, u.username, u.nombre, u.email, r.nombre as rol, u.activo
+                    SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
                     FROM Usuario u 
                     JOIN Rol r ON u.rol_id = r.id
                     WHERE u.username = %s AND u.password = %s AND u.activo = 1
@@ -372,38 +412,70 @@ def update_paciente(paciente_id: int, paciente: PacienteUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/api/pacientes/{paciente_id}", response_model=MessageResponse)
+@app.delete("/api/pacientes/{paciente_id}", response_model=dict)
 def delete_paciente(paciente_id: int):
-    """Eliminar un paciente"""
+    """Eliminar un paciente y sus registros relacionados (ELIMINACIÓN EN CASCADA)"""
     try:
         conn = pymysql.connect(
             host='localhost',
             user='root',
             password='root',
             database='prueba_consultorio_db',
-            port=3306
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor  # ¡IMPORTANTE AGREGAR ESTO!
         )
         with conn:
             with conn.cursor() as cursor:
                 # Verificar si el paciente existe
-                cursor.execute("SELECT id FROM Paciente WHERE id = %s", (paciente_id,))
-                if not cursor.fetchone():
+                cursor.execute("SELECT id, nombre, apellido FROM Paciente WHERE id = %s", (paciente_id,))
+                paciente = cursor.fetchone()
+                if not paciente:
                     raise HTTPException(status_code=404, detail="Paciente no encontrado")
                 
-                # Eliminar paciente
+                print(f"🗑️ Eliminando paciente {paciente_id} ({paciente['nombre']} {paciente['apellido']})")
+                
+                # Contar registros que se eliminarán
+                cursor.execute("SELECT COUNT(*) as count FROM Cita WHERE paciente_id = %s", (paciente_id,))
+                citas_count = cursor.fetchone()['count']
+                
+                cursor.execute("SELECT COUNT(*) as count FROM historial_clinico WHERE paciente_id = %s", (paciente_id,))
+                historias_count = cursor.fetchone()['count']
+                
+                print(f"   📋 Citas a eliminar: {citas_count}")
+                print(f"   📋 Historias clínicas a eliminar: {historias_count}")
+                
+                # Eliminar en orden inverso de dependencias
+                # 1. Primero eliminar historias clínicas (si existen)
+                if historias_count > 0:
+                    print(f"   🗑️ Eliminando {historias_count} historias clínicas...")
+                    cursor.execute("DELETE FROM historial_clinico WHERE paciente_id = %s", (paciente_id,))
+                    print(f"   ✅ {historias_count} historias clínicas eliminadas")
+                
+                # 2. Luego eliminar citas (si existen)
+                if citas_count > 0:
+                    print(f"   🗑️ Eliminando {citas_count} citas...")
+                    cursor.execute("DELETE FROM Cita WHERE paciente_id = %s", (paciente_id,))
+                    print(f"   ✅ {citas_count} citas eliminadas")
+                
+                # 3. Finalmente eliminar paciente
+                print(f"   🗑️ Eliminando paciente...")
                 cursor.execute("DELETE FROM Paciente WHERE id = %s", (paciente_id,))
                 conn.commit()
+                print(f"   ✅ Paciente eliminado")
                 
-                return MessageResponse(message="Paciente eliminado exitosamente")
+                return {
+                    "success": True,
+                    "message": "Paciente y registros relacionados eliminados exitosamente",
+                    "paciente_id": paciente_id,
+                    "paciente_nombre": f"{paciente['nombre']} {paciente['apellido']}",
+                    "citas_eliminadas": citas_count,
+                    "historias_eliminadas": historias_count
+                }
                 
-    except pymysql.err.IntegrityError as e:
-        raise HTTPException(
-            status_code=400, 
-            detail="No se puede eliminar el paciente porque tiene registros relacionados"
-        )
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ Error eliminando paciente {paciente_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ========================================
@@ -706,6 +778,426 @@ def get_procedimiento(procedimiento_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ========================================
+# ENDPOINTS DE HISTORIAS CLÍNICAS
+# ========================================
+
+@app.get("/api/historias-clinicas")
+def get_historias_clinicas(limit: int = 100, offset: int = 0):
+    """Obtener todas las historias clínicas"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT * FROM historial_clinico 
+                    ORDER BY fecha_creacion DESC 
+                    LIMIT %s OFFSET %s
+                """, (limit, offset))
+                historias = cursor.fetchall()
+                return {"historias": historias}
+    except Exception as e:
+        # Si la tabla no existe, devolver array vacío
+        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+            return {"historias": []}
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/historias-clinicas/paciente/{paciente_id}")
+def get_historias_by_paciente(paciente_id: int):
+    """Obtener historias clínicas de un paciente específico"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Primero verificar que el paciente existe
+                cursor.execute("SELECT id FROM paciente WHERE id = %s", (paciente_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                
+                cursor.execute("""
+                    SELECT * FROM historial_clinico 
+                    WHERE paciente_id = %s 
+                    ORDER BY fecha_creacion DESC
+                """, (paciente_id,))
+                historias = cursor.fetchall()
+                return historias
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Si la tabla no existe, devolver array vacío
+        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+            return []
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/historias-clinicas/{historia_id}")
+def get_historia_clinica(historia_id: int):
+    """Obtener una historia clínica específica por ID"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM historial_clinico WHERE id = %s", (historia_id,))
+                historia = cursor.fetchone()
+                if not historia:
+                    raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+                return historia
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Si la tabla no existe
+        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+            raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/historias-clinicas", response_model=dict)
+def create_historia_clinica(historia: HistorialClinicoCreate):
+    """Crear una nueva historia clínica"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el paciente existe
+                cursor.execute("SELECT id FROM paciente WHERE id = %s", (historia.paciente_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                
+                # Insertar nueva historia clínica (sin fotos inicialmente)
+                cursor.execute("""
+                    INSERT INTO historial_clinico (
+                        paciente_id, motivo_consulta, antecedentes_medicos,
+                        antecedentes_quirurgicos, antecedentes_alergicos,
+                        antecedentes_farmacologicos, exploracion_fisica,
+                        diagnostico, tratamiento, recomendaciones, fotos
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    historia.paciente_id,
+                    historia.motivo_consulta or "",
+                    historia.antecedentes_medicos or "",
+                    historia.antecedentes_quirurgicos or "",
+                    historia.antecedentes_alergicos or "",
+                    historia.antecedentes_farmacologicos or "",
+                    historia.exploracion_fisica or "",
+                    historia.diagnostico or "",
+                    historia.tratamiento or "",
+                    historia.recomendaciones or "",
+                    ""  # fotos vacías inicialmente
+                ))
+                historia_id = cursor.lastrowid
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Historia clínica creada exitosamente",
+                    "historia_id": historia_id,
+                    "id": historia_id
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Si la tabla no existe
+        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+            raise HTTPException(status_code=500, detail="Tabla de historias clínicas no existe. Ejecuta el script SQL primero.")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/historias-clinicas/{historia_id}", response_model=dict)
+def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
+    """Actualizar una historia clínica existente"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar si la historia existe
+                cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+                
+                # Verificar que el paciente existe
+                cursor.execute("SELECT id FROM paciente WHERE id = %s", (historia.paciente_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                
+                # Actualizar historia clínica
+                cursor.execute("""
+                    UPDATE historial_clinico SET
+                        paciente_id = %s,
+                        motivo_consulta = %s,
+                        antecedentes_medicos = %s,
+                        antecedentes_quirurgicos = %s,
+                        antecedentes_alergicos = %s,
+                        antecedentes_farmacologicos = %s,
+                        exploracion_fisica = %s,
+                        diagnostico = %s,
+                        tratamiento = %s,
+                        recomendaciones = %s
+                    WHERE id = %s
+                """, (
+                    historia.paciente_id,
+                    historia.motivo_consulta or "",
+                    historia.antecedentes_medicos or "",
+                    historia.antecedentes_quirurgicos or "",
+                    historia.antecedentes_alergicos or "",
+                    historia.antecedentes_farmacologicos or "",
+                    historia.exploracion_fisica or "",
+                    historia.diagnostico or "",
+                    historia.tratamiento or "",
+                    historia.recomendaciones or "",
+                    historia_id
+                ))
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Historia clínica actualizada exitosamente",
+                    "historia_id": historia_id
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Si la tabla no existe
+        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+            raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/historias-clinicas/{historia_id}", response_model=MessageResponse)
+def delete_historia_clinica(historia_id: int):
+    """Eliminar una historia clínica"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar si la historia existe
+                cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+                
+                # Eliminar historia clínica
+                cursor.execute("DELETE FROM historial_clinico WHERE id = %s", (historia_id,))
+                conn.commit()
+                
+                return MessageResponse(message="Historia clínica eliminada exitosamente")
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Si la tabla no existe
+        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+            raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ========================================
+# ENDPOINTS DE SUBIDA DE ARCHIVOS
+# ========================================
+
+@app.post("/api/upload/historia/{historia_id}", response_model=FileUploadResponse)
+async def upload_historia_foto(
+    historia_id: int,
+    file: UploadFile = File(...)
+):
+    """Subir foto para una historia clínica"""
+    print(f"🔥 DEBUG: Endpoint llamado con historia_id={historia_id}")
+    print(f"🔥 DEBUG: File object recibido")
+    print(f"🔥 DEBUG: Filename: {file.filename}")
+    print(f"🔥 DEBUG: Content type: {file.content_type}")
+    
+    try:
+        # Verificar si la historia existe
+        conn = None
+        try:
+            conn = pymysql.connect(
+                host='localhost',
+                user='root',
+                password='root',
+                database='prueba_consultorio_db',
+                port=3306
+            )
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
+                resultado = cursor.fetchone()
+                if not resultado:
+                    print(f"❌ Historia {historia_id} no encontrada en la base de datos")
+                    raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+                print(f"✅ Historia {historia_id} encontrada en la base de datos")
+        except Exception as db_error:
+            print(f"❌ Error base de datos: {db_error}")
+            raise HTTPException(status_code=500, detail=f"Error base de datos: {str(db_error)}")
+        finally:
+            if conn:
+                conn.close()
+        
+        # Validar tipo de archivo
+        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+        file_ext = os.path.splitext(file.filename or "unknown.jpg")[1].lower()
+        if file_ext not in allowed_extensions:
+            print(f"❌ Extensión no permitida: {file_ext}")
+            raise HTTPException(status_code=400, detail="Tipo de archivo no permitido. Use JPG, PNG, GIF, BMP o WebP.")
+        
+        # Validar tamaño (máximo 10MB)
+        max_size = 10 * 1024 * 1024  # 10MB
+        
+        # Leer contenido del archivo
+        content = await file.read()
+        print(f"📏 Tamaño del archivo: {len(content)} bytes")
+        if len(content) > max_size:
+            print(f"❌ Archivo demasiado grande: {len(content)} > {max_size}")
+            raise HTTPException(status_code=400, detail="El archivo es demasiado grande. Máximo 10MB.")
+        
+        # Generar nombre único para el archivo
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        filename = f"historia_{historia_id}_{timestamp}{file_ext}"
+        
+        # Asegurar que existe el directorio
+        historia_dir = os.path.join(UPLOAD_DIR, "historias")
+        os.makedirs(historia_dir, exist_ok=True)
+        
+        file_path = os.path.join(historia_dir, filename)
+        print(f"📁 Guardando archivo en: {file_path}")
+        
+        # Guardar archivo
+        await file.seek(0)  # Volver al inicio del archivo
+        with open(file_path, "wb") as buffer:
+            # Leer en chunks para manejar archivos grandes
+            while True:
+                chunk = await file.read(8192)  # 8KB chunks
+                if not chunk:
+                    break
+                buffer.write(chunk)
+        
+        print(f"✅ Archivo guardado correctamente: {file_path}")
+        
+        # Verificar que el archivo existe
+        if not os.path.exists(file_path):
+            print(f"❌ ERROR: Archivo no se creó: {file_path}")
+            raise HTTPException(status_code=500, detail="Error al guardar el archivo en el servidor")
+        
+        file_size = os.path.getsize(file_path)
+        print(f"✅ Archivo verificado: {file_path} ({file_size} bytes)")
+        
+        # Crear URL para acceder al archivo
+        file_url = f"/uploads/historias/{filename}"
+        print(f"🌐 URL generada: {file_url}")
+        
+        # Actualizar la historia clínica con la nueva URL
+        conn2 = None
+        try:
+            conn2 = pymysql.connect(
+                host='localhost',
+                user='root',
+                password='root',
+                database='prueba_consultorio_db',
+                port=3306
+            )
+            with conn2.cursor() as cursor:
+                # Obtener fotos actuales
+                cursor.execute("SELECT fotos FROM historial_clinico WHERE id = %s", (historia_id,))
+                resultado = cursor.fetchone()
+                fotos_actuales = ""
+                if resultado and resultado[0]:  # resultado es una tupla
+                    fotos_actuales = resultado[0]
+                    print(f"📸 Fotos actuales en BD: {fotos_actuales}")
+                else:
+                    print(f"📸 No hay fotos previas en BD")
+                
+                # Agregar nueva foto
+                if fotos_actuales and fotos_actuales.strip():
+                    nuevas_fotos = f"{fotos_actuales},{file_url}"
+                else:
+                    nuevas_fotos = file_url
+                
+                print(f"📝 Actualizando fotos para historia {historia_id}: {nuevas_fotos}")
+                
+                cursor.execute(
+                    "UPDATE historial_clinico SET fotos = %s WHERE id = %s",
+                    (nuevas_fotos, historia_id)
+                )
+                conn2.commit()
+                print(f"✅ Base de datos actualizada exitosamente")
+        except Exception as update_error:
+            print(f"❌ Error actualizando base de datos: {update_error}")
+            import traceback
+            traceback.print_exc()
+            # No lanzamos error aquí para que al menos el archivo se guarde
+        finally:
+            if conn2:
+                conn2.close()
+        
+        return FileUploadResponse(
+            success=True,
+            message="Foto subida exitosamente",
+            url=file_url,
+            filename=filename
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error inesperado en upload_historia_foto: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error subiendo archivo: {str(e)}")
+
+# ========================================
+# ENDPOINT DE DIAGNÓSTICO
+# ========================================
+
+@app.get("/api/debug/upload-dir")
+def debug_upload_dir():
+    """Verificar directorio de uploads"""
+    import os
+    upload_dir = os.path.abspath(UPLOAD_DIR)
+    historias_dir = os.path.join(upload_dir, "historias")
+    
+    return {
+        "upload_dir": upload_dir,
+        "historias_dir": historias_dir,
+        "upload_dir_exists": os.path.exists(upload_dir),
+        "historias_dir_exists": os.path.exists(historias_dir),
+        "current_working_dir": os.getcwd(),
+        "permissions": {
+            "upload_dir_writable": os.access(upload_dir, os.W_OK) if os.path.exists(upload_dir) else False,
+            "historias_dir_writable": os.access(historias_dir, os.W_OK) if os.path.exists(historias_dir) else False
+        },
+        "files_in_historias_dir": os.listdir(historias_dir) if os.path.exists(historias_dir) else []
+    }
+
+# ========================================
 # ENDPOINT DE TEST MEJORADO
 # ========================================
 
@@ -733,6 +1225,15 @@ def test_frontend():
                 
                 cursor.execute("SELECT COUNT(*) as count FROM Cita")
                 citas_count = cursor.fetchone()['count']
+                
+                # Verificar si existe tabla de historias clínicas
+                try:
+                    cursor.execute("SELECT COUNT(*) as count FROM historial_clinico")
+                    historias_count = cursor.fetchone()['count']
+                    historias_disponible = True
+                except:
+                    historias_count = 0
+                    historias_disponible = False
         
         return {
             "success": True,
@@ -744,7 +1245,11 @@ def test_frontend():
             "counts": {
                 "pacientes": pacientes_count,
                 "usuarios": usuarios_count,
-                "citas": citas_count
+                "citas": citas_count,
+                "historias_clinicas": historias_count
+            },
+            "modulos_activos": {
+                "historias_clinicas": historias_disponible
             },
             "endpoints_disponibles": [
                 "/api/usuarios",
@@ -757,6 +1262,11 @@ def test_frontend():
                 "/api/estados/quirurgicos",
                 "/api/procedimientos",
                 "/api/procedimientos/{id}",
+                "/api/historias-clinicas",
+                "/api/historias-clinicas/paciente/{id}",
+                "/api/historias-clinicas/{id}",
+                "/api/upload/historia/{id}",
+                "/api/debug/upload-dir",
                 "/api/test-frontend"
             ]
         }

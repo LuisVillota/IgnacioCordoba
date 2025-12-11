@@ -1,6 +1,5 @@
-# backend/src/app/models/paciente.py
 from sqlalchemy import Column, String, Integer, Date, DateTime, ForeignKey, Text
-from sqlalchemy.sql import func  # <-- AÑADE ESTA IMPORTACIÓN
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -20,7 +19,10 @@ class Paciente(BaseModel):
     
     # Relaciones - COMENTA TEMPORALMENTE las relaciones circulares
     # citas = relationship("Cita", back_populates="paciente", cascade="all, delete-orphan")
-    # historiales = relationship("HistorialClinico", back_populates="paciente", cascade="all, delete-orphan")
+    historiales = relationship("HistorialClinico", back_populates="paciente", cascade="all, delete-orphan")
     # planes_quirurgicos = relationship("PlanQuirurgico", back_populates="paciente", cascade="all, delete-orphan")
     # cotizaciones = relationship("Cotizacion", back_populates="paciente", cascade="all, delete-orphan")
     # facturas = relationship("Factura", back_populates="paciente", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Paciente {self.nombre} {self.apellido}>"
