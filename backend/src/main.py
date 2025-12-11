@@ -7,7 +7,7 @@ import os
 import shutil
 from datetime import datetime
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, List
 
 # Configurar directorio para archivos subidos
 UPLOAD_DIR = "uploads"
@@ -111,6 +111,28 @@ class FileUploadResponse(BaseModel):
     message: str
     url: Optional[str] = None
     filename: Optional[str] = None
+
+# ========================================
+# MODELOS PYDANTIC PARA SALA DE ESPERA
+# ========================================
+
+class SalaEsperaBase(BaseModel):
+    paciente_id: int
+    cita_id: Optional[int] = None
+    estado_id: int
+    notas: Optional[str] = None
+    tiene_cita_hoy: Optional[bool] = False
+
+class SalaEsperaCreate(BaseModel):
+    paciente_id: int
+    cita_id: Optional[int] = None
+
+class SalaEsperaUpdate(BaseModel):
+    estado: str
+    cita_id: Optional[int] = None
+
+class BulkUpdateEstadosRequest(BaseModel):
+    cambios: Dict[str, str]  # paciente_id -> estado_nombre
 
 # ========================================
 # ENDPOINTS BÁSICOS
@@ -706,7 +728,7 @@ def update_cita(cita_id: int, cita: CitaUpdate):
                 # Verificar si la cita existe
                 cursor.execute("SELECT id FROM Cita WHERE id = %s", (cita_id,))
                 if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Cita no encontrada")
+                    raise HTTPException(status_code=404, detail="Cita no encontrado")
                 
                 # Actualizar cita
                 cursor.execute("""
@@ -757,7 +779,7 @@ def delete_cita(cita_id: int):
                 # Verificar si la cita existe
                 cursor.execute("SELECT id FROM Cita WHERE id = %s", (cita_id,))
                 if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Cita no encontrada")
+                    raise HTTPException(status_code=404, detail="Cita no encontrado")
                 
                 # Eliminar cita
                 cursor.execute("DELETE FROM Cita WHERE id = %s", (cita_id,))
@@ -1275,6 +1297,496 @@ async def upload_historia_foto(
         raise HTTPException(status_code=500, detail=f"Error subiendo archivo: {str(e)}")
 
 # ========================================
+# ENDPOINTS DE SALA DE ESPERA
+# ========================================
+
+@app.get("/api/sala-espera")
+def get_sala_espera(mostrarTodos: bool = True):
+    """Obtener pacientes en sala de espera"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                hoy = datetime.now().strftime('%Y-%m-%d')
+                
+                # Consulta base para obtener pacientes
+                if mostrarTodos:
+                    query = """
+                        SELECT 
+                            p.id,
+                            p.nombre,
+                            p.apellido,
+                            p.numero_documento,
+                            p.telefono,
+                            p.email,
+                            se.id as sala_espera_id,
+                            se.cita_id,
+                            ese.nombre as estado_sala,
+                            se.tiempo_espera_minutos as tiempo_espera,
+                            TIME(se.fecha_hora_ingreso) as hora_cita,
+                            DATE(se.fecha_hora_ingreso) as fecha_cita,
+                            CASE 
+                                WHEN c.id IS NOT NULL AND DATE(c.fecha_hora) = %s THEN 1
+                                ELSE 0
+                            END as tiene_cita_hoy,
+                            c.fecha_hora as cita_fecha_hora
+                        FROM paciente p
+                        LEFT JOIN sala_espera se ON p.id = se.paciente_id 
+                            AND DATE(se.fecha_hora_ingreso) = %s
+                        LEFT JOIN estado_sala_espera ese ON se.estado_id = ese.id
+                        LEFT JOIN cita c ON p.id = c.paciente_id 
+                            AND DATE(c.fecha_hora) = %s
+                        ORDER BY se.fecha_hora_ingreso DESC, p.apellido, p.nombre
+                    """
+                    params = [hoy, hoy, hoy]
+                else:
+                    # Solo pacientes con cita hoy
+                    query = """
+                        SELECT 
+                            p.id,
+                            p.nombre,
+                            p.apellido,
+                            p.numero_documento,
+                            p.telefono,
+                            p.email,
+                            se.id as sala_espera_id,
+                            se.cita_id,
+                            ese.nombre as estado_sala,
+                            se.tiempo_espera_minutos as tiempo_espera,
+                            TIME(se.fecha_hora_ingreso) as hora_cita,
+                            DATE(se.fecha_hora_ingreso) as fecha_cita,
+                            1 as tiene_cita_hoy,
+                            c.fecha_hora as cita_fecha_hora,
+                            c.id as cita_id_real
+                        FROM paciente p
+                        INNER JOIN cita c ON p.id = c.paciente_id 
+                            AND DATE(c.fecha_hora) = %s
+                        LEFT JOIN sala_espera se ON p.id = se.paciente_id 
+                            AND DATE(se.fecha_hora_ingreso) = %s
+                        LEFT JOIN estado_sala_espera ese ON se.estado_id = ese.id
+                        ORDER BY c.fecha_hora ASC, p.apellido, p.nombre
+                    """
+                    params = [hoy, hoy]
+                
+                cursor.execute(query, params)
+                pacientes = cursor.fetchall()
+                
+                # Si el paciente no tiene registro en sala_espera, crear uno por defecto
+                for paciente in pacientes:
+                    if not paciente['sala_espera_id']:
+                        # Obtener estado "pendiente" por defecto
+                        cursor.execute(
+                            "SELECT id FROM estado_sala_espera WHERE nombre = 'pendiente'"
+                        )
+                        estado = cursor.fetchone()
+                        
+                        if estado:
+                            # Crear registro en sala_espera
+                            cursor.execute("""
+                                INSERT INTO sala_espera 
+                                (paciente_id, estado_id, fecha_hora_ingreso, tiene_cita_hoy) 
+                                VALUES (%s, %s, NOW(), %s)
+                            """, (
+                                paciente['id'],
+                                estado['id'],
+                                paciente['tiene_cita_hoy']
+                            ))
+                            paciente['sala_espera_id'] = cursor.lastrowid
+                            paciente['estado_sala'] = 'pendiente'
+                            paciente['tiempo_espera'] = 0
+                            paciente['hora_cita'] = datetime.now().strftime('%H:%M')
+                            paciente['fecha_cita'] = hoy
+                
+                # Re-ejecutar la consulta para obtener datos actualizados
+                cursor.execute(query, params)
+                pacientes = cursor.fetchall()
+                
+                # Formatear respuesta
+                pacientes_formateados = []
+                for paciente in pacientes:
+                    hora_cita_formateada = None
+                    if paciente['cita_fecha_hora']:
+                        try:
+                            hora_cita = datetime.strptime(
+                                str(paciente['cita_fecha_hora']), 
+                                '%Y-%m-%d %H:%M:%S'
+                            )
+                            hora_cita_formateada = hora_cita.strftime('%H:%M')
+                        except:
+                            hora_cita_formateada = "09:00"
+                    
+                    pacientes_formateados.append({
+                        'id': str(paciente['id']),
+                        'nombres': paciente['nombre'] or '',
+                        'apellidos': paciente['apellido'] or '',
+                        'documento': paciente['numero_documento'] or '',
+                        'telefono': paciente['telefono'] or '',
+                        'email': paciente['email'] or '',
+                        'sala_espera_id': str(paciente['sala_espera_id']) if paciente['sala_espera_id'] else None,
+                        'cita_id': str(paciente['cita_id']) if paciente['cita_id'] else None,
+                        'estado_sala': paciente['estado_sala'] or 'pendiente',
+                        'tiempo_espera': paciente['tiempo_espera'] or 0,
+                        'hora_cita': hora_cita_formateada or paciente['hora_cita'],
+                        'fecha_cita': paciente['fecha_cita'] or hoy,
+                        'tiene_cita_hoy': bool(paciente['tiene_cita_hoy'])
+                    })
+                
+                conn.commit()
+                return {
+                    "success": True,
+                    "pacientes": pacientes_formateados,
+                    "total": len(pacientes_formateados),
+                    "fecha": hoy
+                }
+                
+    except Exception as e:
+        print(f"❌ Error obteniendo sala de espera: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error obteniendo sala de espera: {str(e)}")
+
+@app.post("/api/sala-espera", response_model=dict)
+def crear_registro_sala_espera(registro: SalaEsperaCreate):
+    """Crear un nuevo registro en sala de espera"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el paciente existe
+                cursor.execute("SELECT id FROM paciente WHERE id = %s", (registro.paciente_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                
+                # Obtener estado "pendiente" por defecto
+                cursor.execute("SELECT id FROM estado_sala_espera WHERE nombre = 'pendiente'")
+                estado = cursor.fetchone()
+                if not estado:
+                    raise HTTPException(status_code=500, detail="Estado 'pendiente' no encontrado en la base de datos")
+                
+                # Verificar si ya existe un registro para hoy
+                cursor.execute("""
+                    SELECT id FROM sala_espera 
+                    WHERE paciente_id = %s AND DATE(fecha_hora_ingreso) = CURDATE()
+                """, (registro.paciente_id,))
+                
+                if cursor.fetchone():
+                    return {
+                        "success": True,
+                        "message": "El paciente ya está registrado en sala de espera hoy",
+                        "already_exists": True
+                    }
+                
+                # Crear nuevo registro
+                cursor.execute("""
+                    INSERT INTO sala_espera 
+                    (paciente_id, cita_id, estado_id, fecha_hora_ingreso, tiene_cita_hoy) 
+                    VALUES (%s, %s, %s, NOW(), %s)
+                """, (
+                    registro.paciente_id,
+                    registro.cita_id,
+                    estado['id'],
+                    registro.cita_id is not None  # Si tiene cita_id, tiene_cita_hoy = True
+                ))
+                
+                registro_id = cursor.lastrowid
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Paciente registrado en sala de espera",
+                    "registro_id": registro_id,
+                    "already_exists": False
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creando registro sala de espera: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creando registro: {str(e)}")
+
+@app.put("/api/sala-espera/{paciente_id}/estado", response_model=dict)
+def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
+    """Actualizar estado de un paciente en sala de espera"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el paciente existe
+                cursor.execute("SELECT id FROM paciente WHERE id = %s", (paciente_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                
+                # Obtener ID del estado
+                cursor.execute("SELECT id FROM estado_sala_espera WHERE nombre = %s", (datos.estado,))
+                estado = cursor.fetchone()
+                if not estado:
+                    raise HTTPException(status_code=400, detail=f"Estado '{datos.estado}' no válido")
+                
+                # Buscar registro de hoy
+                cursor.execute("""
+                    SELECT id, estado_id FROM sala_espera 
+                    WHERE paciente_id = %s AND DATE(fecha_hora_ingreso) = CURDATE()
+                """, (paciente_id,))
+                
+                registro = cursor.fetchone()
+                
+                if registro:
+                    # Actualizar registro existente
+                    cursor.execute("""
+                        UPDATE sala_espera 
+                        SET estado_id = %s, 
+                            fecha_hora_cambio_estado = NOW()
+                        WHERE id = %s
+                    """, (estado['id'], registro['id']))
+                    
+                    # Registrar en historial
+                    cursor.execute("""
+                        INSERT INTO historial_sala_espera 
+                        (sala_espera_id, estado_anterior_id, estado_nuevo_id) 
+                        VALUES (%s, %s, %s)
+                    """, (registro['id'], registro['estado_id'], estado['id']))
+                else:
+                    # Crear nuevo registro si no existe
+                    cursor.execute("""
+                        INSERT INTO sala_espera 
+                        (paciente_id, cita_id, estado_id, fecha_hora_ingreso) 
+                        VALUES (%s, %s, %s, NOW())
+                    """, (paciente_id, datos.cita_id, estado['id']))
+                    
+                    registro_id = cursor.lastrowid
+                    
+                    # Registrar en historial
+                    cursor.execute("""
+                        INSERT INTO historial_sala_espera 
+                        (sala_espera_id, estado_nuevo_id) 
+                        VALUES (%s, %s)
+                    """, (registro_id, estado['id']))
+                
+                conn.commit()
+                return {
+                    "success": True,
+                    "message": f"Estado actualizado a '{datos.estado}'"
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error actualizando estado: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error actualizando estado: {str(e)}")
+
+@app.put("/api/sala-espera/bulk-estados", response_model=dict)
+def bulk_update_estados_sala_espera(request: BulkUpdateEstadosRequest):
+    """Actualizar múltiples estados de sala de espera a la vez"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                actualizados = 0
+                errores = []
+                
+                for paciente_id_str, estado_nombre in request.cambios.items():
+                    try:
+                        paciente_id = int(paciente_id_str)
+                        
+                        # Obtener ID del estado
+                        cursor.execute("SELECT id FROM estado_sala_espera WHERE nombre = %s", (estado_nombre,))
+                        estado = cursor.fetchone()
+                        if not estado:
+                            errores.append(f"Estado '{estado_nombre}' no válido para paciente {paciente_id}")
+                            continue
+                        
+                        # Buscar registro de hoy
+                        cursor.execute("""
+                            SELECT id, estado_id FROM sala_espera 
+                            WHERE paciente_id = %s AND DATE(fecha_hora_ingreso) = CURDATE()
+                        """, (paciente_id,))
+                        
+                        registro = cursor.fetchone()
+                        
+                        if registro:
+                            # Actualizar registro existente
+                            cursor.execute("""
+                                UPDATE sala_espera 
+                                SET estado_id = %s, 
+                                    fecha_hora_cambio_estado = NOW()
+                                WHERE id = %s
+                            """, (estado['id'], registro['id']))
+                            
+                            # Registrar en historial
+                            cursor.execute("""
+                                INSERT INTO historial_sala_espera 
+                                (sala_espera_id, estado_anterior_id, estado_nuevo_id) 
+                                VALUES (%s, %s, %s)
+                            """, (registro['id'], registro['estado_id'], estado['id']))
+                        else:
+                            # Crear nuevo registro
+                            cursor.execute("""
+                                INSERT INTO sala_espera 
+                                (paciente_id, estado_id, fecha_hora_ingreso) 
+                                VALUES (%s, %s, NOW())
+                            """, (paciente_id, estado['id']))
+                            
+                            registro_id = cursor.lastrowid
+                            
+                            # Registrar en historial
+                            cursor.execute("""
+                                INSERT INTO historial_sala_espera 
+                                (sala_espera_id, estado_nuevo_id) 
+                                VALUES (%s, %s)
+                            """, (registro_id, estado['id']))
+                        
+                        actualizados += 1
+                        
+                    except Exception as e:
+                        errores.append(f"Error con paciente {paciente_id}: {str(e)}")
+                        continue
+                
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": f"Se actualizaron {actualizados} pacientes",
+                    "actualizados": actualizados,
+                    "errores": errores if errores else None
+                }
+                
+    except Exception as e:
+        print(f"❌ Error en bulk update: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error actualizando estados: {str(e)}")
+
+@app.get("/api/sala-espera/estadisticas")
+def get_estadisticas_sala_espera():
+    """Obtener estadísticas de sala de espera"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                hoy = datetime.now().strftime('%Y-%m-%d')
+                
+                # Estadísticas generales
+                cursor.execute("""
+                    SELECT 
+                        COUNT(DISTINCT p.id) as total_pacientes,
+                        SUM(CASE WHEN c.id IS NOT NULL AND DATE(c.fecha_hora) = %s THEN 1 ELSE 0 END) as con_cita_hoy,
+                        SUM(CASE WHEN c.id IS NULL OR DATE(c.fecha_hora) != %s THEN 1 ELSE 0 END) as sin_cita_hoy
+                    FROM paciente p
+                    LEFT JOIN cita c ON p.id = c.paciente_id AND DATE(c.fecha_hora) = %s
+                """, (hoy, hoy, hoy))
+                
+                general_stats = cursor.fetchone()
+                
+                # Estadísticas de estados en sala de espera
+                cursor.execute("""
+                    SELECT 
+                        ese.nombre as estado,
+                        COUNT(*) as cantidad,
+                        AVG(TIMESTAMPDIFF(MINUTE, se.fecha_hora_ingreso, NOW())) as tiempo_promedio_espera
+                    FROM sala_espera se
+                    JOIN estado_sala_espera ese ON se.estado_id = ese.id
+                    WHERE DATE(se.fecha_hora_ingreso) = %s
+                    GROUP BY ese.nombre, ese.orden
+                    ORDER BY ese.orden
+                """, (hoy,))
+                
+                estados_stats = cursor.fetchall()
+                
+                # Inicializar contadores
+                estadisticas = {
+                    'total': general_stats['total_pacientes'] or 0,
+                    'con_cita_hoy': general_stats['con_cita_hoy'] or 0,
+                    'sin_cita_hoy': general_stats['sin_cita_hoy'] or 0,
+                    'pendientes': 0,
+                    'llegadas': 0,
+                    'confirmadas': 0,
+                    'en_consulta': 0,
+                    'completadas': 0,
+                    'no_asistieron': 0,
+                    'tiempo_promedio_espera': 0,
+                    'tiempo_promedio_consulta': 25  # Valor por defecto
+                }
+                
+                # Llenar contadores por estado
+                for stat in estados_stats:
+                    estado = stat['estado']
+                    cantidad = stat['cantidad']
+                    tiempo_promedio = stat['tiempo_promedio_espera'] or 0
+                    
+                    if estado == 'pendiente':
+                        estadisticas['pendientes'] = cantidad
+                    elif estado == 'llegada':
+                        estadisticas['llegadas'] = cantidad
+                    elif estado == 'confirmada':
+                        estadisticas['confirmadas'] = cantidad
+                    elif estado == 'en_consulta':
+                        estadisticas['en_consulta'] = cantidad
+                    elif estado == 'completada':
+                        estadisticas['completadas'] = cantidad
+                    elif estado == 'no_asistio':
+                        estadisticas['no_asistieron'] = cantidad
+                    
+                    # Calcular tiempo promedio general
+                    if cantidad > 0:
+                        estadisticas['tiempo_promedio_espera'] = tiempo_promedio
+                
+                # Calcular tiempo promedio de consulta (ejemplo simplificado)
+                cursor.execute("""
+                    SELECT AVG(TIMESTAMPDIFF(MINUTE, fecha_hora, NOW())) as tiempo_promedio_consulta
+                    FROM cita 
+                    WHERE DATE(fecha_hora) = %s 
+                    AND estado_id = 3  # Completadas
+                """, (hoy,))
+                
+                consulta_time = cursor.fetchone()
+                if consulta_time and consulta_time['tiempo_promedio_consulta']:
+                    estadisticas['tiempo_promedio_consulta'] = consulta_time['tiempo_promedio_consulta']
+                
+                return {
+                    "success": True,
+                    "fecha": hoy,
+                    "estadisticas": estadisticas
+                }
+                
+    except Exception as e:
+        print(f"❌ Error obteniendo estadísticas: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error obteniendo estadísticas: {str(e)}")
+
+# ========================================
 # ENDPOINT DE DIAGNÓSTICO
 # ========================================
 
@@ -1335,6 +1847,47 @@ def test_frontend():
                 except:
                     historias_count = 0
                     historias_disponible = False
+                
+                # Verificar si existen tablas de sala de espera
+                try:
+                    cursor.execute("SELECT COUNT(*) as count FROM estado_sala_espera")
+                    estados_sala_count = cursor.fetchone()['count']
+                    cursor.execute("SELECT COUNT(*) as count FROM sala_espera WHERE DATE(fecha_hora_ingreso) = CURDATE()")
+                    sala_hoy_count = cursor.fetchone()['count']
+                    sala_espera_disponible = True
+                except:
+                    estados_sala_count = 0
+                    sala_hoy_count = 0
+                    sala_espera_disponible = False
+        
+        # Actualizar endpoints disponibles
+        endpoints_disponibles = [
+            "/api/usuarios",
+            "/api/login",
+            "/api/pacientes",
+            "/api/pacientes/{id}",
+            "/api/citas",
+            "/api/citas/{id}",
+            "/api/estados/citas",
+            "/api/estados/quirurgicos",
+            "/api/procedimientos",
+            "/api/procedimientos/{id}",
+            "/api/historias-clinicas",
+            "/api/historias-clinicas/paciente/{id}",
+            "/api/historias-clinicas/{id}",
+            "/api/upload/historia/{id}",
+            "/api/debug/upload-dir",
+            "/api/test-frontend"
+        ]
+        
+        # Agregar endpoints de sala de espera si están disponibles
+        if sala_espera_disponible:
+            endpoints_disponibles.extend([
+                "/api/sala-espera",
+                "/api/sala-espera/{paciente_id}/estado",
+                "/api/sala-espera/bulk-estados",
+                "/api/sala-espera/estadisticas"
+            ])
         
         return {
             "success": True,
@@ -1347,29 +1900,15 @@ def test_frontend():
                 "pacientes": pacientes_count,
                 "usuarios": usuarios_count,
                 "citas": citas_count,
-                "historias_clinicas": historias_count
+                "historias_clinicas": historias_count,
+                "estados_sala_espera": estados_sala_count,
+                "sala_espera_hoy": sala_hoy_count
             },
             "modulos_activos": {
-                "historias_clinicas": historias_disponible
+                "historias_clinicas": historias_disponible,
+                "sala_espera": sala_espera_disponible
             },
-            "endpoints_disponibles": [
-                "/api/usuarios",
-                "/api/login",
-                "/api/pacientes",
-                "/api/pacientes/{id}",
-                "/api/citas",
-                "/api/citas/{id}",
-                "/api/estados/citas",
-                "/api/estados/quirurgicos",
-                "/api/procedimientos",
-                "/api/procedimientos/{id}",
-                "/api/historias-clinicas",
-                "/api/historias-clinicas/paciente/{id}",
-                "/api/historias-clinicas/{id}",
-                "/api/upload/historia/{id}",
-                "/api/debug/upload-dir",
-                "/api/test-frontend"
-            ]
+            "endpoints_disponibles": endpoints_disponibles
         }
     except Exception as e:
         return {
