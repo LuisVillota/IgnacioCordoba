@@ -13,6 +13,7 @@ import { SalaEsperaPage } from "../pages/SalaEsperaPage"
 import { ProgramacionQuirurgicaPage } from "../pages/ProgramacionQuirurgicaPage"
 import { PlanQuirurgicoPage } from "../pages/PlanQuirurgicoPage"
 import { OrdenExamenesPage } from "../pages/OrdenExamenesPage"
+import { UsuariosPage } from "@/pages/UsuariosPage"
 
 type CurrentPage =
   | "home"
@@ -24,6 +25,7 @@ type CurrentPage =
   | "programacion"
   | "plan"
   | "ordenExamen"
+  | "usuarios"
 
 export function DashboardLayout() {
   const auth = useContext(AuthContext)
@@ -39,6 +41,7 @@ export function DashboardLayout() {
         <main className="flex-1 overflow-auto">
           {currentPage === "home" && <DashboardHome user={auth.user} hasPermission={auth.hasPermission} />}
           {currentPage === "pacientes" && <PacientesPage />}
+          {currentPage === "usuarios" && <UsuariosPage />}
           {currentPage === "agenda" && <AgendaPage />}
           {currentPage === "historia" && <HistoriaClinicaPage />}
           {currentPage === "cotizaciones" && <CotizacionesPage />}

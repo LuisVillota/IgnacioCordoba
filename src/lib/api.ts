@@ -81,6 +81,10 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
   }
 };
 
+
+
+
+
 // Helper para convertir archivo a base64
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -93,6 +97,8 @@ const fileToBase64 = (file: File): Promise<string> => {
 
 // Funciones específicas de la API
 export const api = {
+
+  
   // ===== AUTH =====
   login: (username: string, password: string) => {
     const encodedUsername = encodeURIComponent(username);
@@ -101,8 +107,24 @@ export const api = {
   },
   
   // ===== USUARIOS =====
-  getUsuarios: () => fetchAPI('/api/usuarios'),
+
+  getUsuarios: (p0: number) => fetchAPI('/api/usuarios'),
   getUsuario: (id: number) => fetchAPI(`/api/usuarios/${id}`),
+
+createUsuario: async (data: {
+  username: string
+  password: string
+  nombre: string
+  email: string
+  rol_id: number
+  activo: boolean
+}) => {
+  return fetchAPI("/api/usuarios", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+},
+
   
   // ===== PACIENTES =====
   getPacientes: (limit?: number, offset?: number) => 
@@ -439,8 +461,172 @@ export const api = {
       console.error("❌ Debug error:", error);
       throw error;
     }
-  }
+  },
+
+  bulkUpdateEstadosSalaEspera: async (cambios: Record<string, string>): Promise<any> => {
+    try {
+      console.log("💾 Enviando cambios de estado:", cambios);
+      
+      const response = await fetch(`${API_URL}/api/sala-espera/bulk-estados`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+        body: JSON.stringify({ cambios }),
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log("✅ Respuesta bulk update:", data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error actualizando estados:', error);
+      throw error;
+    }
+  },
+
+  getEstadisticasSalaEspera: async (): Promise<any> => {
+    try {
+      const response = await fetch(`${API_URL}/api/sala-espera/estadisticas`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log("📊 Estadísticas sala de espera:", data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error obteniendo estadísticas:', error);
+      throw error;
+    }
+  },
+
+  agregarPacienteSalaEspera: async (pacienteId: string, citaId?: string): Promise<any> => {
+    try {
+      console.log("➕ Agregando paciente a sala de espera:", { pacienteId, citaId });
+      
+      const body: any = { paciente_id: parseInt(pacienteId) };
+      if (citaId) {
+        body.cita_id = parseInt(citaId);
+      }
+      
+      const response = await fetch(`${API_URL}/api/sala-espera`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log("✅ Paciente agregado a sala de espera:", data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error agregando paciente:', error);
+      throw error;
+    }
+  },
+
+  updateEstadoSalaEspera: async (pacienteId: string, estado: string, citaId?: string): Promise<any> => {
+    try {
+      console.log("🔄 Actualizando estado individual:", { pacienteId, estado, citaId });
+      
+      const body: any = { estado };
+      if (citaId) {
+        body.cita_id = citaId;
+      }
+      
+      const response = await fetch(`${API_URL}/api/sala-espera/${pacienteId}/estado`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log("✅ Estado actualizado:", data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error actualizando estado:', error);
+      throw error;
+    }
+  },
 };
+
+
 
 // Helper para manejar errores
 export const handleApiError = (error: any): string => {
@@ -496,6 +682,24 @@ export const transformBackendToFrontend = {
     fecha_registro: backendPaciente.fecha_registro || new Date().toISOString(),
   }),
   
+usuario: (backendUsuario: any) => ({
+  id: backendUsuario.id?.toString() || "",
+  username: backendUsuario.username || "",
+  nombre: backendUsuario.nombre || "",
+  email: backendUsuario.email || "",
+
+
+  rol: backendUsuario.rol ?? "desconocido",
+
+  activo: Boolean(backendUsuario.usuario_activo),
+
+  fecha_registro: backendUsuario.fecha_creacion
+    ? backendUsuario.fecha_creacion.split(" ")[0]
+    : "",
+}),
+
+
+
   // Transformar cita del backend al formato del frontend
   cita: (backendCita: any) => {
     let fecha = '';

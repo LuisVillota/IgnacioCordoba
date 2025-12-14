@@ -1,0 +1,6 @@
+DATABASE_URL=mysql+pymysql://root:root@localhost:3306/prueba_consultorio_db?charset=utf8mb4
+SECRET_KEY=2416c33e23e7f87b2feb10bcdb4213824622dcf0bfb97168397ad1d9e365b8b4
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+FRONTEND_URL=http://localhost:3000
+DEBUG=True

@@ -37,6 +37,14 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 # MODELOS PYDANTIC (deben ir antes de los endpoints)
 # ========================================
 
+class UsuarioCreate(BaseModel):
+    username: str
+    password: str
+    nombre: str
+    email: str
+    rol_id: int
+    activo: bool
+    
 class PacienteBase(BaseModel):
     numero_documento: str
     tipo_documento: Optional[str] = "CC"
@@ -165,10 +173,18 @@ def get_usuarios():
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
-                    FROM Usuario u 
+                  SELECT 
+                    u.id,
+                    u.username,
+                    u.nombre,
+                    u.email,
+                    r.tipo_rol AS rol,
+                    u.activo AS usuario_activo,
+                    u.fecha_creacion
+                    FROM Usuario u
                     JOIN Rol r ON u.rol_id = r.id
-                    ORDER BY u.id
+                    ORDER BY u.id;
+
                 """)
                 usuarios = cursor.fetchall()
                 return {"total": len(usuarios), "usuarios": usuarios}
@@ -246,6 +262,62 @@ def login(username: str, password: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+    
+@app.post("/api/usuarios", response_model=dict)
+def create_usuario(usuario: UsuarioCreate):
+    """Crear un nuevo usuario"""
+    try:
+        conn = pymysql.connect(
+            host="localhost",
+            user="root",
+            password="root",
+            database="prueba_consultorio_db",
+            port=3306
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar username duplicado
+                cursor.execute(
+                    "SELECT id FROM usuario WHERE username = %s",
+                    (usuario.username,)
+                )
+                if cursor.fetchone():
+                    raise HTTPException(status_code=400, detail="El username ya existe")
+
+                # Insertar usuario
+                cursor.execute("""
+                    INSERT INTO usuario (
+                        username,
+                        password,
+                        nombre,
+                        email,
+                        rol_id,
+                        activo,
+                        fecha_creacion
+                    ) VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                """, (
+                    usuario.username,
+                    usuario.password,
+                    usuario.nombre,
+                    usuario.email,
+                    usuario.rol_id,
+                    usuario.activo
+                ))
+
+                usuario_id = cursor.lastrowid
+                conn.commit()
+
+                return {
+                    "success": True,
+                    "message": "Usuario creado exitosamente",
+                    "usuario_id": usuario_id
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ========================================
 # ENDPOINTS DE PACIENTES
@@ -309,6 +381,8 @@ def get_paciente(paciente_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
 
 @app.post("/api/pacientes", response_model=dict)
 def create_paciente(paciente: PacienteCreate):
