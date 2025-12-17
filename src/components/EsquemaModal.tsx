@@ -1,5 +1,3 @@
-// src/components/EsquemaModal.tsx
-
 import React, { useState, useRef, useCallback, useEffect } from "react";
 
 // --- TIPOS ---

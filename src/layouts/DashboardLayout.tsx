@@ -13,6 +13,7 @@ import { SalaEsperaPage } from "../pages/SalaEsperaPage"
 import { ProgramacionQuirurgicaPage } from "../pages/ProgramacionQuirurgicaPage"
 import { PlanQuirurgicoPage } from "../pages/PlanQuirurgicoPage"
 import { OrdenExamenesPage } from "../pages/OrdenExamenesPage"
+import { ProcedimientosPage } from "../pages/ProcedimientosPage" // Agrega esta importación
 
 type CurrentPage =
   | "home"
@@ -24,6 +25,7 @@ type CurrentPage =
   | "programacion"
   | "plan"
   | "ordenExamen"
+  | "procedimientos" // Agrega este tipo
 
 export function DashboardLayout() {
   const auth = useContext(AuthContext)
@@ -45,7 +47,8 @@ export function DashboardLayout() {
           {currentPage === "sala-espera" && <SalaEsperaPage />}
           {currentPage === "programacion" && <ProgramacionQuirurgicaPage />}
           {currentPage === "plan" && <PlanQuirurgicoPage />}
-          {currentPage === "ordenExamen" && <OrdenExamenesPage />} {/* ← CAMBIA ESTA LÍNEA */}
+          {currentPage === "ordenExamen" && <OrdenExamenesPage />}
+          {currentPage === "procedimientos" && <ProcedimientosPage />} {/* Agrega esta línea */}
         </main>
       </div>
     </div>
