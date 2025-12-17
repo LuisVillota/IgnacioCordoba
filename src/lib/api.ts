@@ -32,7 +32,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
         if (errorData.detail) {
           if (Array.isArray(errorData.detail)) {
             // Es un array de errores de validación de Pydantic
-            // Ejemplo: [{"loc": ["body", "fecha_hora"], "msg": "field required", "type": "value_error.missing"}]
             errorMessage = errorData.detail.map((err: any) => {
               if (typeof err === 'object' && err.msg) {
                 const field = err.loc?.join('.') || 'campo';
@@ -342,9 +341,57 @@ export const api = {
   getEstadosCitas: () => fetchAPI('/api/estados/citas'),
   getEstadosQuirurgicos: () => fetchAPI('/api/estados/quirurgicos'),
   
-  // ===== PROCEDIMIENTOS =====
-  getProcedimientos: () => fetchAPI('/api/procedimientos'),
-  getProcedimiento: (id: number) => fetchAPI(`/api/procedimientos/${id}`),
+  // ===== PROCEDIMIENTOS (CONSULTA) =====
+getProcedimientos: () => fetchAPI('/api/procedimientos'),
+getProcedimiento: (id: number) => fetchAPI(`/api/procedimientos/${id}`),
+
+// ===== PROCEDIMIENTOS (CATÁLOGO) - Verifica los endpoints correctos =====
+getCatalogoProcedimientos: () => fetchAPI('/api/procedimientos'),
+getCatalogoProcedimiento: (id: number) => fetchAPI(`/api/procedimientos/${id}`),
+createCatalogoProcedimiento: (data: any) => 
+  fetchAPI('/api/procedimientos', { 
+    method: 'POST', 
+    body: JSON.stringify(data) 
+  }),
+updateCatalogoProcedimiento: (id: number, data: any) => 
+  fetchAPI(`/api/procedimientos/${id}`, { 
+    method: 'PUT', 
+    body: JSON.stringify(data) 
+  }),
+deleteCatalogoProcedimiento: (id: number) => 
+  fetchAPI(`/api/procedimientos/${id}`, { method: 'DELETE' }),
+
+// ===== ADICIONALES - Endpoints temporales (crear si no existen) =====
+getAdicionales: () => fetchAPI('/api/adicionales'),
+getAdicional: (id: number) => fetchAPI(`/api/adicionales/${id}`),
+createAdicional: (data: any) => 
+  fetchAPI('/api/adicionales', { 
+    method: 'POST', 
+    body: JSON.stringify(data) 
+  }),
+updateAdicional: (id: number, data: any) => 
+  fetchAPI(`/api/adicionales/${id}`, { 
+    method: 'PUT', 
+    body: JSON.stringify(data) 
+  }),
+deleteAdicional: (id: number) => 
+  fetchAPI(`/api/adicionales/${id}`, { method: 'DELETE' }),
+
+// ===== OTROS ADICIONALES - Endpoints temporales (crear si no existen) =====
+getOtrosAdicionales: () => fetchAPI('/api/otros-adicionales'),
+getOtroAdicional: (id: number) => fetchAPI(`/api/otros-adicionales/${id}`),
+createOtroAdicional: (data: any) => 
+  fetchAPI('/api/otros-adicionales', { 
+    method: 'POST', 
+    body: JSON.stringify(data) 
+  }),
+updateOtroAdicional: (id: number, data: any) => 
+  fetchAPI(`/api/otros-adicionales/${id}`, { 
+    method: 'PUT', 
+    body: JSON.stringify(data) 
+  }),
+deleteOtroAdicional: (id: number) => 
+  fetchAPI(`/api/otros-adicionales/${id}`, { method: 'DELETE' }),
   
   // ===== DASHBOARD =====
   async getDashboardStats() {
@@ -415,6 +462,7 @@ export const api = {
   
   // ===== DEBUG =====
   debugUploadDir: () => fetchAPI('/api/debug/upload-dir'),
+  debugSalaEspera: () => fetchAPI('/api/debug/sala-espera'),
   
   // Nueva función para debug de fotos
   debugHistoriaFotos: async (historiaId: number) => {
@@ -439,7 +487,390 @@ export const api = {
       console.error("❌ Debug error:", error);
       throw error;
     }
-  }
+  },
+
+  // ===== SALA DE ESPERA =====
+  getSalaEspera: async (mostrarTodos: boolean = true): Promise<any> => {
+    try {
+      console.log(`📥 Obteniendo sala de espera, mostrarTodos: ${mostrarTodos}`);
+      const response = await fetch(`${API_URL}/api/sala-espera?mostrarTodos=${mostrarTodos}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error('❌ Error obteniendo sala de espera:', errorData);
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log("✅ Respuesta sala de espera recibida:", {
+        success: data.success,
+        total: data.total,
+        pacientes: data.pacientes?.length || 0
+      });
+      return data;
+    } catch (error) {
+      console.error('❌ Error obteniendo sala de espera:', error);
+      // Retornar datos de fallback en lugar de lanzar error
+      return {
+        success: false,
+        pacientes: [],
+        total: 0,
+        message: 'Error cargando sala de espera: ' + (error instanceof Error ? error.message : 'Error desconocido')
+      };
+    }
+  },
+
+  bulkUpdateEstadosSalaEspera: async (cambios: Record<string, string>): Promise<any> => {
+    try {
+      console.log("💾 Enviando cambios de estado a sala de espera:", {
+        totalCambios: Object.keys(cambios).length,
+        cambios: cambios
+      });
+      
+      const response = await fetch(`${API_URL}/api/sala-espera/bulk-estados`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+        body: JSON.stringify({ cambios }),
+      });
+      
+      console.log("📥 Respuesta bulk update:", response.status, response.statusText);
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error('❌ Error en bulk update:', errorData);
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log("✅ Bulk update completado:", {
+        success: data.success,
+        actualizados: data.actualizados,
+        errores: data.errores?.length || 0
+      });
+      return data;
+    } catch (error) {
+      console.error('❌ Error actualizando estados:', error);
+      throw error;
+    }
+  },
+
+  getEstadisticasSalaEspera: async (): Promise<any> => {
+    try {
+      console.log("📊 Obteniendo estadísticas de sala de espera...");
+      const response = await fetch(`${API_URL}/api/sala-espera/estadisticas`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error('❌ Error obteniendo estadísticas:', errorData);
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        // No lanzar error para estadísticas, retornar datos por defecto
+        console.warn('⚠️ Usando estadísticas por defecto');
+        return {
+          success: false,
+          estadisticas: {
+            total: 0,
+            pendientes: 0,
+            llegadas: 0,
+            confirmadas: 0,
+            en_consulta: 0,
+            completadas: 0,
+            no_asistieron: 0,
+            con_cita_hoy: 0,
+            sin_cita_hoy: 0,
+            tiempo_promedio_espera: 15,
+            tiempo_promedio_consulta: 25
+          }
+        };
+      }
+      
+      const data = await response.json();
+      console.log("✅ Estadísticas obtenidas:", data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error obteniendo estadísticas:', error);
+      // Retornar estadísticas por defecto en lugar de lanzar error
+      return {
+        success: false,
+        estadisticas: {
+          total: 0,
+          pendientes: 0,
+          llegadas: 0,
+          confirmadas: 0,
+          en_consulta: 0,
+          completadas: 0,
+          no_asistieron: 0,
+          con_cita_hoy: 0,
+          sin_cita_hoy: 0,
+          tiempo_promedio_espera: 15,
+          tiempo_promedio_consulta: 25
+        }
+      };
+    }
+  },
+
+  agregarPacienteSalaEspera: async (pacienteId: string, citaId?: string): Promise<any> => {
+    try {
+      console.log("➕ Agregando paciente a sala de espera:", { pacienteId, citaId });
+      
+      const body: any = { paciente_id: parseInt(pacienteId) };
+      if (citaId) {
+        body.cita_id = parseInt(citaId);
+      }
+      
+      const response = await fetch(`${API_URL}/api/sala-espera`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      
+      console.log("📥 Respuesta agregar paciente:", response.status, response.statusText);
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error('❌ Error agregando paciente:', errorData);
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log("✅ Paciente agregado a sala de espera:", data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error agregando paciente:', error);
+      throw error;
+    }
+  },
+
+  updateEstadoSalaEspera: async (pacienteId: string, estado: string, citaId?: string): Promise<any> => {
+    try {
+      console.log("🔄 Actualizando estado individual:", { pacienteId, estado, citaId });
+      
+      const body: any = { estado };
+      if (citaId) {
+        body.cita_id = parseInt(citaId);
+      }
+      
+      const response = await fetch(`${API_URL}/api/sala-espera/${pacienteId}/estado`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      
+      console.log("📥 Respuesta actualizar estado:", response.status, response.statusText);
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error('❌ Error actualizando estado individual:', errorData);
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log("✅ Estado actualizado individualmente:", data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error actualizando estado individual:', error);
+      throw error;
+    }
+  },
+
+  // ===== CREAR REGISTRO EN SALA DE ESPERA =====
+  crearRegistroSalaEspera: async (pacienteId: number, citaId?: number): Promise<any> => {
+    try {
+      console.log("📝 Creando registro sala de espera para paciente:", pacienteId);
+      
+      const body: any = { paciente_id: pacienteId };
+      if (citaId) {
+        body.cita_id = citaId;
+      }
+      
+      const response = await fetch(`${API_URL}/api/sala-espera`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      
+      console.log("📥 Respuesta crear registro:", response.status, response.statusText);
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error('❌ Error creando registro:', errorData);
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log("✅ Registro creado exitosamente:", data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error creando registro:', error);
+      throw error;
+    }
+  },
+
+  // ===== ACTUALIZAR ESTADO SALA DE ESPERA (CORREGIDO) =====
+  actualizarEstadoSalaEspera: async (pacienteId: string, datos: { estado: string, cita_id?: string }): Promise<any> => {
+    try {
+      console.log("🔄 Actualizando estado sala espera:", { pacienteId, datos });
+      
+      const response = await fetch(`${API_URL}/api/sala-espera/${pacienteId}/estado`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+        body: JSON.stringify(datos),
+      });
+      
+      console.log("📥 Respuesta actualizar estado:", response.status, response.statusText);
+      
+      if (!response.ok) {
+        let errorMessage = `Error HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error('❌ Error actualizando estado:', errorData);
+          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+        } catch {
+          // Si no se puede parsear como JSON
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Si falla todo
+          }
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log("✅ Estado actualizado correctamente:", data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error actualizando estado:', error);
+      throw error;
+    }
+  },
+
+  // ===== OBTENER DIAGNÓSTICO DE SALA DE ESPERA =====
+  getDiagnosticSalaEspera: async (): Promise<any> => {
+    try {
+      console.log("🔍 Obteniendo diagnóstico de sala de espera...");
+      const response = await fetch(`${API_URL}/api/debug/sala-espera`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+        },
+      });
+      
+      if (!response.ok) {
+        console.warn('⚠️ No se pudo obtener diagnóstico de sala de espera');
+        return {
+          success: false,
+          message: 'No se pudo obtener diagnóstico'
+        };
+      }
+      
+      const data = await response.json();
+      console.log("✅ Diagnóstico obtenido:", data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error obteniendo diagnóstico:', error);
+      return {
+        success: false,
+        message: 'Error obteniendo diagnóstico: ' + (error instanceof Error ? error.message : 'Error desconocido')
+      };
+    }
+  },
 };
 
 // Helper para manejar errores
@@ -448,6 +879,17 @@ export const handleApiError = (error: any): string => {
   
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
+    
+    // Errores específicos de sala de espera
+    if (message.includes('sala') && message.includes('espera')) {
+      if (message.includes('tabla') || message.includes('no existe')) {
+        return 'Error: La tabla de sala de espera no existe en la base de datos. Contacta al administrador.';
+      }
+      if (message.includes('estado') && message.includes('no encontrado')) {
+        return 'Error: Estado no válido en sala de espera. Contacta al administrador.';
+      }
+      return 'Error en sala de espera: ' + error.message;
+    }
     
     if (message.includes('datetime value')) {
       return 'Error de formato de fecha/hora. Contacta al administrador.';
@@ -604,6 +1046,44 @@ export const transformBackendToFrontend = {
     precio: backendProcedimiento.precio_base || backendProcedimiento.precio || 0,
     tiempo_promedio: 90,
   }),
+
+  // Transformar procedimiento de catálogo
+  procedimientoCatalogo: (backendProcedimiento: any) => ({
+    id: backendProcedimiento.id?.toString() || '',
+    nombre: backendProcedimiento.nombre || '',
+    precio: backendProcedimiento.precio || 0,
+  }),
+
+  // Transformar adicional
+  adicional: (backendAdicional: any) => ({
+    id: backendAdicional.id?.toString() || '',
+    nombre: backendAdicional.nombre || '',
+    precio: backendAdicional.precio || 0,
+  }),
+
+  // Transformar otro adicional
+  otroAdicional: (backendOtroAdicional: any) => ({
+    id: backendOtroAdicional.id?.toString() || '',
+    nombre: backendOtroAdicional.nombre || '',
+    precio: backendOtroAdicional.precio || 0,
+  }),
+
+  // Transformar paciente de sala de espera del backend al formato del frontend
+  pacienteSalaEspera: (backendPaciente: any) => ({
+    id: backendPaciente.id?.toString() || '',
+    nombres: backendPaciente.nombres || backendPaciente.nombre || '',
+    apellidos: backendPaciente.apellidos || backendPaciente.apellido || '',
+    documento: backendPaciente.documento || backendPaciente.numero_documento || '',
+    telefono: backendPaciente.telefono || '',
+    email: backendPaciente.email || '',
+    cita_id: backendPaciente.cita_id?.toString(),
+    hora_cita: backendPaciente.hora_cita || '',
+    fecha_cita: backendPaciente.fecha_cita || '',
+    estado_sala: backendPaciente.estado_sala || 'pendiente',
+    tiempo_espera: backendPaciente.tiempo_espera || 0,
+    tiene_cita_hoy: backendPaciente.tiene_cita_hoy || false,
+    sala_espera_id: backendPaciente.sala_espera_id?.toString()
+  }),
   
   // Transformación inversa - Paciente
   pacienteToBackend: (frontendPaciente: any) => {
@@ -651,4 +1131,88 @@ export const transformBackendToFrontend = {
       fotos: frontendHistoria.fotos || ''
     };
   },
+
+  // Transformación inversa - Sala de Espera
+  salaEsperaToBackend: (frontendPaciente: any) => {
+    return {
+      paciente_id: parseInt(frontendPaciente.id),
+      estado: frontendPaciente.estado_sala,
+      cita_id: frontendPaciente.cita_id ? parseInt(frontendPaciente.cita_id) : undefined
+    };
+  },
+
+  // Transformación inversa - Procedimiento Catálogo
+  procedimientoCatalogoToBackend: (frontendProcedimiento: any) => {
+    return {
+      nombre: frontendProcedimiento.nombre || '',
+      precio: parseFloat(frontendProcedimiento.precio) || 0,
+    };
+  },
+
+  // Transformación inversa - Adicional
+  adicionalToBackend: (frontendAdicional: any) => {
+    return {
+      nombre: frontendAdicional.nombre || '',
+      precio: parseFloat(frontendAdicional.precio) || 0,
+    };
+  },
+
+  // Transformación inversa - Otro Adicional
+  otroAdicionalToBackend: (frontendOtroAdicional: any) => {
+    return {
+      nombre: frontendOtroAdicional.nombre || '',
+      precio: parseFloat(frontendOtroAdicional.precio) || 0,
+    };
+  },
+};
+
+// Funciones helper adicionales para sala de espera
+export const salaEsperaHelpers = {
+  // Mapear estado a color
+  getEstadoColor: (estado: string): string => {
+    switch (estado) {
+      case "pendiente": return "bg-gray-100 text-gray-800";
+      case "llegada": return "bg-yellow-100 text-yellow-800";
+      case "confirmada": return "bg-green-100 text-green-800";
+      case "en_consulta": return "bg-blue-100 text-blue-800";
+      case "completada": return "bg-purple-100 text-purple-800";
+      case "no_asistio": return "bg-red-100 text-red-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  },
+
+  // Mapear estado a etiqueta
+  getEstadoLabel: (estado: string): string => {
+    switch (estado) {
+      case "pendiente": return "Pendiente";
+      case "llegada": return "Llegada";
+      case "confirmada": return "Confirmada";
+      case "en_consulta": return "En Consulta";
+      case "completada": return "Completada";
+      case "no_asistio": return "No Asistió";
+      default: return estado;
+    }
+  },
+
+  // Estados disponibles
+  estadosDisponibles: [
+    "pendiente", "llegada", "confirmada", "en_consulta", "completada", "no_asistio"
+  ],
+
+  // Calcular tiempo de espera formateado
+  formatTiempoEspera: (minutos: number): string => {
+    if (minutos < 60) {
+      return `${minutos} min`;
+    } else {
+      const horas = Math.floor(minutos / 60);
+      const minsRestantes = minutos % 60;
+      return `${horas}h ${minsRestantes}min`;
+    }
+  },
+
+  // Validar si un estado es válido
+  isValidEstado: (estado: string): boolean => {
+    const estadosValidos = ["pendiente", "llegada", "confirmada", "en_consulta", "completada", "no_asistio"];
+    return estadosValidos.includes(estado);
+  }
 };
