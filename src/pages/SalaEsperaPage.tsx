@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Clock, AlertCircle, CheckCircle2, Phone, Save, UserCheck, UserX, User, Calendar, RefreshCw } from "lucide-react"
+import { Clock, AlertCircle, CheckCircle2, Save, UserCheck, UserX, User, Calendar, RefreshCw } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
@@ -675,7 +675,7 @@ export function SalaEsperaPage() {
                       </p>
                     </div>
 
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center">
                       <select
                         value={paciente.estado_sala}
                         onChange={(e) => handleChangeEstado(paciente.id, e.target.value as PacienteSalaEspera["estado_sala"])}
@@ -687,16 +687,6 @@ export function SalaEsperaPage() {
                           </option>
                         ))}
                       </select>
-
-                      <button 
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                        title="Llamar paciente"
-                        onClick={() => {
-                          toast.info(`Llamando a ${paciente.nombres} ${paciente.apellidos}`)
-                        }}
-                      >
-                        <Phone size={20} />
-                      </button>
                     </div>
                   </div>
                 </div>

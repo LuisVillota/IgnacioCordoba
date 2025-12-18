@@ -1,230 +1,415 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { X, Plus, Trash2 } from "lucide-react"
-import { mockPacientes } from "../data/mockData"
-import type { Cotizacion, CotizacionItem } from "../pages/CotizacionesPage"
+import { transformBackendToFrontend, cotizacionHelpers } from "../lib/api"
+import type { Cotizacion, CotizacionItemBase, CotizacionServicioIncluido } from "../types"
 
 interface CotizacionFormProps {
   cotizacion?: Cotizacion
-  onSave: (data: Omit<Cotizacion, "id" | "fecha_creacion">) => void
+  onSave: (data: any) => void
   onClose: () => void
 }
 
-// Datos basados en el Excel proporcionado
-const procedimientosBase = [
-  { id: "1", nombre: "ABDOMINOPLASTIA + PEXIA SIN IMPLANTES", precio: 20000000 },
-  { id: "2", nombre: "CORRECCION DE CICATRIZ 1", precio: 4000000 },
-  { id: "3", nombre: "GLUTEOPLASTIA POR LIPOTRANSFERENCIA", precio: 3000000 },
-  { id: "4", nombre: "LIPOESCULTURA 3 HORAS", precio: 12000000 },
-]
+interface ProcedimientoCatalogo {
+  id: number;
+  nombre: string;
+  precio: number;
+}
 
-const adicionalesBase = [
-  { id: "a1", nombre: "SEGURO PARA COMPLICACIONES QUIRURGICAS", precio: 75200 },
-  { id: "a2", nombre: "CAMARA HIPERBARICA (5 SESIONES)", precio: 700000 },
-  { id: "a3", nombre: "MASAJES (10 SESIONES)", precio: 800000 },
-]
+interface AdicionalCatalogo {
+  id: number;
+  nombre: string;
+  precio: number;
+}
 
-const otrosAdicionalesBase = [
-  { id: "oa1", nombre: "FAJA SUAVE", precio: 250000 },
-  { id: "oa2", nombre: "FAJA RIGIDA", precio: 290000 },
-  { id: "oa3", nombre: "BRASIER POST-QUIRURGICOS ALGODÓN", precio: 90000 },
-  { id: "oa4", nombre: "TABLA ABDOMINAL", precio: 0 },
-  { id: "oa5", nombre: "TABLA DERRIER", precio: 80000 },
-  { id: "oa6", nombre: "MENTONERA", precio: 710000 },
-]
+interface Paciente {
+  id: number;
+  nombre: string;
+  apellido: string;
+  numero_documento: string;
+}
 
-// Servicios incluidos con checkbox
-const serviciosIncluidos = [
-  { id: "inc1", nombre: "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", requiere: false },
-  { id: "inc2", nombre: "ANESTESIOLOGO", requiere: false },
-  { id: "inc3", nombre: "CONTROLES CON MEDICO Y ENFERMERA", requiere: false },
-  { id: "inc4", nombre: "VALORACION CON ANESTESIOLOGO", requiere: false },
-  { id: "inc5", nombre: "HEMOGRAMA DE CONTROL", requiere: false },
-  { id: "inc6", nombre: "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", requiere: false },
-  { id: "inc7", nombre: "IMPLANTES", requiere: false },
+// Servicios incluidos fijos
+const serviciosIncluidosFijos = [
+  { servicio_nombre: "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", requiere: false },
+  { servicio_nombre: "ANESTESIOLOGO", requiere: false },
+  { servicio_nombre: "CONTROLES CON MEDICO Y ENFERMERA", requiere: false },
+  { servicio_nombre: "VALORACION CON ANESTESIOLOGO", requiere: false },
+  { servicio_nombre: "HEMOGRAMA DE CONTROL", requiere: false },
+  { servicio_nombre: "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", requiere: false },
+  { servicio_nombre: "IMPLANTES", requiere: false },
 ]
 
 export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormProps) {
+  // Estado inicial del formulario
   const [formData, setFormData] = useState({
-    id_paciente: cotizacion?.id_paciente || "",
-    estado: cotizacion?.estado || ("pendiente" as const),
+    paciente_id: cotizacion?.paciente_id || "",
+    usuario_id: "1",
+    estado: cotizacion?.estado || "pendiente",
     items: cotizacion?.items || [],
-    serviciosIncluidos: cotizacion?.serviciosIncluidos || serviciosIncluidos,
+    servicios_incluidos: cotizacion?.servicios_incluidos || serviciosIncluidosFijos,
     observaciones: cotizacion?.observaciones || "",
   })
 
+  // Estados para datos dinámicos del backend
+  const [procedimientos, setProcedimientos] = useState<ProcedimientoCatalogo[]>([])
+  const [adicionales, setAdicionales] = useState<AdicionalCatalogo[]>([])
+  const [otrosAdicionales, setOtrosAdicionales] = useState<AdicionalCatalogo[]>([])
+  const [pacientes, setPacientes] = useState<Paciente[]>([])
+  
+  const [loading, setLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [selectedProcedimiento, setSelectedProcedimiento] = useState<string>("")
   const [selectedAdicional, setSelectedAdicional] = useState<string>("")
   const [selectedOtroAdicional, setSelectedOtroAdicional] = useState<string>("")
 
-  const calculateTotals = (items: CotizacionItem[]) => {
-    const subtotalProcedimientos = items
-      .filter(item => procedimientosBase.some(p => p.nombre === item.nombre))
-      .reduce((sum, item) => sum + item.subtotal, 0)
-    
-    const subtotalAdicionales = items
-      .filter(item => adicionalesBase.some(a => a.nombre === item.nombre))
-      .reduce((sum, item) => sum + item.subtotal, 0)
-    
-    const subtotalOtrosAdicionales = items
-      .filter(item => otrosAdicionalesBase.some(oa => oa.nombre === item.nombre))
-      .reduce((sum, item) => sum + item.subtotal, 0)
+  // Ref para prevenir envíos duplicados
+  const isSubmittingRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
-    const total = items.reduce((sum, item) => sum + item.subtotal, 0)
+  // Función para calcular totales
+  const calculateTotals = () => {
+    console.log("🔢 Calculando totales de items:", formData.items);
+    
+    let subtotalProcedimientos = 0;
+    let subtotalAdicionales = 0;
+    let subtotalOtrosAdicionales = 0;
+    
+    formData.items.forEach((item, index) => {
+      const cantidad = Number(item.cantidad) || 1;
+      const precioUnitario = Number(item.precio_unitario) || 0;
+      const subtotal = cantidad * precioUnitario;
+      
+      console.log(`Item ${index}: ${item.nombre}`, {
+        tipo: item.tipo,
+        cantidad,
+        precioUnitario,
+        subtotal
+      });
+      
+      // Clasificar por tipo
+      if (item.tipo === "procedimiento") {
+        subtotalProcedimientos += subtotal;
+      } else if (item.tipo === "adicional") {
+        subtotalAdicionales += subtotal;
+      } else if (item.tipo === "otroAdicional") {
+        subtotalOtrosAdicionales += subtotal;
+      }
+    });
+    
+    const total = subtotalProcedimientos + subtotalAdicionales + subtotalOtrosAdicionales;
+    
+    console.log("💰 Totales calculados:", {
+      subtotalProcedimientos,
+      subtotalAdicionales,
+      subtotalOtrosAdicionales,
+      total
+    });
     
     return {
       subtotalProcedimientos,
       subtotalAdicionales,
       subtotalOtrosAdicionales,
-      total,
-      total_con_impuesto: total, // Sin impuestos
+      total
+    };
+  }
+
+  // Usar useMemo para calcular totales eficientemente
+  const totals = useMemo(() => calculateTotals(), [formData.items]);
+
+  // Cargar datos del backend
+  useEffect(() => {
+    loadInitialData()
+  }, [])
+
+  // Función para cargar datos iniciales - MODIFICADA para usar api desde props
+  async function loadInitialData() {
+    try {
+      setLoading(true)
+      
+      // Necesitamos importar api aquí o pasarlo por props
+      // Por simplicidad, vamos a importarlo directamente
+      const { api } = await import("../lib/api");
+      
+      // Cargar procedimientos
+      const procRes = await api.getProcedimientos()
+      setProcedimientos(procRes.procedimientos || [])
+      
+      // Cargar adicionales
+      const addRes = await api.getAdicionales()
+      setAdicionales(addRes.adicionales || [])
+      
+      // Cargar otros adicionales
+      const oaRes = await api.getOtrosAdicionales()
+      setOtrosAdicionales(oaRes.otros_adicionales || [])
+      
+      // Cargar pacientes
+      const pacRes = await api.getPacientes(100)
+      setPacientes(pacRes.pacientes || [])
+      
+    } catch (error) {
+      console.error("Error cargando datos:", error)
+      alert("Error cargando datos del servidor")
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleToggleServicioIncluido = (servicioId: string) => {
-    setFormData({
-      ...formData,
-      serviciosIncluidos: formData.serviciosIncluidos.map(servicio => 
-        servicio.id === servicioId 
-          ? { ...servicio, requiere: !servicio.requiere }
-          : servicio
-      )
+  const handleToggleServicioIncluido = (index: number) => {
+    setFormData(prev => {
+      const nuevosServicios = [...prev.servicios_incluidos]
+      nuevosServicios[index] = {
+        ...nuevosServicios[index],
+        requiere: !nuevosServicios[index].requiere
+      }
+      
+      return {
+        ...prev,
+        servicios_incluidos: nuevosServicios
+      }
     })
   }
 
   const handleAddItem = (tipo: "procedimiento" | "adicional" | "otroAdicional") => {
-    let itemToAdd: any = null
+    let itemToAdd: ProcedimientoCatalogo | AdicionalCatalogo | undefined
+    let sourceArray: (ProcedimientoCatalogo | AdicionalCatalogo)[] = []
 
     if (tipo === "procedimiento" && selectedProcedimiento) {
-      itemToAdd = procedimientosBase.find((p) => p.id === selectedProcedimiento)
+      sourceArray = procedimientos
+      itemToAdd = procedimientos.find((p) => p.id.toString() === selectedProcedimiento)
     } else if (tipo === "adicional" && selectedAdicional) {
-      itemToAdd = adicionalesBase.find((a) => a.id === selectedAdicional)
+      sourceArray = adicionales
+      itemToAdd = adicionales.find((a) => a.id.toString() === selectedAdicional)
     } else if (tipo === "otroAdicional" && selectedOtroAdicional) {
-      itemToAdd = otrosAdicionalesBase.find((oa) => oa.id === selectedOtroAdicional)
+      sourceArray = otrosAdicionales
+      itemToAdd = otrosAdicionales.find((oa) => oa.id.toString() === selectedOtroAdicional)
     }
 
     if (!itemToAdd) {
-      setErrors({ ...errors, [tipo]: `Selecciona un ${tipo}` })
+      setErrors(prev => ({ ...prev, [tipo]: `Selecciona un ${tipo}` }))
       return
     }
 
-    const newItem: CotizacionItem = {
+    const newItem: CotizacionItemBase = {
       id: Date.now().toString(),
+      tipo: tipo === "otroAdicional" ? "otroAdicional" : tipo,
+      item_id: itemToAdd.id,
       nombre: itemToAdd.nombre,
       descripcion: "",
       cantidad: 1,
       precio_unitario: itemToAdd.precio,
       subtotal: itemToAdd.precio,
-      tipo: tipo,
     }
 
-    setFormData({
-      ...formData,
-      items: [...formData.items, newItem],
-    })
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, newItem],
+    }))
 
-    // Reset selection
-    if (tipo === "procedimiento") setSelectedProcedimiento("")
-    if (tipo === "adicional") setSelectedAdicional("")
-    if (tipo === "otroAdicional") setSelectedOtroAdicional("")
+    // Reset selection y limpiar error
+    if (tipo === "procedimiento") {
+      setSelectedProcedimiento("")
+      setErrors(prev => ({ ...prev, procedimiento: "" }))
+    }
+    if (tipo === "adicional") {
+      setSelectedAdicional("")
+      setErrors(prev => ({ ...prev, adicional: "" }))
+    }
+    if (tipo === "otroAdicional") {
+      setSelectedOtroAdicional("")
+      setErrors(prev => ({ ...prev, otroAdicional: "" }))
+    }
   }
 
   const handleRemoveItem = (itemId: string) => {
-    setFormData({
-      ...formData,
-      items: formData.items.filter((i) => i.id !== itemId),
-    })
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.filter((i) => i.id !== itemId),
+    }))
   }
 
   const handleUpdateItem = (itemId: string, field: string, value: any) => {
-    setFormData({
-      ...formData,
-      items: formData.items.map((item) => {
+    setFormData(prev => {
+      const updatedItems = prev.items.map((item) => {
         if (item.id === itemId) {
           const updated = { ...item, [field]: value }
           if (field === "cantidad" || field === "precio_unitario") {
-            updated.subtotal = updated.cantidad * updated.precio_unitario
+            const cantidad = Number(updated.cantidad) || 1
+            const precioUnitario = Number(updated.precio_unitario) || 0
+            updated.subtotal = cantidad * precioUnitario
           }
           return updated
         }
         return item
-      }),
+      })
+      
+      return {
+        ...prev,
+        items: updatedItems
+      }
     })
   }
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.id_paciente) newErrors.id_paciente = "Selecciona un paciente"
+    if (!formData.paciente_id) newErrors.paciente_id = "Selecciona un paciente"
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (validateForm()) {
-      const totals = calculateTotals(formData.items)
-      const fecha_vencimiento = new Date()
-      fecha_vencimiento.setDate(fecha_vencimiento.getDate() + 7) // Validez fija de 7 días
+  // 🎯 FUNCIÓN DE SUBMIT MODIFICADA - SOLO PREPARA DATOS, NO LLAMA API
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log("🟡 [SUBMIT] Iniciando handleSubmit - SOLO PREPARACIÓN DE DATOS");
+    
+    // PROTECCIÓN CONTRA DOBLE ENVÍO - Usamos ref y state
+    if (isSubmitting || isSubmittingRef.current) {
+      console.log("⚠️ [SUBMIT] Ya se está enviando, ignorando...");
+      return;
+    }
+    
+    if (!validateForm()) {
+      console.log("❌ [SUBMIT] Validación fallida");
+      return;
+    }
+    
+    // BLOQUEAR INMEDIATAMENTE
+    setIsSubmitting(true);
+    isSubmittingRef.current = true;
+    
+    try {
+      console.log("📋 [SUBMIT] Preparando datos para pasar al componente padre...");
+      
+      // Preparar datos para el backend
+      const backendData = transformBackendToFrontend.cotizacionToBackend({
+        ...formData,
+        subtotalProcedimientos: totals.subtotalProcedimientos,
+        subtotalAdicionales: totals.subtotalAdicionales,
+        subtotalOtrosAdicionales: totals.subtotalOtrosAdicionales,
+        fecha_vencimiento: cotizacionHelpers.calcularFechaVencimiento(7),
+        validez_dias: 7
+      });
 
-      onSave({
+      console.log("📤 [SUBMIT] Datos preparados para backend:", backendData);
+
+      // Buscar información del paciente para mostrar
+      const pacienteInfo = pacientes.find(p => p.id.toString() === formData.paciente_id);
+
+      // Crear objeto de respuesta para el callback
+      const responseData = {
+        // Datos para mostrar en la UI
         ...formData,
         ...totals,
-        fecha_vencimiento: fecha_vencimiento.toISOString().split("T")[0],
-        validez_dias: 7, // Validez fija
-      })
+        id: cotizacion?.id || '', // Si es edición, mantener el ID
+        fecha_creacion: cotizacion?.fecha_creacion || new Date().toISOString().split('T')[0],
+        fecha_vencimiento: cotizacionHelpers.calcularFechaVencimiento(7),
+        validez_dias: 7,
+        paciente_nombre: pacienteInfo ? `${pacienteInfo.nombre} ${pacienteInfo.apellido}` : '',
+        paciente_apellido: pacienteInfo?.apellido || '',
+        usuario_nombre: "Dr Hernan Ignacio Cordoba",
+        paciente_documento: pacienteInfo?.numero_documento || '',
+        
+        // Información adicional para el padre
+        _isEditing: !!cotizacion?.id,
+        _originalId: cotizacion?.id || '',
+        _backendData: backendData // Datos crudos para que el padre haga la llamada
+      }
+
+      console.log("📋 [SUBMIT] Datos listos para pasar al padre:", responseData);
+
+      // Llamar al callback de éxito - el padre se encarga de llamar a la API
+      onSave(responseData);
+
+      // Cerrar el formulario inmediatamente
+      onClose();
+
+    } catch (error: any) {
+      console.error('❌ [SUBMIT] Error preparando datos:', error);
+      
+      // Manejar errores específicos
+      if (error.message.includes('tuple indices must be integers or slices')) {
+        alert("Error en la transformación de datos. Contacta al administrador.");
+      } else if (error.message.includes("generated column 'total'")) {
+        alert("Error: No se puede preparar el total calculado. La base de datos lo calcula automáticamente.");
+      } else {
+        alert(error.message || 'Error al preparar los datos de la cotización');
+      }
+    } finally {
+      setIsSubmitting(false);
+      isSubmittingRef.current = false;
+      console.log("🔄 [SUBMIT] Estado resetado");
     }
   }
 
-  const totals = calculateTotals(formData.items)
-
   // Filtrar items por tipo para mostrar en secciones separadas
-  const itemsProcedimientos = formData.items.filter(item => 
-    procedimientosBase.some(p => p.nombre === item.nombre)
-  )
-  const itemsAdicionales = formData.items.filter(item => 
-    adicionalesBase.some(a => a.nombre === item.nombre)
-  )
-  const itemsOtrosAdicionales = formData.items.filter(item => 
-    otrosAdicionalesBase.some(oa => oa.nombre === item.nombre)
-  )
+  const itemsProcedimientos = formData.items.filter(item => item.tipo === "procedimiento")
+  const itemsAdicionales = formData.items.filter(item => item.tipo === "adicional")
+  const itemsOtrosAdicionales = formData.items.filter(item => item.tipo === "otroAdicional")
+
+  if (loading && !cotizacion) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <p>Cargando datos...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
           <h2 className="text-xl font-bold text-gray-800">{cotizacion ? "Editar Cotización" : "Nueva Cotización"}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="p-1 hover:bg-gray-100 rounded-lg transition disabled:opacity-50"
+            disabled={loading || isSubmitting}
+          >
             <X size={20} />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Paciente */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Paciente</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Paciente *</label>
             <select
-              value={formData.id_paciente}
-              onChange={(e) => setFormData({ ...formData, id_paciente: e.target.value })}
+              value={formData.paciente_id}
+              onChange={(e) => setFormData(prev => ({ ...prev, paciente_id: e.target.value }))}
+              disabled={loading || isSubmitting}
               className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${
-                errors.id_paciente ? "border-red-500" : "border-gray-300"
-              }`}
+                errors.paciente_id ? "border-red-500" : "border-gray-300"
+              } ${(loading || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               <option value="">-- Selecciona un paciente --</option>
-              {mockPacientes.map((p) => (
+              {pacientes.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.nombres} {p.apellidos} ({p.documento})
+                  {p.nombre} {p.apellido} ({p.numero_documento})
                 </option>
               ))}
             </select>
-            {errors.id_paciente && <p className="text-xs text-red-600 mt-1">{errors.id_paciente}</p>}
+            {errors.paciente_id && <p className="text-xs text-red-600 mt-1">{errors.paciente_id}</p>}
+          </div>
+
+          {/* Doctor/Usuario - Fijo */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Doctor Responsable</label>
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+              <p className="text-gray-800">Dr Hernan Ignacio Cordoba</p>
+              <input type="hidden" value="1" name="usuario_id" />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Doctor asignado automáticamente</p>
           </div>
 
           {/* Sección INCLUYE - Tabla con checkboxes */}
@@ -239,16 +424,17 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
                   </tr>
                 </thead>
                 <tbody>
-                  {formData.serviciosIncluidos.map((servicio) => (
-                    <tr key={servicio.id} className="border-b border-blue-100 hover:bg-blue-100/50">
+                  {formData.servicios_incluidos.map((servicio, index) => (
+                    <tr key={index} className="border-b border-blue-100 hover:bg-blue-100/50">
                       <td className="py-2 px-3 text-blue-700">
-                        {servicio.nombre}
+                        {servicio.servicio_nombre}
                       </td>
                       <td className="py-2 px-3 text-center">
                         <input
                           type="checkbox"
                           checked={servicio.requiere}
-                          onChange={() => handleToggleServicioIncluido(servicio.id)}
+                          onChange={() => handleToggleServicioIncluido(index)}
+                          disabled={loading || isSubmitting}
                           className="w-4 h-4 text-[#1a6b32] border-gray-300 rounded focus:ring-[#1a6b32]"
                         />
                       </td>
@@ -268,24 +454,29 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
               <select
                 value={selectedProcedimiento}
                 onChange={(e) => setSelectedProcedimiento(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8]"
+                disabled={loading || isSubmitting}
+                className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${
+                  errors.procedimiento ? "border-red-500" : "border-gray-300"
+                } ${(loading || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <option value="">-- Selecciona procedimiento --</option>
-                {procedimientosBase.map((p) => (
+                {procedimientos.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.nombre} (${p.precio.toLocaleString("es-CO")})
+                    {p.nombre} (${cotizacionHelpers.formatCurrency(p.precio)})
                   </option>
                 ))}
               </select>
               <button
                 type="button"
                 onClick={() => handleAddItem("procedimiento")}
-                className="bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition"
+                disabled={loading || isSubmitting}
+                className="bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={18} />
                 <span>Agregar</span>
               </button>
             </div>
+            {errors.procedimiento && <p className="text-xs text-red-600 mb-2">{errors.procedimiento}</p>}
 
             {/* Items Table - Procedimientos */}
             {itemsProcedimientos.length > 0 && (
@@ -299,8 +490,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
                       <input
                         type="number"
                         value={item.cantidad}
-                        onChange={(e) => handleUpdateItem(item.id, "cantidad", Number.parseInt(e.target.value) || 1)}
+                        onChange={(e) => handleUpdateItem(item.id!, "cantidad", Number.parseInt(e.target.value) || 1)}
                         min="1"
+                        disabled={loading || isSubmitting}
                         className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm"
                       />
                       <span className="text-gray-600 text-sm">×</span>
@@ -313,8 +505,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleRemoveItem(item.id)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                      onClick={() => handleRemoveItem(item.id!)}
+                      disabled={loading || isSubmitting}
+                      className="p-1 text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50"
                     >
                       <Trash2 size={18} />
                     </button>
@@ -339,24 +532,29 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
               <select
                 value={selectedAdicional}
                 onChange={(e) => setSelectedAdicional(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8]"
+                disabled={loading || isSubmitting}
+                className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${
+                  errors.adicional ? "border-red-500" : "border-gray-300"
+                } ${(loading || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <option value="">-- Selecciona adicional --</option>
-                {adicionalesBase.map((a) => (
+                {adicionales.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.nombre} (${a.precio.toLocaleString("es-CO")})
+                    {a.nombre} (${cotizacionHelpers.formatCurrency(a.precio)})
                   </option>
                 ))}
               </select>
               <button
                 type="button"
                 onClick={() => handleAddItem("adicional")}
-                className="bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition"
+                disabled={loading || isSubmitting}
+                className="bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={18} />
                 <span>Agregar</span>
               </button>
             </div>
+            {errors.adicional && <p className="text-xs text-red-600 mb-2">{errors.adicional}</p>}
 
             {/* Items Table - Adicionales */}
             {itemsAdicionales.length > 0 && (
@@ -370,8 +568,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
                       <input
                         type="number"
                         value={item.cantidad}
-                        onChange={(e) => handleUpdateItem(item.id, "cantidad", Number.parseInt(e.target.value) || 1)}
+                        onChange={(e) => handleUpdateItem(item.id!, "cantidad", Number.parseInt(e.target.value) || 1)}
                         min="1"
+                        disabled={loading || isSubmitting}
                         className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm"
                       />
                       <span className="text-gray-600 text-sm">×</span>
@@ -384,8 +583,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleRemoveItem(item.id)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                      onClick={() => handleRemoveItem(item.id!)}
+                      disabled={loading || isSubmitting}
+                      className="p-1 text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50"
                     >
                       <Trash2 size={18} />
                     </button>
@@ -410,24 +610,29 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
               <select
                 value={selectedOtroAdicional}
                 onChange={(e) => setSelectedOtroAdicional(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8]"
+                disabled={loading || isSubmitting}
+                className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${
+                  errors.otroAdicional ? "border-red-500" : "border-gray-300"
+                } ${(loading || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <option value="">-- Selecciona otro adicional --</option>
-                {otrosAdicionalesBase.map((oa) => (
+                {otrosAdicionales.map((oa) => (
                   <option key={oa.id} value={oa.id}>
-                    {oa.nombre} {oa.precio > 0 ? `($${oa.precio.toLocaleString("es-CO")})` : "(Incluido)"}
+                    {oa.nombre} {oa.precio > 0 ? `(${cotizacionHelpers.formatCurrency(oa.precio)})` : "(Incluido)"}
                   </option>
                 ))}
               </select>
               <button
                 type="button"
                 onClick={() => handleAddItem("otroAdicional")}
-                className="bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition"
+                disabled={loading || isSubmitting}
+                className="bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={18} />
                 <span>Agregar</span>
               </button>
             </div>
+            {errors.otroAdicional && <p className="text-xs text-red-600 mb-2">{errors.otroAdicional}</p>}
 
             {/* Items Table - Otros Adicionales */}
             {itemsOtrosAdicionales.length > 0 && (
@@ -441,8 +646,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
                       <input
                         type="number"
                         value={item.cantidad}
-                        onChange={(e) => handleUpdateItem(item.id, "cantidad", Number.parseInt(e.target.value) || 1)}
+                        onChange={(e) => handleUpdateItem(item.id!, "cantidad", Number.parseInt(e.target.value) || 1)}
                         min="1"
+                        disabled={loading || isSubmitting}
                         className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm"
                       />
                       <span className="text-gray-600 text-sm">×</span>
@@ -455,8 +661,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleRemoveItem(item.id)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                      onClick={() => handleRemoveItem(item.id!)}
+                      disabled={loading || isSubmitting}
+                      className="p-1 text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50"
                     >
                       <Trash2 size={18} />
                     </button>
@@ -472,19 +679,25 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             )}
           </div>
 
-          {/* Totals - Sin impuestos */}
+          {/* Totals */}
           <div className="bg-gradient-to-r from-[#1a6b32]/10 to-[#99d6e8]/10 rounded-lg p-4 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-gray-700">Subtotal Procedimientos:</span>
-              <span className="font-semibold text-gray-800">${totals.subtotalProcedimientos.toLocaleString("es-CO")}</span>
+              <span className="font-semibold text-gray-800">
+                ${totals.subtotalProcedimientos.toLocaleString("es-CO")}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-700">Subtotal Adicionales:</span>
-              <span className="font-semibold text-gray-800">${totals.subtotalAdicionales.toLocaleString("es-CO")}</span>
+              <span className="font-semibold text-gray-800">
+                ${totals.subtotalAdicionales.toLocaleString("es-CO")}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-700">Subtotal Otros Adicionales:</span>
-              <span className="font-semibold text-gray-800">${totals.subtotalOtrosAdicionales.toLocaleString("es-CO")}</span>
+              <span className="font-semibold text-gray-800">
+                ${totals.subtotalOtrosAdicionales.toLocaleString("es-CO")}
+              </span>
             </div>
             <div className="flex items-center justify-between border-t border-gray-300 pt-2">
               <span className="text-lg font-bold text-[#1a6b32]">Total General:</span>
@@ -499,8 +712,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             <label className="block text-sm font-semibold text-gray-700 mb-2">Estado</label>
             <select
               value={formData.estado}
-              onChange={(e) => setFormData({ ...formData, estado: e.target.value as any })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8]"
+              onChange={(e) => setFormData(prev => ({ ...prev, estado: e.target.value as any }))}
+              disabled={loading || isSubmitting}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] disabled:opacity-50"
             >
               <option value="pendiente">Pendiente</option>
               <option value="aceptada">Aceptada</option>
@@ -514,24 +728,29 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             <label className="block text-sm font-semibold text-gray-700 mb-2">Observaciones</label>
             <textarea
               value={formData.observaciones}
-              onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8]"
+              onChange={(e) => setFormData(prev => ({ ...prev, observaciones: e.target.value }))}
+              disabled={loading || isSubmitting}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] disabled:opacity-50"
               rows={3}
+              placeholder="Notas adicionales sobre la cotización..."
             />
           </div>
 
-          {/* Buttons */}
+          {/* 🎯 BOTONES */}
           <div className="flex items-center space-x-3 pt-4 border-t border-gray-200">
             <button
               type="submit"
-              className="flex-1 bg-[#1a6b32] hover:bg-[#155529] text-white font-medium py-2 rounded-lg transition"
+              disabled={loading || isSubmitting}
+              className="flex-1 bg-[#1a6b32] hover:bg-[#155529] text-white font-medium py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {cotizacion ? "Actualizar" : "Crear"} Cotización
+              {isSubmitting ? "Preparando..." : cotizacion ? "Actualizar" : "Crear"} Cotización
             </button>
+            
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 rounded-lg transition"
+              disabled={loading || isSubmitting}
+              className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 rounded-lg transition disabled:opacity-50"
             >
               Cancelar
             </button>

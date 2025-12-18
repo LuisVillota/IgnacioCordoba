@@ -1,6 +1,6 @@
 "use client"
 
-import { Users, Calendar, FileText, CreditCard, Settings, RefreshCw } from "lucide-react"
+import { Users, Calendar, RefreshCw } from "lucide-react"
 import type { User } from "../context/AuthContext"
 import type { Permission } from "../types/permissions"
 import { api, transformBackendToFrontend } from "../lib/api"
@@ -14,16 +14,12 @@ interface DashboardHomeProps {
 interface DashboardStats {
   totalPacientes: number
   citasHoy: number
-  totalCotizaciones?: number
-  ingresosMes?: string
 }
 
 export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
   const [stats, setStats] = useState<DashboardStats>({
     totalPacientes: 0,
-    citasHoy: 0,
-    totalCotizaciones: 0,
-    ingresosMes: "$0"
+    citasHoy: 0
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -108,9 +104,7 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
       
       setStats({
         totalPacientes,
-        citasHoy,
-        totalCotizaciones: 0,
-        ingresosMes: "$0"
+        citasHoy
       })
       
     } catch (err: any) {
@@ -119,9 +113,7 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
       
       setStats({
         totalPacientes: 0,
-        citasHoy: 0,
-        totalCotizaciones: 0,
-        ingresosMes: "$0"
+        citasHoy: 0
       })
     } finally {
       setLoading(false)
@@ -148,21 +140,7 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
       value: stats.citasHoy.toString(), 
       color: "bg-[#669933]", 
       permission: "ver_agenda" as Permission
-    },
-    { 
-      icon: FileText, 
-      label: "Cotizaciones", 
-      value: stats.totalCotizaciones?.toString() || "0", 
-      color: "bg-[#1a6b32]", 
-      permission: "ver_cotizaciones" as Permission
-    },
-    { 
-      icon: CreditCard, 
-      label: "Ingresos Mes", 
-      value: stats.ingresosMes || "$0", 
-      color: "bg-blue-500", 
-      permission: "ver_reportes" as Permission
-    },
+    }
   ]
 
   return (
@@ -208,7 +186,7 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
 
       {/* Stats Grid */}
       {!loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {statCards.map(
             (stat, idx) =>
               (!stat.permission || hasPermission(stat.permission)) && (
@@ -231,75 +209,51 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
         </div>
       )}
 
-      {/* Quick Access */}
-      {!loading && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {hasPermission("ver_agenda" as Permission) && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                <Calendar className="mr-2 text-[#669933]" size={20} />
-                Citas Recientes
-              </h2>
-              <div className="space-y-3">
-                {citasRecientes.length > 0 ? (
-                  citasRecientes.map((cita, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-gray-800">
-                          {cita.paciente_nombre} {cita.paciente_apellido}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {cita.hora} - {cita.tipo_cita === "consulta" ? "Consulta" : 
-                           cita.tipo_cita === "control" ? "Control" :
-                           cita.tipo_cita === "valoracion" ? "Valoración" : "Programación Quirúrgica"}
-                        </p>
-                      </div>
-                      <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                        cita.estado === "confirmada" 
-                          ? "text-[#1a6b32] bg-[#99d6e8]/30" 
-                          : cita.estado === "pendiente"
-                          ? "text-yellow-700 bg-yellow-100"
-                          : cita.estado === "completada"
-                          ? "text-blue-700 bg-blue-100"
-                          : "text-red-700 bg-red-100"
-                      }`}>
-                        {cita.estado === "confirmada" ? "Confirmada" :
-                         cita.estado === "pendiente" ? "Pendiente" :
-                         cita.estado === "completada" ? "Completada" : "Cancelada"}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-4">
-                    <p className="text-gray-500 text-sm">No hay citas recientes</p>
+      {/* Quick Access - Solo Citas Recientes */}
+      {!loading && hasPermission("ver_agenda" as Permission) && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+            <Calendar className="mr-2 text-[#669933]" size={20} />
+            Citas Recientes
+          </h2>
+          <div className="space-y-3">
+            {citasRecientes.length > 0 ? (
+              citasRecientes.map((cita, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">
+                      {cita.paciente_nombre} {cita.paciente_apellido}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {cita.hora} - {cita.tipo_cita === "consulta" ? "Consulta" : 
+                       cita.tipo_cita === "control" ? "Control" :
+                       cita.tipo_cita === "valoracion" ? "Valoración" : "Programación Quirúrgica"}
+                    </p>
                   </div>
-                )}
+                  <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                    cita.estado === "confirmada" 
+                      ? "text-[#1a6b32] bg-[#99d6e8]/30" 
+                      : cita.estado === "pendiente"
+                      ? "text-yellow-700 bg-yellow-100"
+                      : cita.estado === "completada"
+                      ? "text-blue-700 bg-blue-100"
+                      : "text-red-700 bg-red-100"
+                  }`}>
+                    {cita.estado === "confirmada" ? "Confirmada" :
+                     cita.estado === "pendiente" ? "Pendiente" :
+                     cita.estado === "completada" ? "Completada" : "Cancelada"}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-gray-500 text-sm">No hay citas recientes</p>
               </div>
-            </div>
-          )}
-
-          {hasPermission("ver_procedimientos" as Permission) && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                <Settings className="mr-2 text-[#1a6b32]" size={20} />
-                Procedimientos Populares
-              </h2>
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
-                  >
-                    <p className="text-sm font-medium text-gray-800">Procedimiento #{i}</p>
-                    <p className="text-xs font-semibold text-[#669933]">$3.5M - $5M</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

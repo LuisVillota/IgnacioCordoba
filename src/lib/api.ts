@@ -1,12 +1,29 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// Cliente HTTP reutilizable
+// Variable global para rastrear llamadas en progreso y prevenir duplicados
+const callsInProgress = new Set<string>();
+
+// Cliente HTTP reutilizable - VERSIÓN CORREGIDA CON PROTECCIÓN CONTRA DUPLICADOS
 export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   
+  // 🛠️ CORRECCIÓN: Manejo seguro del body para logging
+  let bodyForLog = undefined;
+  try {
+    if (options?.body) {
+      if (typeof options.body === 'string') {
+        bodyForLog = JSON.parse(options.body);
+      } else {
+        bodyForLog = options.body;
+      }
+    }
+  } catch (e) {
+    console.log('⚠️ No se pudo parsear body para logging:', options?.body);
+  }
+  
   console.log(`📤 API Request: ${API_URL}${endpoint}`, { 
     method: options?.method || 'GET',
-    body: options?.body ? JSON.parse(options.body as string) : undefined
+    body: bodyForLog
   });
   
   try {
@@ -19,64 +36,82 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       ...options,
     });
     
-    console.log(`📥 API Response: ${response.status} ${response.statusText}`);
+    console.log(`📥 API Response Status: ${response.status} ${response.statusText}`);
+    
+    // **CORRECCIÓN CRÍTICA: Leer respuesta como texto primero**
+    const responseText = await response.text();
+    
+    let responseData;
+    try {
+      // Intentar parsear como JSON
+      responseData = responseText ? JSON.parse(responseText) : {};
+      console.log(`📥 API Response Body (parsed):`, responseData);
+    } catch (jsonError) {
+      console.log(`⚠️ Response is not JSON, treating as text`);
+      responseData = responseText;
+    }
     
     if (!response.ok) {
+      console.error(`❌ API Error ${response.status}:`, responseData);
+      
       let errorMessage = `Error HTTP ${response.status}`;
       
-      try {
-        const errorData = await response.json();
-        console.error('❌ Error data from backend (RAW):', errorData);
-        
-        // FastAPI devuelve errores de validación como {detail: [...]} o {detail: string}
-        if (errorData.detail) {
-          if (Array.isArray(errorData.detail)) {
-            // Es un array de errores de validación de Pydantic
-            errorMessage = errorData.detail.map((err: any) => {
-              if (typeof err === 'object' && err.msg) {
-                const field = err.loc?.join('.') || 'campo';
+      // **CORRECCIÓN: Manejar diferentes formatos de error SIN asumir tuplas**
+      if (typeof responseData === 'string') {
+        errorMessage = responseData;
+      } else if (responseData && typeof responseData === 'object') {
+        // Backend puede devolver error en formato {detail: string} o {message: string}
+        if (responseData.detail) {
+          if (typeof responseData.detail === 'string') {
+            errorMessage = responseData.detail;
+          } else if (Array.isArray(responseData.detail)) {
+            // Manejar lista de errores de Pydantic
+            errorMessage = responseData.detail.map((err: any) => {
+              if (typeof err === 'string') return err;
+              if (err && typeof err === 'object' && err.msg && err.loc) {
+                const field = Array.isArray(err.loc) ? err.loc.slice(1).join('.') : err.loc;
                 return `${field}: ${err.msg}`;
               }
-              return String(err);
+              return JSON.stringify(err);
             }).join(', ');
-          } else if (typeof errorData.detail === 'string') {
-            // Es un string simple
-            errorMessage = errorData.detail;
-          } else {
-            errorMessage = JSON.stringify(errorData.detail);
+          } else if (responseData.detail && typeof responseData.detail === 'object') {
+            // Si detail es un objeto (como {error: "message"})
+            errorMessage = responseData.detail.message || JSON.stringify(responseData.detail);
           }
-        } else if (errorData.message) {
-          errorMessage = errorData.message;
-        } else if (typeof errorData === 'string') {
-          errorMessage = errorData;
+        } else if (responseData.message) {
+          errorMessage = responseData.message;
+        } else if (responseData.error) {
+          if (typeof responseData.error === 'string') {
+            errorMessage = responseData.error;
+          } else if (responseData.error && typeof responseData.error === 'object') {
+            errorMessage = responseData.error.message || JSON.stringify(responseData.error);
+          }
         } else {
-          errorMessage = JSON.stringify(errorData);
-        }
-        
-        console.error('❌ API Error parsed:', errorMessage);
-      } catch (jsonError) {
-        console.error('❌ Error parsing JSON:', jsonError);
-        // Si no se puede parsear como JSON, intentar como texto
-        try {
-          const text = await response.text();
-          if (text) {
-            errorMessage = text;
-            console.error('❌ Error text:', text);
-          }
-        } catch {
-          // Si falla todo, usar el mensaje por defecto
+          errorMessage = JSON.stringify(responseData);
         }
       }
       
-      throw new Error(errorMessage);
+      console.error('❌ Final error message:', errorMessage);
+      
+      // Crear un Error con el mensaje correcto
+      const apiError = new Error(errorMessage);
+      // Agregar información adicional al error
+      (apiError as any).status = response.status;
+      (apiError as any).response = responseData;
+      throw apiError;
     }
     
-    const responseData = await response.json();
-    console.log(`✅ API Success:`, responseData);
     return responseData;
   } catch (error) {
     console.error('❌ API Fetch Error:', error);
-    throw error;
+    
+    // Si el error ya es una instancia de Error, solo relanzarlo
+    if (error instanceof Error) {
+      throw error;
+    }
+    
+    // Si es otra cosa, convertirlo a Error
+    throw new Error(typeof error === 'string' ? error : 'Error desconocido en la conexión con la API');
   }
 };
 
@@ -88,6 +123,34 @@ const fileToBase64 = (file: File): Promise<string> => {
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = error => reject(error);
   });
+};
+
+// Helper para prevenir llamadas duplicadas
+const preventDuplicateCall = async (callType: string, callFn: () => Promise<any>): Promise<any> => {
+  // Crear una clave única para esta llamada
+  const callKey = `${callType}_${Date.now()}`;
+  
+  // Verificar si ya hay una llamada similar en progreso
+  if (callsInProgress.has(callType)) {
+    console.warn(`⚠️ Ya hay una llamada ${callType} en proceso, ignorando llamada duplicada`);
+    throw new Error(`Ya hay una llamada ${callType} en proceso`);
+  }
+  
+  callsInProgress.add(callType);
+  console.log(`🔄 [${callType}] Iniciando llamada protegida`);
+  
+  try {
+    const result = await callFn();
+    console.log(`✅ [${callType}] Llamada completada exitosamente`);
+    return result;
+  } catch (error) {
+    console.error(`❌ [${callType}] Error en llamada:`, error);
+    throw error;
+  } finally {
+    // Siempre limpiar después de completar
+    callsInProgress.delete(callType);
+    console.log(`🧹 [${callType}] Llamada limpiada de registro`);
+  }
 };
 
 // Funciones específicas de la API
@@ -128,6 +191,239 @@ export const api = {
   updateCita: (id: number, data: any) => fetchAPI(`/api/citas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCita: (id: number) => fetchAPI(`/api/citas/${id}`, { method: 'DELETE' }),
   
+  // ===== AGENDA DE PROCEDIMIENTOS =====
+  getAgendaProcedimientos: (
+    limit?: number, 
+    offset?: number,
+    fecha?: string,
+    estado?: string,
+    numero_documento?: string,
+    fecha_inicio?: string,
+    fecha_fin?: string
+  ) => {
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit.toString());
+    if (offset) params.append('offset', offset.toString());
+    if (fecha) params.append('fecha', fecha);
+    if (estado) params.append('estado', estado);
+    if (numero_documento) params.append('numero_documento', numero_documento);
+    if (fecha_inicio) params.append('fecha_inicio', fecha_inicio);
+    if (fecha_fin) params.append('fecha_fin', fecha_fin);
+    
+    return fetchAPI(`/api/agenda-procedimientos?${params.toString()}`);
+  },
+
+  getAgendaProcedimiento: (id: number) => 
+    fetchAPI(`/api/agenda-procedimientos/${id}`),
+
+  // En src/lib/api.ts, actualiza la función createAgendaProcedimiento:
+
+// En src/lib/api.ts, actualiza la función createAgendaProcedimiento:
+
+createAgendaProcedimiento: (data: any) => {
+  return preventDuplicateCall('createAgendaProcedimiento', () => {
+    console.log("📤 Creando procedimiento agendado, datos recibidos EN API:", data);
+    
+    // **CORRECCIÓN CRÍTICA: Crear una copia profunda y convertir tipos**
+    const dataParaEnviar = { ...data };
+    
+    // Asegurar que procedimiento_id sea un NÚMERO
+    if (dataParaEnviar.procedimiento_id !== undefined && dataParaEnviar.procedimiento_id !== null) {
+      console.log("🔧 API: Convirtiendo procedimiento_id a número:", {
+        original: dataParaEnviar.procedimiento_id,
+        tipo_original: typeof dataParaEnviar.procedimiento_id
+      });
+      
+      // Intentar convertir a número
+      const procedimientoIdNum = parseInt(dataParaEnviar.procedimiento_id);
+      
+      if (isNaN(procedimientoIdNum)) {
+        console.error("❌ API: Error - procedimiento_id no es un número válido:", dataParaEnviar.procedimiento_id);
+        throw new Error("El ID del procedimiento debe ser un número válido");
+      }
+      
+      // Asignar el número convertido
+      dataParaEnviar.procedimiento_id = procedimientoIdNum;
+      console.log("✅ API: procedimiento_id convertido a número:", dataParaEnviar.procedimiento_id);
+    }
+    
+    // Asegurar que otros campos numéricos también sean números
+    if (dataParaEnviar.duracion !== undefined) {
+      dataParaEnviar.duracion = parseInt(dataParaEnviar.duracion) || 60;
+    }
+    
+    console.log("📤 API: Datos finales para enviar al backend (después de conversión):", dataParaEnviar);
+    console.log("📤 API: Tipo de procedimiento_id final:", typeof dataParaEnviar.procedimiento_id);
+    
+    return fetchAPI('/api/agenda-procedimientos', { 
+      method: 'POST', 
+      body: JSON.stringify(dataParaEnviar) 
+    });
+  });
+},
+
+  // En src/lib/api.ts, actualiza también updateAgendaProcedimiento:
+
+updateAgendaProcedimiento: (id: number, data: any) => {
+  return preventDuplicateCall('updateAgendaProcedimiento', () => {
+    console.log("📤 Actualizando procedimiento agendado ID:", id, "datos recibidos:", data);
+    
+    const dataParaEnviar = { ...data };
+    
+    // **CORRECCIÓN: Convertir procedimiento_id si existe**
+    if (dataParaEnviar.procedimiento_id !== undefined && dataParaEnviar.procedimiento_id !== null) {
+      const procedimientoIdNum = parseInt(dataParaEnviar.procedimiento_id);
+      
+      if (!isNaN(procedimientoIdNum)) {
+        dataParaEnviar.procedimiento_id = procedimientoIdNum;
+        console.log("✅ API: procedimiento_id convertido para update:", dataParaEnviar.procedimiento_id);
+      } else {
+        console.warn("⚠️ API: procedimiento_id no es número válido para update, manteniendo valor original");
+      }
+    }
+    
+    // Asegurar que otros campos numéricos sean números
+    if (dataParaEnviar.duracion !== undefined) {
+      dataParaEnviar.duracion = parseInt(dataParaEnviar.duracion) || 60;
+    }
+    
+    console.log("📤 API: Datos para update:", dataParaEnviar);
+    
+    return fetchAPI(`/api/agenda-procedimientos/${id}`, { 
+      method: 'PUT', 
+      body: JSON.stringify(dataParaEnviar) 
+    });
+  });
+},
+
+  deleteAgendaProcedimiento: (id: number) => 
+    fetchAPI(`/api/agenda-procedimientos/${id}`, { method: 'DELETE' }),
+
+  // **CORRECCIÓN CRÍTICA: Función verificarDisponibilidad con procedimiento_id opcional**
+  verificarDisponibilidad: (fecha: string, hora: string, duracion: number, excludeId?: number, procedimientoId?: number) => {
+    console.log("🔍 API: verificarDisponibilidad llamada con:", {
+      fecha, hora, duracion, excludeId, procedimientoId
+    });
+    
+    const params = new URLSearchParams();
+    params.append('fecha', fecha);
+    params.append('hora', hora);
+    params.append('duracion', duracion.toString());
+    
+    if (excludeId && excludeId > 0) {
+      params.append('exclude_id', excludeId.toString());
+    }
+    
+    // **SOLO agregar procedimiento_id si es válido**
+    if (procedimientoId && procedimientoId > 0) {
+      console.log("➕ Agregando procedimiento_id:", procedimientoId);
+      params.append('procedimiento_id', procedimientoId.toString());
+    } else {
+      console.log("⚠️ procedimiento_id no válido o no proporcionado:", procedimientoId);
+    }
+    
+    const url = `/api/agenda-procedimientos/disponibilidad?${params.toString()}`;
+    console.log("📤 URL completa para disponibilidad:", url);
+    
+    return fetchAPI(url);
+  },
+
+  getEstadosProcedimiento: () => 
+    fetchAPI('/api/agenda-procedimientos/estados/disponibles'),
+
+  getCalendarioProcedimientos: (year: number, month: number) =>
+    fetchAPI(`/api/agenda-procedimientos/calendario/${year}/${month}`),
+
+  getEstadisticasProcedimientos: (fecha_inicio?: string, fecha_fin?: string) => {
+    const params = new URLSearchParams();
+    if (fecha_inicio) params.append('fecha_inicio', fecha_inicio);
+    if (fecha_fin) params.append('fecha_fin', fecha_fin);
+    
+    return fetchAPI(`/api/agenda-procedimientos/estadisticas?${params.toString()}`);
+  },
+
+  // ===== COTIZACIONES =====
+  getCotizaciones: (limit?: number, offset?: number) =>
+    fetchAPI(`/api/cotizaciones?limit=${limit || 50}&offset=${offset || 0}`),
+  
+  getCotizacion: (id: number) => fetchAPI(`/api/cotizaciones/${id}`),
+  
+  // 🛡️ VERSIÓN PROTEGIDA CONTRA DUPLICADOS
+  createCotizacion: (data: any) => {
+    return preventDuplicateCall('createCotizacion', async () => {
+      console.log("📤 Creando cotización, datos recibidos:", data);
+      
+      // **CORRECCIÓN: Asegurarse de que NO se envía el campo 'total'**
+      // Crear una copia del objeto y eliminar el campo 'total'
+      const dataParaEnviar = { ...data };
+      
+      // Eliminar campo 'total' si existe
+      if (dataParaEnviar.total !== undefined) {
+        console.log("⚠️ Eliminando campo 'total' antes de enviar (MySQL lo calcula automáticamente)");
+        delete dataParaEnviar.total;
+      }
+      
+      // También asegurar que otros campos numéricos sean números
+      if (dataParaEnviar.subtotal_procedimientos !== undefined) {
+        dataParaEnviar.subtotal_procedimientos = parseFloat(dataParaEnviar.subtotal_procedimientos) || 0;
+      }
+      if (dataParaEnviar.subtotal_adicionales !== undefined) {
+        dataParaEnviar.subtotal_adicionales = parseFloat(dataParaEnviar.subtotal_adicionales) || 0;
+      }
+      if (dataParaEnviar.subtotal_otros_adicionales !== undefined) {
+        dataParaEnviar.subtotal_otros_adicionales = parseFloat(dataParaEnviar.subtotal_otros_adicionales) || 0;
+      }
+      
+      console.log("📤 Datos finales para enviar al backend:", dataParaEnviar);
+      
+      return fetchAPI('/api/cotizaciones', { 
+        method: 'POST', 
+        body: JSON.stringify(dataParaEnviar) 
+      });
+    });
+  },
+  
+  // 🛡️ VERSIÓN PROTEGIDA CONTRA DUPLICADOS
+  updateCotizacion: (id: number, data: any) => {
+    return preventDuplicateCall('updateCotizacion', async () => {
+      console.log("📤 Actualizando cotización ID:", id, "datos recibidos:", data);
+      
+      // **CORRECCIÓN: Asegurarse de que NO se envía el campo 'total'**
+      const dataParaEnviar = { ...data };
+      
+      // Eliminar campo 'total' si existe
+      if (dataParaEnviar.total !== undefined) {
+        console.log("⚠️ Eliminando campo 'total' antes de enviar (MySQL lo calcula automáticamente)");
+        delete dataParaEnviar.total;
+      }
+      
+      // También asegurar que otros campos numéricos sean números
+      if (dataParaEnviar.subtotal_procedimientos !== undefined) {
+        dataParaEnviar.subtotal_procedimientos = parseFloat(dataParaEnviar.subtotal_procedimientos) || 0;
+      }
+      if (dataParaEnviar.subtotal_adicionales !== undefined) {
+        dataParaEnviar.subtotal_adicionales = parseFloat(dataParaEnviar.subtotal_adicionales) || 0;
+      }
+      if (dataParaEnviar.subtotal_otros_adicionales !== undefined) {
+        dataParaEnviar.subtotal_otros_adicionales = parseFloat(dataParaEnviar.subtotal_otros_adicionales) || 0;
+      }
+      
+      console.log("📤 Datos finales para enviar al backend:", dataParaEnviar);
+      
+      return fetchAPI(`/api/cotizaciones/${id}`, { 
+        method: 'PUT', 
+        body: JSON.stringify(dataParaEnviar) 
+      });
+    });
+  },
+  
+  deleteCotizacion: (id: number) => 
+    fetchAPI(`/api/cotizaciones/${id}`, { method: 'DELETE' }),
+  
+  getEstadosCotizaciones: () => fetchAPI('/api/estados/cotizaciones'),
+  
+  getPlantillaServicios: () => fetchAPI('/api/cotizaciones/plantilla-servicios'),
+  
   // ===== HISTORIA CLÍNICA =====
   getHistoriasClinicas: (limit?: number, offset?: number) =>
     fetchAPI(`/api/historias-clinicas?limit=${limit || 100}&offset=${offset || 0}`),
@@ -136,13 +432,11 @@ export const api = {
     console.log(`📋 Obteniendo historias para paciente ${pacienteId}...`);
     
     try {
-      // Intentar endpoint específico primero
       return await fetchAPI(`/api/historias-clinicas/paciente/${pacienteId}`);
     } catch (error) {
       console.log(`⚠️ Endpoint específico falló, usando endpoint general para paciente ${pacienteId}`);
       const allHistorias = await api.getHistoriasClinicas(100, 0);
       
-      // Filtrar por paciente_id
       if (Array.isArray(allHistorias.historias)) {
         return allHistorias.historias.filter((historia: any) => {
           const matches = historia.paciente_id === pacienteId;
@@ -158,51 +452,55 @@ export const api = {
   getHistoriaClinica: (id: number) => fetchAPI(`/api/historias-clinicas/${id}`),
   
   createHistoriaClinica: (data: any) => {
-    console.log("📤 Creando historia clínica con datos:", data);
-    
-    const backendData = {
-      paciente_id: parseInt(data.paciente_id || data.id_paciente),
-      motivo_consulta: data.motivo_consulta || '',
-      antecedentes_medicos: data.antecedentes_medicos || '',
-      antecedentes_quirurgicos: data.antecedentes_quirurgicos || '',
-      antecedentes_alergicos: data.antecedentes_alergicos || '',
-      antecedentes_farmacologicos: data.antecedentes_farmacologicos || '',
-      exploracion_fisica: data.exploracion_fisica || '',
-      diagnostico: data.diagnostico || '',
-      tratamiento: data.tratamiento || '',
-      recomendaciones: data.recomendaciones || '',
-      fotos: ""  // Inicialmente vacío, las fotos se suben después
-    };
-    
-    console.log("📤 Enviando al backend:", backendData);
-    
-    return fetchAPI('/api/historias-clinicas', {
-      method: 'POST',
-      body: JSON.stringify(backendData)
+    return preventDuplicateCall('createHistoriaClinica', async () => {
+      console.log("📤 Creando historia clínica con datos:", data);
+      
+      const backendData = {
+        paciente_id: parseInt(data.paciente_id || data.id_paciente),
+        motivo_consulta: data.motivo_consulta || '',
+        antecedentes_medicos: data.antecedentes_medicos || '',
+        antecedentes_quirurgicos: data.antecedentes_quirurgicos || '',
+        antecedentes_alergicos: data.antecedentes_alergicos || '',
+        antecedentes_farmacologicos: data.antecedentes_farmacologicos || '',
+        exploracion_fisica: data.exploracion_fisica || '',
+        diagnostico: data.diagnostico || '',
+        tratamiento: data.tratamiento || '',
+        recomendaciones: data.recomendaciones || '',
+        fotos: ""
+      };
+      
+      console.log("📤 Enviando al backend:", backendData);
+      
+      return fetchAPI('/api/historias-clinicas', {
+        method: 'POST',
+        body: JSON.stringify(backendData)
+      });
     });
   },
   
   updateHistoriaClinica: (id: number, data: any) => {
-    console.log("📤 Actualizando historia clínica ID:", id, "con datos:", data);
-    
-    const backendData = {
-      paciente_id: parseInt(data.paciente_id || data.id_paciente),
-      motivo_consulta: data.motivo_consulta || '',
-      antecedentes_medicos: data.antecedentes_medicos || '',
-      antecedentes_quirurgicos: data.antecedentes_quirurgicos || '',
-      antecedentes_alergicos: data.antecedentes_alergicos || '',
-      antecedentes_farmacologicos: data.antecedentes_farmacologicos || '',
-      exploracion_fisica: data.exploracion_fisica || '',
-      diagnostico: data.diagnostico || '',
-      tratamiento: data.tratamiento || '',
-      recomendaciones: data.recomendaciones || '',
-    };
-    
-    console.log("📤 Enviando al backend:", backendData);
-    
-    return fetchAPI(`/api/historias-clinicas/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(backendData)
+    return preventDuplicateCall('updateHistoriaClinica', async () => {
+      console.log("📤 Actualizando historia clínica ID:", id, "con datos:", data);
+      
+      const backendData = {
+        paciente_id: parseInt(data.paciente_id || data.id_paciente),
+        motivo_consulta: data.motivo_consulta || '',
+        antecedentes_medicos: data.antecedentes_medicos || '',
+        antecedentes_quirurgicos: data.antecedentes_quirurgicos || '',
+        antecedentes_alergicos: data.antecedentes_alergicos || '',
+        antecedentes_farmacologicos: data.antecedentes_farmacologicos || '',
+        exploracion_fisica: data.exploracion_fisica || '',
+        diagnostico: data.diagnostico || '',
+        tratamiento: data.tratamiento || '',
+        recomendaciones: data.recomendaciones || '',
+      };
+      
+      console.log("📤 Enviando al backend:", backendData);
+      
+      return fetchAPI(`/api/historias-clinicas/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(backendData)
+      });
     });
   },
   
@@ -227,7 +525,6 @@ export const api = {
           const errorData = await response.json();
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
-          // Si no se puede parsear como JSON
           try {
             const text = await response.text();
             if (text) errorMessage = text;
@@ -236,7 +533,6 @@ export const api = {
           }
         }
         
-        // Si es 404, no lanzar error crítico
         if (response.status === 404) {
           console.log(`ℹ️ Historia ${id} no encontrada (posiblemente ya eliminada)`)
           return { success: true, message: "Historia ya eliminada" }
@@ -270,7 +566,6 @@ export const api = {
         ultimaModificacion: new Date(file.lastModified).toISOString()
       });
       
-      // Subir el archivo real
       console.log("🚀 Iniciando upload real...");
       const response = await fetch(`${API_URL}/api/upload/historia/${historiaId}`, {
         method: 'POST',
@@ -289,7 +584,6 @@ export const api = {
           errorDetail = errorData.detail || errorData.message || JSON.stringify(errorData);
           console.error("❌ Error detallado:", errorData);
         } catch {
-          // Si no se puede parsear como JSON, usar el texto
           try {
             const text = await response.text();
             if (text) {
@@ -307,7 +601,6 @@ export const api = {
       const result = await response.json();
       console.log("✅ Foto subida exitosamente:", result);
       
-      // Convertir URL relativa a absoluta
       if (result.url && result.url.startsWith('/uploads/')) {
         result.url = `${API_URL}${result.url}`;
         console.log("🔗 URL convertida a absoluta:", result.url);
@@ -317,7 +610,6 @@ export const api = {
     } catch (error) {
       console.error('❌ Error subiendo foto:', error);
       
-      // En desarrollo, usar Data URL como fallback
       if (process.env.NODE_ENV === 'development') {
         console.warn('⚠️ En modo desarrollo, usando Data URL como fallback');
         try {
@@ -341,57 +633,102 @@ export const api = {
   getEstadosCitas: () => fetchAPI('/api/estados/citas'),
   getEstadosQuirurgicos: () => fetchAPI('/api/estados/quirurgicos'),
   
-  // ===== PROCEDIMIENTOS (CONSULTA) =====
-getProcedimientos: () => fetchAPI('/api/procedimientos'),
-getProcedimiento: (id: number) => fetchAPI(`/api/procedimientos/${id}`),
+  // ===== PROCEDIMIENTOS =====
+  // Método principal
+  getProcedimientos: () => fetchAPI('/api/procedimientos'),
+  
+  // Alias para compatibilidad con ProcedimientosPage.tsx
+  getCatalogoProcedimientos: () => fetchAPI('/api/procedimientos'),
+  
+  // Métodos de CRUD
+  getProcedimiento: (id: number) => fetchAPI(`/api/procedimientos/${id}`),
+  
+  // Crear - versión protegida
+  createProcedimiento: (data: any) => {
+    return preventDuplicateCall('createProcedimiento', () => 
+      fetchAPI('/api/procedimientos', { 
+        method: 'POST', 
+        body: JSON.stringify(data) 
+      })
+    );
+  },
+  
+  // Alias para compatibilidad
+  createCatalogoProcedimiento: (data: any) => api.createProcedimiento(data),
+  
+  // Actualizar - versión protegida
+  updateProcedimiento: (id: number, data: any) => {
+    return preventDuplicateCall('updateProcedimiento', () => 
+      fetchAPI(`/api/procedimientos/${id}`, { 
+        method: 'PUT', 
+        body: JSON.stringify(data) 
+      })
+    );
+  },
+  
+  // Alias para compatibilidad
+  updateCatalogoProcedimiento: (id: number, data: any) => api.updateProcedimiento(id, data),
+  
+  // Eliminar
+  deleteProcedimiento: (id: number) => 
+    fetchAPI(`/api/procedimientos/${id}`, { method: 'DELETE' }),
+  
+  // Alias para compatibilidad
+  deleteCatalogoProcedimiento: (id: number) => api.deleteProcedimiento(id),
 
-// ===== PROCEDIMIENTOS (CATÁLOGO) - Verifica los endpoints correctos =====
-getCatalogoProcedimientos: () => fetchAPI('/api/procedimientos'),
-getCatalogoProcedimiento: (id: number) => fetchAPI(`/api/procedimientos/${id}`),
-createCatalogoProcedimiento: (data: any) => 
-  fetchAPI('/api/procedimientos', { 
-    method: 'POST', 
-    body: JSON.stringify(data) 
-  }),
-updateCatalogoProcedimiento: (id: number, data: any) => 
-  fetchAPI(`/api/procedimientos/${id}`, { 
-    method: 'PUT', 
-    body: JSON.stringify(data) 
-  }),
-deleteCatalogoProcedimiento: (id: number) => 
-  fetchAPI(`/api/procedimientos/${id}`, { method: 'DELETE' }),
+  // ===== ADICIONALES =====
+  getAdicionales: () => fetchAPI('/api/adicionales'),
+  getAdicional: (id: number) => fetchAPI(`/api/adicionales/${id}`),
+  
+  // Crear - versión protegida
+  createAdicional: (data: any) => {
+    return preventDuplicateCall('createAdicional', () => 
+      fetchAPI('/api/adicionales', { 
+        method: 'POST', 
+        body: JSON.stringify(data) 
+      })
+    );
+  },
+  
+  // Actualizar - versión protegida
+  updateAdicional: (id: number, data: any) => {
+    return preventDuplicateCall('updateAdicional', () => 
+      fetchAPI(`/api/adicionales/${id}`, { 
+        method: 'PUT', 
+        body: JSON.stringify(data) 
+      })
+    );
+  },
+  
+  deleteAdicional: (id: number) => 
+    fetchAPI(`/api/adicionales/${id}`, { method: 'DELETE' }),
 
-// ===== ADICIONALES - Endpoints temporales (crear si no existen) =====
-getAdicionales: () => fetchAPI('/api/adicionales'),
-getAdicional: (id: number) => fetchAPI(`/api/adicionales/${id}`),
-createAdicional: (data: any) => 
-  fetchAPI('/api/adicionales', { 
-    method: 'POST', 
-    body: JSON.stringify(data) 
-  }),
-updateAdicional: (id: number, data: any) => 
-  fetchAPI(`/api/adicionales/${id}`, { 
-    method: 'PUT', 
-    body: JSON.stringify(data) 
-  }),
-deleteAdicional: (id: number) => 
-  fetchAPI(`/api/adicionales/${id}`, { method: 'DELETE' }),
-
-// ===== OTROS ADICIONALES - Endpoints temporales (crear si no existen) =====
-getOtrosAdicionales: () => fetchAPI('/api/otros-adicionales'),
-getOtroAdicional: (id: number) => fetchAPI(`/api/otros-adicionales/${id}`),
-createOtroAdicional: (data: any) => 
-  fetchAPI('/api/otros-adicionales', { 
-    method: 'POST', 
-    body: JSON.stringify(data) 
-  }),
-updateOtroAdicional: (id: number, data: any) => 
-  fetchAPI(`/api/otros-adicionales/${id}`, { 
-    method: 'PUT', 
-    body: JSON.stringify(data) 
-  }),
-deleteOtroAdicional: (id: number) => 
-  fetchAPI(`/api/otros-adicionales/${id}`, { method: 'DELETE' }),
+  // ===== OTROS ADICIONALES =====
+  getOtrosAdicionales: () => fetchAPI('/api/otros-adicionales'),
+  getOtroAdicional: (id: number) => fetchAPI(`/api/otros-adicionales/${id}`),
+  
+  // Crear - versión protegida
+  createOtroAdicional: (data: any) => {
+    return preventDuplicateCall('createOtroAdicional', () => 
+      fetchAPI('/api/otros-adicionales', { 
+        method: 'POST', 
+        body: JSON.stringify(data) 
+      })
+    );
+  },
+  
+  // Actualizar - versión protegida
+  updateOtroAdicional: (id: number, data: any) => {
+    return preventDuplicateCall('updateOtroAdicional', () => 
+      fetchAPI(`/api/otros-adicionales/${id}`, { 
+        method: 'PUT', 
+        body: JSON.stringify(data) 
+      })
+    );
+  },
+  
+  deleteOtroAdicional: (id: number) => 
+    fetchAPI(`/api/otros-adicionales/${id}`, { method: 'DELETE' }),
   
   // ===== DASHBOARD =====
   async getDashboardStats() {
@@ -507,7 +844,6 @@ deleteOtroAdicional: (id: number) =>
           console.error('❌ Error obteniendo sala de espera:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
-          // Si no se puede parsear como JSON
           try {
             const text = await response.text();
             if (text) errorMessage = text;
@@ -527,7 +863,6 @@ deleteOtroAdicional: (id: number) =>
       return data;
     } catch (error) {
       console.error('❌ Error obteniendo sala de espera:', error);
-      // Retornar datos de fallback en lugar de lanzar error
       return {
         success: false,
         pacientes: [],
@@ -562,7 +897,6 @@ deleteOtroAdicional: (id: number) =>
           console.error('❌ Error en bulk update:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
-          // Si no se puede parsear como JSON
           try {
             const text = await response.text();
             if (text) errorMessage = text;
@@ -603,7 +937,6 @@ deleteOtroAdicional: (id: number) =>
           console.error('❌ Error obteniendo estadísticas:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
-          // Si no se puede parsear como JSON
           try {
             const text = await response.text();
             if (text) errorMessage = text;
@@ -611,8 +944,6 @@ deleteOtroAdicional: (id: number) =>
             // Si falla todo
           }
         }
-        // No lanzar error para estadísticas, retornar datos por defecto
-        console.warn('⚠️ Usando estadísticas por defecto');
         return {
           success: false,
           estadisticas: {
@@ -636,7 +967,6 @@ deleteOtroAdicional: (id: number) =>
       return data;
     } catch (error) {
       console.error('❌ Error obteniendo estadísticas:', error);
-      // Retornar estadísticas por defecto en lugar de lanzar error
       return {
         success: false,
         estadisticas: {
@@ -683,7 +1013,6 @@ deleteOtroAdicional: (id: number) =>
           console.error('❌ Error agregando paciente:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
-          // Si no se puede parsear como JSON
           try {
             const text = await response.text();
             if (text) errorMessage = text;
@@ -730,7 +1059,6 @@ deleteOtroAdicional: (id: number) =>
           console.error('❌ Error actualizando estado individual:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
-          // Si no se puede parsear como JSON
           try {
             const text = await response.text();
             if (text) errorMessage = text;
@@ -750,7 +1078,6 @@ deleteOtroAdicional: (id: number) =>
     }
   },
 
-  // ===== CREAR REGISTRO EN SALA DE ESPERA =====
   crearRegistroSalaEspera: async (pacienteId: number, citaId?: number): Promise<any> => {
     try {
       console.log("📝 Creando registro sala de espera para paciente:", pacienteId);
@@ -778,7 +1105,6 @@ deleteOtroAdicional: (id: number) =>
           console.error('❌ Error creando registro:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
-          // Si no se puede parsear como JSON
           try {
             const text = await response.text();
             if (text) errorMessage = text;
@@ -798,7 +1124,6 @@ deleteOtroAdicional: (id: number) =>
     }
   },
 
-  // ===== ACTUALIZAR ESTADO SALA DE ESPERA (CORREGIDO) =====
   actualizarEstadoSalaEspera: async (pacienteId: string, datos: { estado: string, cita_id?: string }): Promise<any> => {
     try {
       console.log("🔄 Actualizando estado sala espera:", { pacienteId, datos });
@@ -821,7 +1146,6 @@ deleteOtroAdicional: (id: number) =>
           console.error('❌ Error actualizando estado:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
-          // Si no se puede parsear como JSON
           try {
             const text = await response.text();
             if (text) errorMessage = text;
@@ -841,7 +1165,6 @@ deleteOtroAdicional: (id: number) =>
     }
   },
 
-  // ===== OBTENER DIAGNÓSTICO DE SALA DE ESPERA =====
   getDiagnosticSalaEspera: async (): Promise<any> => {
     try {
       console.log("🔍 Obteniendo diagnóstico de sala de espera...");
@@ -871,6 +1194,17 @@ deleteOtroAdicional: (id: number) =>
       };
     }
   },
+  
+  // ===== DEBUG DE LLAMADAS DUPLICADAS =====
+  getActiveCalls: () => {
+    console.log("📊 Llamadas activas:", Array.from(callsInProgress));
+    return Array.from(callsInProgress);
+  },
+  
+  clearAllCalls: () => {
+    console.log("🧹 Limpiando todas las llamadas en progreso");
+    callsInProgress.clear();
+  }
 };
 
 // Helper para manejar errores
@@ -880,7 +1214,6 @@ export const handleApiError = (error: any): string => {
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
     
-    // Errores específicos de sala de espera
     if (message.includes('sala') && message.includes('espera')) {
       if (message.includes('tabla') || message.includes('no existe')) {
         return 'Error: La tabla de sala de espera no existe en la base de datos. Contacta al administrador.';
@@ -913,13 +1246,18 @@ export const handleApiError = (error: any): string => {
       return 'Error de configuración del servidor. El directorio de uploads no está configurado correctamente.';
     }
     
+    // Manejar error de llamada duplicada
+    if (message.includes('ya hay una llamada') || message.includes('en proceso')) {
+      return 'La operación ya está en proceso. Por favor, espera a que se complete.';
+    }
+    
     return error.message || 'Error desconocido';
   }
   
   return typeof error === 'string' ? error : 'Error desconocido';
 };
 
-// Funciones helper para transformar datos
+// Funciones helper para transformar datos - VERSIÓN MEJORADA
 export const transformBackendToFrontend = {
   // Transformar paciente del backend al formato del frontend
   paciente: (backendPaciente: any) => ({
@@ -985,7 +1323,100 @@ export const transformBackendToFrontend = {
     };
   },
   
-  // Transformar historia clínica del backend al formato del frontend - CORREGIDO
+  // Transformar cotización del backend al formato del frontend - MEJORADO
+  cotizacion: (backendCotizacion: any) => {
+    console.log("🔄 Transformando cotización del backend:", backendCotizacion);
+    
+    // Mapear estado ID a nombre
+    const estadoMap: Record<number, string> = {
+      1: 'pendiente',
+      2: 'aceptada', 
+      3: 'rechazada',
+      4: 'facturada'
+    };
+    
+    // Procesar fecha de creación
+    let fechaCreacion = '';
+    if (backendCotizacion.fecha_creacion) {
+      const fechaStr = backendCotizacion.fecha_creacion.toString();
+      if (fechaStr.includes(' ')) {
+        fechaCreacion = fechaStr.split(' ')[0];
+      } else if (fechaStr.includes('T')) {
+        fechaCreacion = fechaStr.split('T')[0];
+      } else {
+        fechaCreacion = fechaStr;
+      }
+    }
+    
+    // Procesar items
+    const items = Array.isArray(backendCotizacion.items) ? backendCotizacion.items.map((item: any) => ({
+      id: item.id?.toString() || crypto.randomUUID(),
+      item_id: item.item_id?.toString() || item.id?.toString() || '',
+      nombre: item.nombre || '',
+      descripcion: item.descripcion || '',
+      cantidad: item.cantidad || 1,
+      precio_unitario: parseFloat(item.precio_unitario) || 0,
+      subtotal: parseFloat(item.subtotal) || 0,
+      tipo: item.tipo || 'procedimiento'
+    })) : [];
+    
+    // Procesar servicios incluidos
+    let serviciosIncluidos = Array.isArray(backendCotizacion.servicios_incluidos) 
+      ? backendCotizacion.servicios_incluidos.map((servicio: any) => ({
+          id: servicio.id?.toString() || crypto.randomUUID(),
+          servicio_nombre: servicio.servicio_nombre || '',
+          requiere: servicio.requiere || false
+        }))
+      : [];
+    
+    // Si no hay servicios, usar los por defecto
+    if (serviciosIncluidos.length === 0) {
+      serviciosIncluidos = cotizacionHelpers.serviciosIncluidosDefault();
+    }
+    
+    // IMPORTANTE: Obtener los subtotales directamente de la BD
+    const subtotalProcedimientos = parseFloat(backendCotizacion.subtotal_procedimientos) || 0;
+    const subtotalAdicionales = parseFloat(backendCotizacion.subtotal_adicionales) || 0;
+    const subtotalOtrosAdicionales = parseFloat(backendCotizacion.subtotal_otros_adicionales) || 0;
+    const totalBD = parseFloat(backendCotizacion.total) || 0;
+    
+    // Calcular total basado en items si el de la BD es 0
+    let totalCalculado = totalBD;
+    if (totalBD === 0 && items.length > 0) {
+      totalCalculado = items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+    }
+    
+    console.log("📊 Subtotales extraídos de la BD:", {
+      subtotalProcedimientos,
+      subtotalAdicionales,
+      subtotalOtrosAdicionales,
+      totalBD,
+      totalCalculado
+    });
+    
+    return {
+      id: backendCotizacion.id?.toString() || '',
+      id_paciente: backendCotizacion.paciente_id?.toString() || '',
+      fecha_creacion: fechaCreacion || new Date().toISOString().split('T')[0],
+      estado: estadoMap[backendCotizacion.estado_id] || backendCotizacion.estado_nombre || 'pendiente',
+      items: items,
+      servicios_incluidos: serviciosIncluidos,
+      total: totalCalculado,
+      subtotalProcedimientos: subtotalProcedimientos,
+      subtotalAdicionales: subtotalAdicionales,
+      subtotalOtrosAdicionales: subtotalOtrosAdicionales,
+      observaciones: backendCotizacion.observaciones || '',
+      validez_dias: backendCotizacion.validez_dias || 7,
+      fecha_vencimiento: backendCotizacion.fecha_vencimiento || '',
+      // Datos adicionales para mostrar en tabla
+      paciente_nombre: backendCotizacion.paciente_nombre || '',
+      paciente_apellido: backendCotizacion.paciente_apellido || '',
+      usuario_nombre: backendCotizacion.usuario_nombre || '',
+      paciente_documento: backendCotizacion.paciente_documento || ''
+    };
+  },
+  
+  // Transformar historia clínica del backend al formato del frontend
   historiaClinica: (backendHistoria: any) => {
     // Extraer fecha de fecha_creacion
     let fechaCreacion = '';
@@ -1000,14 +1431,11 @@ export const transformBackendToFrontend = {
       }
     }
     
-    // Procesar URLs de fotos - CORREGIDO
+    // Procesar URLs de fotos
     let fotosString = '';
     if (backendHistoria.fotos) {
-      // Asegurarnos de que sea string
       fotosString = backendHistoria.fotos.toString();
       
-      // Si la cadena ya tiene URLs completas, dejarla como está
-      // Si tiene URLs relativas (/uploads/...), convertirlas a absolutas
       if (fotosString.includes('/uploads/')) {
         const urls = fotosString.split(',').map((url: string) => {
           const trimmedUrl = url.trim();
@@ -1033,7 +1461,7 @@ export const transformBackendToFrontend = {
       diagnostico: backendHistoria.diagnostico || '',
       tratamiento: backendHistoria.tratamiento || '',
       recomendaciones: backendHistoria.recomendaciones || '',
-      medico_id: '3', // Mantenemos un valor por defecto para compatibilidad
+      medico_id: '3',
       fotos: fotosString
     };
   },
@@ -1113,6 +1541,96 @@ export const transformBackendToFrontend = {
       direccion: frontendPaciente.direccion,
       ciudad: frontendPaciente.ciudad,
     };
+  },
+  
+  // Transformación inversa - Cotización - CORREGIDA PARA COLUMNA GENERADA
+  cotizacionToBackend: (frontendCotizacion: any) => {
+    console.log("🚀 Transformando cotización para enviar al backend:", frontendCotizacion);
+    
+    // Mapear estado nombre a ID
+    const estadoMap: Record<string, number> = {
+      'pendiente': 1,
+      'aceptada': 2,
+      'rechazada': 3,
+      'facturada': 4
+    };
+    
+    // Procesar items
+    const items = Array.isArray(frontendCotizacion.items) 
+      ? frontendCotizacion.items.map((item: any) => {
+          const processedItem = {
+            tipo: item.tipo || 'procedimiento',
+            item_id: parseInt(item.item_id) || 0,
+            nombre: item.nombre || '',
+            descripcion: item.descripcion || '',
+            cantidad: item.cantidad || 1,
+            precio_unitario: parseFloat(item.precio_unitario) || 0,
+            subtotal: parseFloat(item.subtotal) || 0
+          };
+          
+          console.log("📦 Item procesado:", processedItem);
+          return processedItem;
+        })
+      : [];
+    
+    // Procesar servicios incluidos
+    const servicios_incluidos = Array.isArray(frontendCotizacion.servicios_incluidos)
+      ? frontendCotizacion.servicios_incluidos.map((servicio: any) => {
+          const processedService = {
+            servicio_nombre: servicio.servicio_nombre || '',
+            requiere: servicio.requiere !== undefined ? servicio.requiere : false
+          };
+          return processedService;
+        })
+      : [];
+    
+    console.log("🔧 Servicios incluidos procesados:", servicios_incluidos);
+    
+    // Calcular subtotales si no están proporcionados
+    const subtotalProcedimientos = parseFloat(frontendCotizacion.subtotalProcedimientos) || 
+      items.filter((item: any) => item.tipo === 'procedimiento')
+           .reduce((sum: number, item: any) => sum + (item.subtotal || 0), 0);
+    
+    const subtotalAdicionales = parseFloat(frontendCotizacion.subtotalAdicionales) || 
+      items.filter((item: any) => item.tipo === 'adicional')
+           .reduce((sum: number, item: any) => sum + (item.subtotal || 0), 0);
+    
+    const subtotalOtrosAdicionales = parseFloat(frontendCotizacion.subtotalOtrosAdicionales) || 
+      items.filter((item: any) => item.tipo === 'otroAdicional')
+           .reduce((sum: number, item: any) => sum + (item.subtotal || 0), 0);
+    
+    console.log("💰 Subtotales calculados para enviar:", {
+      subtotalProcedimientos,
+      subtotalAdicionales,
+      subtotalOtrosAdicionales
+    });
+    
+    // Calcular fecha de vencimiento si no está definida
+    let fecha_vencimiento = frontendCotizacion.fecha_vencimiento;
+    if (!fecha_vencimiento && frontendCotizacion.validez_dias) {
+      const fecha = new Date();
+      fecha.setDate(fecha.getDate() + parseInt(frontendCotizacion.validez_dias));
+      fecha_vencimiento = fecha.toISOString().split('T')[0];
+    }
+    
+    const data = {
+      paciente_id: parseInt(frontendCotizacion.paciente_id || frontendCotizacion.id_paciente || 0),
+      usuario_id: parseInt(frontendCotizacion.usuario_id) || 1,
+      estado_id: estadoMap[frontendCotizacion.estado] || 1,
+      items: items,
+      servicios_incluidos: servicios_incluidos,
+      // **SOLO ENVIAR SUBTOTALES - EL TOTAL LO CALCULA MYSQL AUTOMÁTICAMENTE**
+      subtotal_procedimientos: subtotalProcedimientos,
+      subtotal_adicionales: subtotalAdicionales,
+      subtotal_otros_adicionales: subtotalOtrosAdicionales,
+      // **NO INCLUIR 'total' EN ABSOLUTO**
+      validez_dias: parseInt(frontendCotizacion.validez_dias) || 7,
+      observaciones: frontendCotizacion.observaciones || '',
+      fecha_vencimiento: fecha_vencimiento
+    };
+    
+    console.log("📤 Datos finales para enviar al backend (SIN 'total'):", JSON.stringify(data, null, 2));
+    return data;
   },
   
   // Transformación inversa - Historia Clínica
@@ -1216,3 +1734,134 @@ export const salaEsperaHelpers = {
     return estadosValidos.includes(estado);
   }
 };
+
+// Funciones helper para cotizaciones - VERSIÓN MEJORADA
+export const cotizacionHelpers = {
+  // Mapear estado a color
+  getEstadoColor: (estado: string): string => {
+    switch (estado) {
+      case "pendiente": return "bg-yellow-100 text-yellow-800";
+      case "aceptada": return "bg-green-100 text-green-800";
+      case "rechazada": return "bg-red-100 text-red-800";
+      case "facturada": return "bg-blue-100 text-blue-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  },
+
+  // Mapear estado a etiqueta
+  getEstadoLabel: (estado: string): string => {
+    switch (estado) {
+      case "pendiente": return "Pendiente";
+      case "aceptada": return "Aceptada";
+      case "rechazada": return "Rechazada";
+      case "facturada": return "Facturada";
+      default: return estado;
+    }
+  },
+
+  // Estados disponibles
+  estadosDisponibles: [
+    "pendiente", "aceptada", "rechazada", "facturada"
+  ],
+
+  // Calcular totales de una cotización - FUNCIÓN CRÍTICA MEJORADA
+  calcularTotales: (items: any[]): {
+    subtotalProcedimientos: number;
+    subtotalAdicionales: number;
+    subtotalOtrosAdicionales: number;
+    total: number;
+  } => {
+    console.log("🔢 Calculando totales para items:", items);
+    
+    let subtotalProcedimientos = 0;
+    let subtotalAdicionales = 0;
+    let subtotalOtrosAdicionales = 0;
+    
+    items.forEach((item, index) => {
+      // Asegurarse de que los valores sean números
+      const cantidad = Number(item.cantidad) || 1;
+      const precioUnitario = Number(item.precio_unitario) || 0;
+      const subtotal = Number(item.subtotal) || (cantidad * precioUnitario);
+      
+      console.log(`Item ${index} (${item.tipo}):`, {
+        nombre: item.nombre,
+        cantidad,
+        precioUnitario,
+        subtotal,
+        tipo: item.tipo
+      });
+      
+      // Clasificar por tipo
+      switch (item.tipo) {
+        case 'procedimiento':
+          subtotalProcedimientos += subtotal;
+          break;
+        case 'adicional':
+          subtotalAdicionales += subtotal;
+          break;
+        case 'otroAdicional':
+          subtotalOtrosAdicionales += subtotal;
+          break;
+        default:
+          // Si no tiene tipo, asumir procedimiento
+          if (item.nombre?.toLowerCase().includes('procedimiento')) {
+            subtotalProcedimientos += subtotal;
+          } else {
+            subtotalAdicionales += subtotal;
+          }
+      }
+    });
+    
+    const total = subtotalProcedimientos + subtotalAdicionales + subtotalOtrosAdicionales;
+    
+    console.log("🧮 Resultados del cálculo:", {
+      subtotalProcedimientos,
+      subtotalAdicionales,
+      subtotalOtrosAdicionales,
+      total
+    });
+    
+    return {
+      subtotalProcedimientos,
+      subtotalAdicionales,
+      subtotalOtrosAdicionales,
+      total
+    };
+  },
+
+  // Formatear número a moneda colombiana
+  formatCurrency: (amount: number): string => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  },
+
+  // Servicios incluidos por defecto
+  serviciosIncluidosDefault: () => [
+    { servicio_nombre: "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", requiere: false },
+    { servicio_nombre: "ANESTESIOLOGO", requiere: false },
+    { servicio_nombre: "CONTROLES CON MEDICO Y ENFERMERA", requiere: false },
+    { servicio_nombre: "VALORACION CON ANESTESIOLOGO", requiere: false },
+    { servicio_nombre: "HEMOGRAMA DE CONTROL", requiere: false },
+    { servicio_nombre: "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", requiere: false },
+    { servicio_nombre: "IMPLANTES", requiere: false },
+  ],
+
+  // Calcular fecha de vencimiento
+  calcularFechaVencimiento: (diasValidez: number = 7): string => {
+    const fecha = new Date();
+    fecha.setDate(fecha.getDate() + diasValidez);
+    return fecha.toISOString().split('T')[0];
+  },
+
+  // Función auxiliar para calcular total rápido
+  calcularTotalRapido: (subtotalProcedimientos: number, subtotalAdicionales: number, subtotalOtrosAdicionales: number): number => {
+    return subtotalProcedimientos + subtotalAdicionales + subtotalOtrosAdicionales;
+  }
+};
+
+// Exportar también la función de prevención de duplicados
+export { preventDuplicateCall };

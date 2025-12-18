@@ -80,7 +80,14 @@ export const rolePermissions: Record<string, Permission[]> = {
     "ver_sala_espera",
     "ver_programacion",
   ],
-  programacion: ["ver_pacientes", "ver_programacion", "crear_programacion", "editar_programacion", "ver_reportes"],
+  programacion: [
+    "ver_pacientes",
+    "ver_programacion",
+    "crear_programacion",
+    "editar_programacion",
+    "ver_reportes",
+    "ver_sala_espera",
+  ],
 }
 
 export function hasPermission(rol: string, permission: Permission): boolean {

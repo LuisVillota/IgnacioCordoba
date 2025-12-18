@@ -76,7 +76,7 @@ const agregarEncabezado = (doc: jsPDF, data: CotizacionData, pageWidth: number, 
       doc.setFontSize(10)
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(26, 107, 50) // #1a6b32
-      doc.text('CLINICARX', logoX - 35, headerY + 8)
+      doc.text('Dr. Hernán Ignacio Córdoba', logoX - 35, headerY + 8)
       doc.setFontSize(8)
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(102, 153, 51) // #669933
@@ -89,7 +89,7 @@ const agregarEncabezado = (doc: jsPDF, data: CotizacionData, pageWidth: number, 
     doc.setFontSize(10)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(26, 107, 50) // #1a6b32
-    doc.text('CLINICARX', pageWidth - margin - 80, headerY + 8, { align: 'right' })
+    doc.text('Dr. Hernán Ignacio Córdoba', pageWidth - margin - 80, headerY + 8, { align: 'right' })
     doc.setFontSize(8)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(102, 153, 51) // #669933
@@ -121,7 +121,7 @@ const agregarPiePagina = (doc: jsPDF, pageWidth: number, pageHeight: number) => 
   
   doc.setFontSize(8)
   doc.setTextColor(119, 158, 77) // Verde suave
-  doc.text('ClinicaRX - Especialistas en Cirugía Plástica', pageWidth / 2, pageHeight - 15, { align: 'center' })
+  doc.text('Dr. Hernán Ignacio Córdoba - Especialistas en Cirugía Plástica', pageWidth / 2, pageHeight - 15, { align: 'center' })
   doc.setTextColor(140, 140, 140) // Gris claro
   doc.text(`Página ${currentPage} de ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' })
 }
