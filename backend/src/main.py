@@ -189,6 +189,464 @@ class SalaEsperaUpdate(BaseModel):
 class BulkUpdateEstadosRequest(BaseModel):
     cambios: Dict[str, str]  # paciente_id -> estado_nombre
 
+
+# ========================================
+# MODELOS PYDANTIC PARA COTIZACIONES - CORREGIDOS
+# ========================================
+
+class CotizacionItemBase(BaseModel):
+    tipo: str  # 'procedimiento', 'adicional', 'otro_adicional'
+    item_id: int
+    nombre: str
+    descripcion: Optional[str] = None
+    cantidad: int = 1
+    precio_unitario: float
+    subtotal: float
+
+class CotizacionServicioIncluido(BaseModel):
+    servicio_nombre: str
+    requiere: bool = False
+
+class CotizacionCreate(BaseModel):
+    paciente_id: int
+    usuario_id: int
+    plan_id: Optional[int] = None
+    estado_id: int = 1  # pendiente por defecto
+    items: List[CotizacionItemBase] = []
+    servicios_incluidos: List[CotizacionServicioIncluido] = []
+    subtotal_procedimientos: float = 0
+    subtotal_adicionales: float = 0
+    subtotal_otros_adicionales: float = 0
+    # **CAMBIAR: total ya NO es requerido, es opcional**
+    total: Optional[float] = None  # La BD lo calcula automáticamente
+    validez_dias: int = 7
+    observaciones: Optional[str] = None
+    fecha_vencimiento: Optional[str] = None
+
+class CotizacionUpdate(BaseModel):
+    paciente_id: Optional[int] = None
+    usuario_id: Optional[int] = None
+    plan_id: Optional[int] = None
+    estado_id: Optional[int] = None
+    items: Optional[List[CotizacionItemBase]] = None
+    servicios_incluidos: Optional[List[CotizacionServicioIncluido]] = None
+    subtotal_procedimientos: Optional[float] = None
+    subtotal_adicionales: Optional[float] = None
+    subtotal_otros_adicionales: Optional[float] = None
+    # **CAMBIAR: total ya NO es requerido en actualización**
+    total: Optional[float] = None  # La BD lo calcula automáticamente
+    validez_dias: Optional[int] = None
+    observaciones: Optional[str] = None
+    fecha_vencimiento: Optional[str] = None
+
+# ========================================
+# ENDPOINTS PARA COTIZACIONES
+# ========================================
+
+@app.get("/api/cotizaciones", response_model=dict)
+def get_cotizaciones(limit: int = 50, offset: int = 0):
+    """Obtener todas las cotizaciones con sus detalles"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Obtener cotizaciones
+                cursor.execute("""
+                    SELECT 
+                        c.id,
+                        c.paciente_id,
+                        c.usuario_id,
+                        c.plan_id,
+                        c.estado_id,
+                        ec.nombre as estado_nombre,
+                        c.total,  # **Este es el total calculado por MySQL**
+                        c.subtotal_procedimientos,
+                        c.subtotal_adicionales,
+                        c.subtotal_otros_adicionales,
+                        c.validez_dias,
+                        c.observaciones,
+                        DATE(c.fecha_creacion) as fecha_creacion,
+                        DATE(c.fecha_vencimiento) as fecha_vencimiento,
+                        p.nombre as paciente_nombre,
+                        p.apellido as paciente_apellido,
+                        p.numero_documento as paciente_documento,
+                        u.nombre as usuario_nombre
+                    FROM cotizacion c
+                    JOIN paciente p ON c.paciente_id = p.id
+                    JOIN usuario u ON c.usuario_id = u.id
+                    JOIN estado_cotizacion ec ON c.estado_id = ec.id
+                    ORDER BY c.fecha_creacion DESC
+                    LIMIT %s OFFSET %s
+                """, (limit, offset))
+                cotizaciones = cursor.fetchall()
+                
+                # Para cada cotización, obtener sus ítems y servicios incluidos
+                for cotizacion in cotizaciones:
+                    # Obtener ítems
+                    cursor.execute("""
+                        SELECT 
+                            id,
+                            tipo,
+                            item_id,
+                            nombre,
+                            descripcion,
+                            cantidad,
+                            precio_unitario,
+                            subtotal
+                        FROM cotizacion_item
+                        WHERE cotizacion_id = %s
+                        ORDER BY tipo, nombre
+                    """, (cotizacion['id'],))
+                    cotizacion['items'] = cursor.fetchall()
+                    
+                    # Obtener servicios incluidos
+                    cursor.execute("""
+                        SELECT 
+                            id,
+                            servicio_nombre,
+                            requiere
+                        FROM cotizacion_servicio_incluido
+                        WHERE cotizacion_id = %s
+                    """, (cotizacion['id'],))
+                    cotizacion['servicios_incluidos'] = cursor.fetchall()
+                
+                # Obtener total de cotizaciones
+                cursor.execute("SELECT COUNT(*) as total FROM cotizacion")
+                total = cursor.fetchone()['total']
+                
+                return {
+                    "cotizaciones": cotizaciones,
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset
+                }
+    except Exception as e:
+        error_msg = str(e)
+        if "cotizacion" in error_msg.lower():
+            return {"cotizaciones": [], "total": 0}
+        raise HTTPException(status_code=500, detail=error_msg)
+    
+@app.get("/api/cotizaciones/{cotizacion_id}", response_model=dict)
+def get_cotizacion(cotizacion_id: int):
+    """Obtener una cotización específica por ID"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        c.*,
+                        ec.nombre as estado_nombre,
+                        p.nombre as paciente_nombre,
+                        p.apellido as paciente_apellido,
+                        p.numero_documento as paciente_documento,
+                        p.telefono as paciente_telefono,
+                        p.email as paciente_email,
+                        u.nombre as usuario_nombre
+                    FROM cotizacion c
+                    JOIN estado_cotizacion ec ON c.estado_id = ec.id
+                    JOIN paciente p ON c.paciente_id = p.id
+                    JOIN usuario u ON c.usuario_id = u.id
+                    WHERE c.id = %s
+                """, (cotizacion_id,))
+                cotizacion = cursor.fetchone()
+                
+                if not cotizacion:
+                    raise HTTPException(status_code=404, detail="Cotización no encontrada")
+                
+                # Obtener ítems
+                cursor.execute("""
+                    SELECT 
+                        id,
+                        tipo,
+                        item_id,
+                        nombre,
+                        descripcion,
+                        cantidad,
+                        precio_unitario,
+                        subtotal
+                    FROM cotizacion_item
+                    WHERE cotizacion_id = %s
+                    ORDER BY tipo, nombre
+                """, (cotizacion_id,))
+                cotizacion['items'] = cursor.fetchall()
+                
+                # Obtener servicios incluidos
+                cursor.execute("""
+                    SELECT 
+                        id,
+                        servicio_nombre,
+                        requiere
+                    FROM cotizacion_servicio_incluido
+                    WHERE cotizacion_id = %s
+                """, (cotizacion_id,))
+                cotizacion['servicios_incluidos'] = cursor.fetchall()
+                
+                return cotizacion
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"❌ Error obteniendo cotización {cotizacion_id}: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error obteniendo cotización",
+            "message": str(e)
+        })
+    
+@app.post("/api/cotizaciones", response_model=dict)
+def create_cotizacion(cotizacion: CotizacionCreate):
+    """Crear una nueva cotización - VERSIÓN CORREGIDA"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        
+        with conn:
+            with conn.cursor() as cursor:
+                # **CRÍTICO: Eliminar el campo 'total' si viene en el request**
+                # Convertir el modelo a dict y eliminar 'total'
+                cotizacion_dict = cotizacion.dict()
+                cotizacion_dict.pop('total', None)  # Elimina 'total' si existe
+                
+                # Verificar que el paciente existe - CORREGIDO
+                cursor.execute("SELECT id, nombre, apellido FROM paciente WHERE id = %s", (cotizacion.paciente_id,))
+                resultado_paciente = cursor.fetchone()
+                if not resultado_paciente:
+                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                
+                # Acceder correctamente como diccionario
+                paciente_nombre = resultado_paciente['nombre']
+                paciente_apellido = resultado_paciente['apellido']
+                
+                # Verificar que el usuario existe
+                cursor.execute("SELECT id, nombre FROM usuario WHERE id = %s", (cotizacion.usuario_id,))
+                resultado_usuario = cursor.fetchone()
+                if not resultado_usuario:
+                    raise HTTPException(status_code=404, detail="Usuario no encontrado")
+                
+                # Acceder correctamente como diccionario
+                usuario_nombre = resultado_usuario['nombre']
+                
+                # Verificar que el estado existe
+                cursor.execute("SELECT id FROM estado_cotizacion WHERE id = %s", (cotizacion.estado_id,))
+                estado = cursor.fetchone()
+                if not estado:
+                    raise HTTPException(status_code=404, detail="Estado no encontrado")
+                
+                # Calcular fecha de vencimiento si no se proporciona
+                fecha_vencimiento = cotizacion.fecha_vencimiento
+                if not fecha_vencimiento and cotizacion.validez_dias:
+                    from datetime import datetime, timedelta
+                    fecha_vencimiento = (datetime.now() + timedelta(days=cotizacion.validez_dias)).strftime('%Y-%m-%d')
+                
+                # **CORRECIÓN: Insertar sin el campo 'total'**
+                cursor.execute("""
+                    INSERT INTO cotizacion (
+                        paciente_id, usuario_id, plan_id, estado_id,
+                        subtotal_procedimientos, subtotal_adicionales,
+                        subtotal_otros_adicionales, validez_dias, observaciones,
+                        fecha_vencimiento
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    cotizacion.paciente_id,
+                    cotizacion.usuario_id,
+                    cotizacion.plan_id,
+                    cotizacion.estado_id,
+                    cotizacion.subtotal_procedimientos,
+                    cotizacion.subtotal_adicionales,
+                    cotizacion.subtotal_otros_adicionales,
+                    cotizacion.validez_dias,
+                    cotizacion.observaciones or "",
+                    fecha_vencimiento
+                ))
+                
+                cotizacion_id = cursor.lastrowid
+                
+                # Insertar ítems
+                for item in cotizacion.items:
+                    cursor.execute("""
+                        INSERT INTO cotizacion_item (
+                            cotizacion_id, tipo, item_id, nombre,
+                            descripcion, cantidad, precio_unitario, subtotal
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        cotizacion_id,
+                        item.tipo,
+                        item.item_id,
+                        item.nombre,
+                        item.descripcion or "",
+                        item.cantidad,
+                        item.precio_unitario,
+                        item.subtotal
+                    ))
+                
+                # Insertar servicios incluidos
+                servicios_a_insertar = cotizacion.servicios_incluidos if cotizacion.servicios_incluidos else []
+                if not servicios_a_insertar:
+                    servicios_base = [
+                        "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO",
+                        "ANESTESIOLOGO",
+                        "CONTROLES CON MEDICO Y ENFERMERA",
+                        "VALORACION CON ANESTESIOLOGO",
+                        "HEMOGRAMA DE CONTROL",
+                        "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES",
+                        "IMPLANTES"
+                    ]
+                    for servicio_nombre in servicios_base:
+                        cursor.execute("""
+                            INSERT INTO cotizacion_servicio_incluido (
+                                cotizacion_id, servicio_nombre, requiere
+                            ) VALUES (%s, %s, %s)
+                        """, (cotizacion_id, servicio_nombre, 0))
+                else:
+                    for servicio in servicios_a_insertar:
+                        cursor.execute("""
+                            INSERT INTO cotizacion_servicio_incluido (
+                                cotizacion_id, servicio_nombre, requiere
+                            ) VALUES (%s, %s, %s)
+                        """, (
+                            cotizacion_id,
+                            servicio.servicio_nombre,
+                            1 if servicio.requiere else 0
+                        ))
+                
+                conn.commit()
+                
+                # **OBTENER la cotización recién creada con el total calculado por MySQL**
+                cursor.execute("SELECT * FROM cotizacion WHERE id = %s", (cotizacion_id,))
+                cotizacion_creada = cursor.fetchone()
+                
+                return {
+                    "success": True,
+                    "message": "Cotización creada exitosamente",
+                    "cotizacion_id": cotizacion_id,
+                    "paciente_nombre": f"{paciente_nombre} {paciente_apellido}",
+                    "usuario_nombre": usuario_nombre,
+                    "total": float(cotizacion_creada['total']) if cotizacion_creada and cotizacion_creada['total'] else 0.00
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        # **CORRECCIÓN CRÍTICA: Manejo de errores apropiado**
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"❌ Error creando cotización: {error_details}")
+        raise HTTPException(status_code=500, detail={
+            "error": "Error creando cotización",
+            "message": str(e),
+            "type": type(e).__name__
+        })
+        
+@app.delete("/api/cotizaciones/{cotizacion_id}", response_model=dict)
+def delete_cotizacion(cotizacion_id: int):
+    """Eliminar una cotización y sus registros relacionados"""
+    try:
+        print(f"🗑️ Eliminando cotización {cotizacion_id}")
+        
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT id FROM cotizacion WHERE id = %s", (cotizacion_id,))
+                cotizacion_existente = cursor.fetchone()
+                if not cotizacion_existente:
+                    raise HTTPException(status_code=404, detail="Cotización no encontrada")
+                
+                # Eliminar en cascada (primero los detalles, luego la cotización)
+                cursor.execute("DELETE FROM cotizacion_item WHERE cotizacion_id = %s", (cotizacion_id,))
+                cursor.execute("DELETE FROM cotizacion_servicio_incluido WHERE cotizacion_id = %s", (cotizacion_id,))
+                cursor.execute("DELETE FROM cotizacion WHERE id = %s", (cotizacion_id,))
+                
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Cotización eliminada exitosamente",
+                    "cotizacion_id": cotizacion_id
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error eliminando cotización: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error eliminando cotización",
+            "message": str(e),
+            "type": type(e).__name__
+        })
+    
+# ========================================
+# ENDPOINTS DE UTILIDAD PARA COTIZACIONES
+# ========================================
+
+@app.get("/api/estados/cotizaciones")
+def get_estados_cotizaciones():
+    """Obtener todos los estados de cotización"""
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM estado_cotizacion ORDER BY orden")
+                estados = cursor.fetchall()
+                return {"estados": estados}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error obteniendo estados de cotización",
+            "message": str(e)
+        })
+
+@app.get("/api/cotizaciones/plantilla-servicios")
+def get_plantilla_servicios():
+    """Obtener la plantilla base de servicios incluidos"""
+    servicios_base = [
+        {"servicio_nombre": "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", "requiere": False},
+        {"servicio_nombre": "ANESTESIOLOGO", "requiere": False},
+        {"servicio_nombre": "CONTROLES CON MEDICO Y ENFERMERA", "requiere": False},
+        {"servicio_nombre": "VALORACION CON ANESTESIOLOGO", "requiere": False},
+        {"servicio_nombre": "HEMOGRAMA DE CONTROL", "requiere": False},
+        {"servicio_nombre": "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", "requiere": False},
+        {"servicio_nombre": "IMPLANTES", "requiere": False},
+    ]
+    return {"servicios": servicios_base}
+
 # ========================================
 # ENDPOINTS BÁSICOS
 # ========================================
