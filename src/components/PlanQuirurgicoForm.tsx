@@ -1,9 +1,7 @@
 "use client"
 
-
 import React, { useState, useRef, useEffect, useCallback } from "react"
 import { PlanQuirurgico } from "../types/planQuirurgico"
-import EsquemaModal from "./EsquemaModal";
 
 type ProcedureType = 'lipo' | 'lipotras' | 'musculo' | 'incision';
 
@@ -13,14 +11,14 @@ interface Props {
 }
 
 interface DibujoAccion {
-  tipo: ProcedureType; // Usamos el tipo ProcedureType
+  tipo: ProcedureType;
   x: number;
   y: number;
   timestamp: number;
   tamaño: number;
 }
 
-type ZoneMarkingsSVG = { [zoneId: string]: ProcedureType | null; };
+type ZoneMarkingsSVG = { [zoneId: string]: 'liposuction' | 'lipotransfer' | null };
 
 interface Props {
   plan?: PlanQuirurgico;
@@ -120,25 +118,30 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
   const [notasDoctor, setNotasDoctor] = useState(plan?.notas_doctor ?? "")
   const [imagenesAdjuntas, setImagenesAdjuntas] = useState<string[]>(plan?.imagenes_adjuntas ?? [])
 
-  // ---------------------------
-  // Canvas / Esquema corporal
-  // ---------------------------
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const imgRef = useRef<HTMLImageElement | null>(null)
-  const [herramienta, setHerramienta] = useState<"lipo" | "lipotras" | "musculo" | "incision" | null>(null)
-  const [isCoolingDown, setIsCoolingDown] = useState(false)
+  // ===========================
+  // NUEVO ESQUEMA MEJORADO (EXACTO COMO EL INDEX.HTML)
+  // ===========================
+  const [selectionHistory, setSelectionHistory] = useState<Array<any>>([]);
+  const [svgDocuments, setSvgDocuments] = useState<Array<Document>>([]);
+  const [selectedProcedure, setSelectedProcedure] = useState<'liposuction' | 'lipotransfer'>('liposuction');
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [currentPath, setCurrentPath] = useState<SVGPathElement | null>(null);
+  const [pathPoints, setPathPoints] = useState<Array<{x: number, y: number}>>([]);
+  const [isTextMode, setIsTextMode] = useState(false);
+  const [pendingTextPosition, setPendingTextPosition] = useState<{x: number, y: number, svgDoc: Document} | null>(null);
+  const [textInput, setTextInput] = useState("");
+  const [currentStrokeWidth, setCurrentStrokeWidth] = useState(3);
+  const [currentTextSize, setCurrentTextSize] = useState(16);
+  const [showSaveDropdown, setShowSaveDropdown] = useState(false);
+  const [showTextModal, setShowTextModal] = useState(false);
   
-  // Estados para el zoom y dibujos
-  const [zoom, setZoom] = useState(1)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const [isDragging, setIsDragging] = useState(false)
-  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 })
-  
-  // Guardar los dibujos como objetos
-  const [dibujos, setDibujos] = useState<DibujoAccion[]>(plan?.dibujos_esquema ?? [])
+  // Para zonas marcadas
+  const [zoneMarkings, setZoneMarkings] = useState<ZoneMarkingsSVG>({});
 
-  // Estados para el tamaño de los dibujos (1: muy pequeño, 2: pequeño, 3: normal, 4: grande)
-  const [tamañoDibujo, setTamañoDibujo] = useState(3)
+  const bodySvgRef = useRef<HTMLObjectElement>(null);
+  const facialSvgRef = useRef<HTMLObjectElement>(null);
+  const saveDropdownRef = useRef<HTMLDivElement>(null);
 
   // ---------------------------
   // Efecto para inicializar fecha y hora automáticamente
@@ -180,320 +183,497 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
     setHistoriaClinica(prev => ({ ...prev, peso: datosPaciente.peso, altura: datosPaciente.altura, imc: rounded }))
   }, [datosPaciente.peso, datosPaciente.altura])
 
-  // Cargar imagen
-  useEffect(() => {
-    const img = new Image()
-    img.src = "/images/schema.png"
-    img.onload = () => {
-      imgRef.current = img
-      redrawCanvas()
+  // ===========================
+  // FUNCIONES DEL ESQUEMA (EXACTAMENTE COMO EL INDEX.HTML)
+  // ===========================
+
+  const updateStrokeWidth = (value: number) => {
+    setCurrentStrokeWidth(value);
+  };
+
+  const updateTextSize = (value: number) => {
+    setCurrentTextSize(value);
+  };
+
+  const selectProcedure = (procedure: 'liposuction' | 'lipotransfer') => {
+    setSelectedProcedure(procedure);
+  };
+
+  const toggleDrawingMode = () => {
+    const newDrawingMode = !isDrawingMode;
+    setIsDrawingMode(newDrawingMode);
+    
+    if (newDrawingMode && isTextMode) {
+      setIsTextMode(false);
     }
-  }, [])
-
-  // Redibujar canvas cuando cambia el zoom, offset o dibujos
-  useEffect(() => {
-    redrawCanvas()
-  }, [zoom, offset, dibujos])
-
-  const redrawCanvas = () => {
-    const canvas = canvasRef.current
-    if (!canvas || !imgRef.current) return
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-
-    // Limpiar canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
     
-    // Guardar estado del contexto
-    ctx.save()
-    
-    // Aplicar transformaciones de zoom y pan
-    ctx.translate(offset.x, offset.y)
-    ctx.scale(zoom, zoom)
-    
-    // Dibujar imagen base
-    ctx.drawImage(imgRef.current, 0, 0, canvas.width, canvas.height)
-    
-    // Redibujar todos los dibujos
-    dibujos.forEach(dibujo => {
-      switch (dibujo.tipo) {
-        case "lipo":
-          drawLiposuccion(ctx, dibujo.x, dibujo.y, dibujo.tamaño, false)
-          break
-        case "lipotras":
-          drawLipotras(ctx, dibujo.x, dibujo.y, dibujo.tamaño, false)
-          break
-        case "musculo":
-          drawMusculo(ctx, dibujo.x, dibujo.y, dibujo.tamaño, false)
-          break
-        case "incision":
-          drawIncision(ctx, dibujo.x, dibujo.y, dibujo.tamaño, false)
-          break
+    svgDocuments.forEach(doc => {
+      const svgElement = doc.documentElement;
+      if (newDrawingMode) {
+        svgElement.classList.add('drawing-mode');
+      } else {
+        svgElement.classList.remove('drawing-mode');
       }
-    })
+    });
+  };
+
+  const toggleTextMode = () => {
+    const newTextMode = !isTextMode;
+    setIsTextMode(newTextMode);
     
-    // Restaurar estado del contexto
-    ctx.restore()
-  }
-
-  // Función auxiliar para convertir coordenadas de pantalla a coordenadas del canvas
-  const getCanvasCoordinates = (clientX: number, clientY: number) => {
-    const canvas = canvasRef.current
-    if (!canvas) return { x: 0, y: 0 }
-    
-    const rect = canvas.getBoundingClientRect()
-    const x = (clientX - rect.left - offset.x) / zoom
-    const y = (clientY - rect.top - offset.y) / zoom
-    
-    return { x, y }
-  }
-
-  const saveDibujo = (tipo: "lipo" | "lipotras" | "musculo" | "incision", x: number, y: number, tamaño: number) => {
-    const newDibujo: DibujoAccion = {
-      tipo,
-      x,
-      y,
-      tamaño,
-      timestamp: Date.now()
-    }
-    setDibujos(prev => [...prev, newDibujo])
-  }
-
-  // Función para calcular el tamaño basado en la escala
-  const getTamañoEscalado = (base: number, tamaño: number) => {
-    const escalas = [0.5, 0.75, 1, 1.25] // muy pequeño, pequeño, normal, grande
-    return base * escalas[tamaño - 1]
-  }
-
-  // Función para obtener el nombre del tamaño
-  const getNombreTamaño = (tamaño: number) => {
-    const nombres = ["Muy pequeño", "Pequeño", "Normal", "Grande"]
-    return nombres[tamaño - 1]
-  }
-
-  function drawLiposuccion(ctx: CanvasRenderingContext2D, x: number, y: number, tamaño: number = 3, applyTransform: boolean = true) {
-    if (applyTransform) {
-      ctx.save()
-      ctx.translate(offset.x, offset.y)
-      ctx.scale(zoom, zoom)
+    if (newTextMode && isDrawingMode) {
+      setIsDrawingMode(false);
     }
     
-    ctx.strokeStyle = "red"
-    ctx.lineWidth = 2 / zoom
+    svgDocuments.forEach(doc => {
+      const svgElement = doc.documentElement;
+      if (newTextMode) {
+        svgElement.classList.add('text-mode');
+      } else {
+        svgElement.classList.remove('text-mode');
+      }
+    });
+  };
 
-    const spacing = getTamañoEscalado(8, tamaño)
-    const length = getTamañoEscalado(40, tamaño)
-    const slope = 0.25
-    const numLines = 5
-    const totalWidth = (numLines - 1) * spacing
+  const openTextModal = (x: number, y: number, svgDoc: Document) => {
+    setPendingTextPosition({ x, y, svgDoc });
+    setShowTextModal(true);
+  };
 
-    const offsetY = getTamañoEscalado(-20, tamaño)
+  const closeTextModal = () => {
+    setShowTextModal(false);
+    setPendingTextPosition(null);
+    setTextInput("");
+  };
 
-    for (let i = 0; i < numLines; i++) {
-        const offset = i * spacing - totalWidth / 2
-
-        ctx.beginPath()
-        ctx.moveTo(x + offset, y + length + offsetY)
-        ctx.lineTo(x + offset + length * slope, y + offsetY)
-        ctx.stroke()
-    }
-
-    // Línea vertical centrada y subida
-    ctx.beginPath()
-    ctx.moveTo(x, y + offsetY)
-    ctx.lineTo(x, y + length + offsetY)
-    ctx.stroke()
-
-    if (applyTransform) {
-      ctx.restore()
-    }
-  }
-
-  const drawLipotras = (ctx: CanvasRenderingContext2D, x: number, y: number, tamaño: number = 3, applyTransform: boolean = true) => {
-  if (applyTransform) {
-    ctx.save()
-    ctx.translate(offset.x, offset.y)
-    ctx.scale(zoom, zoom)
-  }
-  
-  ctx.strokeStyle = "blue"
-  ctx.lineWidth = 1.5 / zoom
-  
-  // Dibujar rejilla azul para lipotransferencia
-  const gridSize = getTamañoEscalado(30, tamaño)
-  const cellSize = getTamañoEscalado(6, tamaño)
-  const numCells = Math.floor(gridSize / cellSize)
-  const startX = x - gridSize / 2
-  const startY = y - gridSize / 2
-
-  for (let i = 1; i < numCells; i++) {
-    ctx.beginPath()
-    ctx.moveTo(startX + i * cellSize, startY)
-    ctx.lineTo(startX + i * cellSize, startY + gridSize)
-    ctx.stroke()
-  }
- 
-  for (let i = 1; i < numCells; i++) {
-    ctx.beginPath()
-    ctx.moveTo(startX, startY + i * cellSize)
-    ctx.lineTo(startX + gridSize, startY + i * cellSize)
-    ctx.stroke()
-  }
-
-  if (applyTransform) {
-    ctx.restore()
-  }
-}
-
-  const drawMusculo = (ctx: CanvasRenderingContext2D, x: number, y: number, tamaño: number = 3, applyTransform: boolean = true) => {
-    if (applyTransform) {
-      ctx.save()
-      ctx.translate(offset.x, offset.y)
-      ctx.scale(zoom, zoom)
+  const addTextToSVG = () => {
+    if (!pendingTextPosition || !textInput.trim()) {
+      closeTextModal();
+      return;
     }
     
-    ctx.strokeStyle = "green"
-    ctx.lineWidth = 4 / zoom
-    const height = getTamañoEscalado(40, tamaño)
+    const textElement = pendingTextPosition.svgDoc.createElementNS('http://www.w3.org/2000/svg', 'text');
+    textElement.setAttribute('x', pendingTextPosition.x.toString());
+    textElement.setAttribute('y', pendingTextPosition.y.toString());
+    textElement.setAttribute('fill', '#000000');
+    textElement.setAttribute('font-size', currentTextSize.toString());
+    textElement.setAttribute('font-family', 'Arial, sans-serif');
+    textElement.setAttribute('font-weight', 'bold');
+    textElement.textContent = textInput;
+    textElement.classList.add('user-added-text');
     
-    ctx.beginPath()
-    ctx.moveTo(x, y - height/2)
-    ctx.lineTo(x, y + height/2)
-    ctx.stroke()
+    pendingTextPosition.svgDoc.documentElement.appendChild(textElement);
+    
+    setSelectionHistory(prev => [...prev, {
+      element: textElement,
+      type: 'text'
+    }]);
+    
+    closeTextModal();
+  };
 
-    if (applyTransform) {
-      ctx.restore()
+  const removeTextElement = (textElement: SVGTextElement) => {
+    if (textElement && textElement.parentNode) {
+      textElement.parentNode.removeChild(textElement);
     }
-  }
+  };
 
-  function drawIncision(ctx: CanvasRenderingContext2D, x: number, y: number, tamaño: number = 3, applyTransform: boolean = true) {
-    if (applyTransform) {
-      ctx.save()
-      ctx.translate(offset.x, offset.y)
-      ctx.scale(zoom, zoom)
+  const undoLastSelection = () => {
+    if (selectionHistory.length === 0) return;
+    
+    const lastSelection = selectionHistory[selectionHistory.length - 1];
+    if (lastSelection.type === 'zone') {
+      removeProcedurePattern(lastSelection.element);
+    } else if (lastSelection.type === 'freedraw') {
+      removeFreeDrawPath(lastSelection.element);
+    } else if (lastSelection.type === 'text') {
+      removeTextElement(lastSelection.element);
     }
     
-    ctx.strokeStyle = "red"
-    ctx.lineWidth = 3 / zoom
-    const radius = getTamañoEscalado(20, tamaño)
-    
-    ctx.beginPath()
-    ctx.arc(x, y, radius, 0, Math.PI, false)
-    ctx.stroke()
+    setSelectionHistory(prev => prev.slice(0, -1));
+  };
 
-    if (applyTransform) {
-      ctx.restore()
+  const resetAllSelections = () => {
+    selectionHistory.forEach(selection => {
+      if (selection.type === 'zone') {
+        removeProcedurePattern(selection.element);
+      } else if (selection.type === 'freedraw') {
+        removeFreeDrawPath(selection.element);
+      } else if (selection.type === 'text') {
+        removeTextElement(selection.element);
+      }
+    });
+    setSelectionHistory([]);
+    setZoneMarkings({});
+  };
+
+  const removeFreeDrawPath = (pathElement: SVGPathElement) => {
+    if (pathElement && pathElement.parentNode) {
+      pathElement.parentNode.removeChild(pathElement);
     }
-  }
+  };
 
-  const handleDraw = (e: React.MouseEvent) => {
-    if (!herramienta || isCoolingDown) return
-    const canvas = canvasRef.current
-    if (!canvas) return
+  const startDrawing = (e: MouseEvent, svgDoc: Document) => {
+    if (isTextMode) {
+      const pt = getSVGPoint(e, svgDoc);
+      openTextModal(pt.x, pt.y, svgDoc);
+      return;
+    }
     
-    const rect = canvas.getBoundingClientRect()
-    const canvasCoords = getCanvasCoordinates(e.clientX, e.clientY)
+    if (!isDrawingMode) return;
     
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
+    setIsDrawing(true);
+    
+    const pt = getSVGPoint(e, svgDoc);
+    setPathPoints([pt]);
+    
+    const newPath = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'path');
+    newPath.classList.add('free-draw-path');
+    newPath.setAttribute('fill', 'none');
+    newPath.setAttribute('stroke', '#000000');
+    newPath.setAttribute('stroke-width', currentStrokeWidth.toString());
+    newPath.setAttribute('stroke-linecap', 'round');
+    newPath.setAttribute('stroke-linejoin', 'round');
+    
+    svgDoc.documentElement.appendChild(newPath);
+    setCurrentPath(newPath);
+  };
 
-    // Guardar el dibujo en la lista con el tamaño seleccionado
-    saveDibujo(herramienta, canvasCoords.x, canvasCoords.y, tamañoDibujo)
+  const continueDrawing = (e: MouseEvent, svgDoc: Document) => {
+    if (isTextMode) return;
+    if (!isDrawingMode || !isDrawing) return;
+    
+    const pt = getSVGPoint(e, svgDoc);
+    setPathPoints(prev => [...prev, pt]);
+    
+    updatePathData();
+  };
 
-    // Dibujar inmediatamente
-    switch (herramienta) {
-      case "lipo":
-        drawLiposuccion(ctx, canvasCoords.x, canvasCoords.y, tamañoDibujo)
-        break
-      case "lipotras":
-        drawLipotras(ctx, canvasCoords.x, canvasCoords.y, tamañoDibujo)
-        break
-      case "musculo":
-        drawMusculo(ctx, canvasCoords.x, canvasCoords.y, tamañoDibujo)
-        break
-      case "incision":
-        drawIncision(ctx, canvasCoords.x, canvasCoords.y, tamañoDibujo)
-        break
+  const stopDrawing = (e: MouseEvent, svgDoc: Document) => {
+    if (isTextMode) return;
+    if (!isDrawingMode || !isDrawing) return;
+    
+    setIsDrawing(false);
+    
+    if (currentPath && pathPoints.length > 2) {
+      setSelectionHistory(prev => [...prev, {
+        element: currentPath,
+        type: 'freedraw'
+      }]);
+    } else if (currentPath) {
+      currentPath.parentNode?.removeChild(currentPath);
+    }
+    
+    setCurrentPath(null);
+    setPathPoints([]);
+  };
+
+  const getSVGPoint = (e: MouseEvent, svgDoc: Document) => {
+    const svg = svgDoc.documentElement;
+    const pt = svg.createSVGPoint();
+    
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    
+    const matrix = svg.getScreenCTM()?.inverse();
+    if (!matrix) return { x: 0, y: 0 };
+    
+    return pt.matrixTransform(matrix);
+  };
+
+  const updatePathData = () => {
+    if (!currentPath || pathPoints.length < 2) return;
+    
+    let d = `M ${pathPoints[0].x} ${pathPoints[0].y}`;
+    
+    for (let i = 1; i < pathPoints.length - 1; i++) {
+      const xc = (pathPoints[i].x + pathPoints[i + 1].x) / 2;
+      const yc = (pathPoints[i].y + pathPoints[i + 1].y) / 2;
+      d += ` Q ${pathPoints[i].x} ${pathPoints[i].y}, ${xc} ${yc}`;
+    }
+    
+    if (pathPoints.length > 1) {
+      const last = pathPoints[pathPoints.length - 1];
+      d += ` L ${last.x} ${last.y}`;
+    }
+    
+    currentPath.setAttribute('d', d);
+  };
+
+  const createPatterns = (svgDoc: Document) => {
+    let defs = svgDoc.querySelector('defs');
+    if (!defs) {
+      defs = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      svgDoc.documentElement.insertBefore(defs, svgDoc.documentElement.firstChild);
     }
 
-    setIsCoolingDown(true)
-    setTimeout(() => setIsCoolingDown(false), 500)
-  }
+    // Limpiar patrones existentes
+    const existingPatterns = defs.querySelectorAll('pattern');
+    existingPatterns.forEach(pattern => pattern.remove());
 
-  // Función para deseleccionar herramienta
-  const deseleccionarHerramienta = () => {
-    setHerramienta(null)
-  }
+    // Patrón de liposucción
+    const lipoPattern = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+    lipoPattern.setAttribute('id', 'liposuction-pattern');
+    lipoPattern.setAttribute('patternUnits', 'userSpaceOnUse');
+    lipoPattern.setAttribute('width', '3');
+    lipoPattern.setAttribute('height', '3');
+    lipoPattern.setAttribute('patternTransform', 'rotate(45)');
+    
+    const lipoLine = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
+    lipoLine.setAttribute('x1', '0');
+    lipoLine.setAttribute('y1', '0');
+    lipoLine.setAttribute('x2', '0');
+    lipoLine.setAttribute('y2', '3');
+    lipoLine.setAttribute('stroke', '#FF0000');
+    lipoLine.setAttribute('stroke-width', '2');
+    
+    lipoPattern.appendChild(lipoLine);
+    defs.appendChild(lipoPattern);
 
-  // Funciones de zoom
-  const zoomIn = () => {
-    setZoom(prev => Math.min(prev + 0.2, 3))
-  }
+    // Patrón de lipotransferencia
+    const transferPattern = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+    transferPattern.setAttribute('id', 'lipotransfer-pattern');
+    transferPattern.setAttribute('patternUnits', 'userSpaceOnUse');
+    transferPattern.setAttribute('width', '2.5');
+    transferPattern.setAttribute('height', '2.5');
+    
+    const transferLineH = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
+    transferLineH.setAttribute('x1', '0');
+    transferLineH.setAttribute('y1', '0');
+    transferLineH.setAttribute('x2', '2.5');
+    transferLineH.setAttribute('y2', '0');
+    transferLineH.setAttribute('stroke', '#0000FF');
+    transferLineH.setAttribute('stroke-width', '1.5');
+    
+    const transferLineV = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
+    transferLineV.setAttribute('x1', '0');
+    transferLineV.setAttribute('y1', '0');
+    transferLineV.setAttribute('x2', '0');
+    transferLineV.setAttribute('y2', '2.5');
+    transferLineV.setAttribute('stroke', '#0000FF');
+    transferLineV.setAttribute('stroke-width', '1.5');
+    
+    transferPattern.appendChild(transferLineH);
+    transferPattern.appendChild(transferLineV);
+    defs.appendChild(transferPattern);
+  };
 
-  const zoomOut = () => {
-    setZoom(prev => Math.max(prev - 0.2, 0.5))
-  }
-
-  const resetZoom = () => {
-    setZoom(1)
-    setOffset({ x: 0, y: 0 })
-  }
-
-  // Zoom con rueda del mouse
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const rect = canvas.getBoundingClientRect()
-    const mouseX = e.clientX - rect.left
-    const mouseY = e.clientY - rect.top
-
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
-    const newZoom = Math.max(0.5, Math.min(zoom * zoomFactor, 3))
-
-    // Calcular nuevo offset para hacer zoom hacia el puntero del mouse
-    const newOffsetX = mouseX - (mouseX - offset.x) * (newZoom / zoom)
-    const newOffsetY = mouseY - (mouseY - offset.y) * (newZoom / zoom)
-
-    setZoom(newZoom)
-    setOffset({ x: newOffsetX, y: newOffsetY })
-  }
-
-  // Arrastrar para mover (pan)
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
-      e.preventDefault()
-      setIsDragging(true)
-      setLastMousePos({ x: e.clientX, y: e.clientY })
+  const applyProcedurePattern = (element: SVGElement, procedure: 'liposuction' | 'lipotransfer') => {
+    const originalFill = element.getAttribute('data-original-fill') || 
+                        element.style.fill || 
+                        element.getAttribute('fill') || '';
+    
+    element.style.fillOpacity = '1';
+    
+    // Limpiar fill actual
+    element.style.fill = '';
+    element.removeAttribute('fill');
+    
+    if (procedure === 'liposuction') {
+      element.setAttribute('fill', 'url(#liposuction-pattern)');
+    } else if (procedure === 'lipotransfer') {
+      element.setAttribute('fill', 'url(#lipotransfer-pattern)');
     }
-  }
+    
+    element.setAttribute('data-procedure', procedure);
+    
+    // Actualizar estado de zonas marcadas
+    const zoneId = element.id || element.getAttribute('inkscape:label') || '';
+    if (zoneId) {
+      setZoneMarkings(prev => ({
+        ...prev,
+        [zoneId]: procedure
+      }));
+    }
+  };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging) {
-      const deltaX = e.clientX - lastMousePos.x
-      const deltaY = e.clientY - lastMousePos.y
+  const removeProcedurePattern = (element: SVGElement) => {
+    const originalFill = element.getAttribute('data-original-fill') || '';
+    
+    if (originalFill) {
+      element.setAttribute('fill', originalFill);
+    } else {
+      element.removeAttribute('fill');
+    }
+    
+    const originalOpacity = element.getAttribute('data-original-opacity') || '';
+    if (originalOpacity) {
+      element.style.fillOpacity = originalOpacity;
+    }
+    
+    element.removeAttribute('data-procedure');
+    
+    // Actualizar estado de zonas marcadas
+    const zoneId = element.id || element.getAttribute('inkscape:label') || '';
+    if (zoneId) {
+      setZoneMarkings(prev => {
+        const newMarkings = { ...prev };
+        delete newMarkings[zoneId];
+        return newMarkings;
+      });
+    }
+  };
+
+  const initializeSchema = (objectElement: HTMLObjectElement) => {
+    if (!objectElement) return;
+    
+    const handleLoad = () => {
+      const svgDoc = objectElement.contentDocument;
+      if (!svgDoc) return;
+
+      // Agregar al array de documentos
+      setSvgDocuments(prev => {
+        const exists = prev.some(doc => doc === svgDoc);
+        if (!exists) {
+          return [...prev, svgDoc];
+        }
+        return prev;
+      });
+
+      // Crear patrones
+      createPatterns(svgDoc);
+
+      const svgElement = svgDoc.documentElement;
       
-      setOffset(prev => ({
-        x: prev.x + deltaX,
-        y: prev.y + deltaY
-      }))
+      svgElement.style.userSelect = 'none';
+      svgElement.style.webkitUserSelect = 'none';
       
-      setLastMousePos({ x: e.clientX, y: e.clientY })
+      // Configurar eventos
+      svgElement.addEventListener('mousedown', (e) => startDrawing(e as MouseEvent, svgDoc));
+      svgElement.addEventListener('mousemove', (e) => continueDrawing(e as MouseEvent, svgDoc));
+      svgElement.addEventListener('mouseup', (e) => stopDrawing(e as MouseEvent, svgDoc));
+      svgElement.addEventListener('mouseleave', (e) => stopDrawing(e as MouseEvent, svgDoc));
+
+      // Configurar zonas clicables
+      const allElements = svgDoc.querySelectorAll('*');
+      allElements.forEach((element: Element) => {
+        const svgElement = element as SVGElement;
+        const label = svgElement.getAttribute('inkscape:label');
+        if (label && (svgElement.tagName === 'path' || svgElement.tagName === 'rect' || svgElement.tagName === 'circle' || svgElement.tagName === 'ellipse')) {
+          const originalFill = svgElement.getAttribute('fill') || '';
+          svgElement.setAttribute('data-original-fill', originalFill);
+          
+          const originalOpacity = svgElement.getAttribute('fill-opacity') || '';
+          if (originalOpacity) {
+            svgElement.setAttribute('data-original-opacity', originalOpacity);
+          }
+          
+          svgElement.classList.add('zone');
+          svgElement.style.cursor = 'pointer';
+          
+          svgElement.addEventListener('click', function(e) {
+            if (isDrawingMode) {
+              e.stopPropagation();
+              return;
+            }
+            
+            if (isTextMode) {
+              e.stopPropagation();
+              return;
+            }
+            
+            const currentProcedure = svgElement.getAttribute('data-procedure');
+            
+            if (currentProcedure) {
+              removeProcedurePattern(svgElement);
+              
+              // Remover del historial
+              setSelectionHistory(prev => prev.filter(item => 
+                !(item.type === 'zone' && item.element === svgElement)
+              ));
+            } else {
+              applyProcedurePattern(svgElement, selectedProcedure);
+              
+              setSelectionHistory(prev => [...prev, {
+                element: svgElement,
+                procedure: selectedProcedure,
+                type: 'zone'
+              }]);
+            }
+          });
+        }
+      });
+
+      // Deshabilitar interacción con textos existentes
+      const textElements = svgDoc.querySelectorAll('text');
+      textElements.forEach(text => {
+        text.style.pointerEvents = 'none';
+        text.style.userSelect = 'none';
+        text.style.webkitUserSelect = 'none';
+      });
+
+      // Aplicar clases según modo actual
+      if (isDrawingMode) {
+        svgElement.classList.add('drawing-mode');
+      }
+      if (isTextMode) {
+        svgElement.classList.add('text-mode');
+      }
+    };
+
+    objectElement.addEventListener('load', handleLoad);
+    
+    // Si ya está cargado
+    if (objectElement.contentDocument) {
+      handleLoad();
     }
-  }
 
-  const handleMouseUp = () => {
-    setIsDragging(false)
-  }
+    return () => {
+      objectElement.removeEventListener('load', handleLoad);
+    };
+  };
 
-  const borrarTodo = () => {
-    setDibujos([])
-  }
+  // Inicializar los SVG cuando los refs estén listos
+  useEffect(() => {
+    if (bodySvgRef.current) {
+      initializeSchema(bodySvgRef.current);
+    }
+    if (facialSvgRef.current) {
+      initializeSchema(facialSvgRef.current);
+    }
+  }, [bodySvgRef.current, facialSvgRef.current]);
 
-  const deshacer = () => {
-    setDibujos(prev => prev.slice(0, -1))
-  }
+  // Actualizar clases cuando cambian los modos
+  useEffect(() => {
+    svgDocuments.forEach(doc => {
+      const svgElement = doc.documentElement;
+      if (isDrawingMode) {
+        svgElement.classList.add('drawing-mode');
+        svgElement.classList.remove('text-mode');
+      } else if (isTextMode) {
+        svgElement.classList.add('text-mode');
+        svgElement.classList.remove('drawing-mode');
+      } else {
+        svgElement.classList.remove('drawing-mode', 'text-mode');
+      }
+    });
+  }, [isDrawingMode, isTextMode, svgDocuments]);
+
+  // Teclas de acceso rápido
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && showTextModal) {
+        addTextToSVG();
+      } else if (e.key === 'Escape' && showTextModal) {
+        closeTextModal();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showTextModal, textInput]);
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (saveDropdownRef.current && !saveDropdownRef.current.contains(event.target as Node)) {
+        setShowSaveDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // agregar cirugía previa
   const agregarCirugiaPrev = () => {
@@ -528,6 +708,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
     setDatosPaciente(prev => ({ ...prev, edad: age }))
   }, [historiaClinica.fecha_nacimiento])
 
+  // Guardar esquema
+  const handleSaveSchema = async (format: 'png' | 'pdf') => {
+    setShowSaveDropdown(false);
+    alert(`Funcionalidad de exportar a ${format.toUpperCase()} será implementada con html2canvas y jsPDF`);
+  };
+
   // ---------------------------
   // Guardar
   // ---------------------------
@@ -553,10 +739,18 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
       historia_clinica: historiaClinica,
       cirugias_previas: cirugiasPrevias,
       conducta_quirurgica: conductaQuirurgica,
-      dibujos_esquema: dibujos,
+      dibujos_esquema: [], // Se mantiene por compatibilidad
       notas_doctor: notasDoctor,
       imagenes_adjuntas: imagenesAdjuntas,
       estado: plan?.estado ?? "borrador",
+      // Nuevos campos para el esquema mejorado
+      esquema_mejorado: {
+        zoneMarkings,
+        selectionHistory,
+        currentStrokeWidth,
+        currentTextSize,
+        selectedProcedure
+      }
     }
 
     onGuardar(nuevoPlan)
@@ -572,7 +766,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
       <section className="p-4 border rounded bg-white">
         <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Datos del Paciente</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <input g
+          <input 
             className="border p-2" 
             placeholder="Identificación" 
             value={datosPaciente.identificacion}
@@ -639,125 +833,234 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
         </div>
       </section>
 
-      {/* ESQUEMA */}
+      {/* =========================== */}
+      {/* ESQUEMA MEJORADO (EXACTO COMO INDEX.HTML) */}
+      {/* =========================== */}
       <section className="p-4 border rounded bg-white">
         <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Esquema Corporal Interactivo</h3>
         
-        {/* Controles de zoom, herramientas y tamaños */}
-        <div className="flex flex-wrap gap-2 items-center mb-3">
-          {/* Controles de Zoom */}
-          <div className="flex gap-2 mr-4">
-            <button onClick={zoomIn} className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
-              Zoom In (+)
-            </button>
-            <button onClick={zoomOut} className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
-              Zoom Out (-)
-            </button>
-            <button onClick={resetZoom} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600">
-              Reset Zoom
-            </button>
-          </div>
-          
-          {/* Controles de Tamaño */}
-          <div className="flex gap-2 mr-4">
-            <span className="text-sm font-medium text-gray-700 flex items-center">Tamaño:</span>
+        {/* Controles del esquema - EXACTO COMO EL INDEX.HTML */}
+        <div className="controls-panel bg-white rounded-xl p-6 mb-4 shadow-md">
+          <div className="control-group flex flex-wrap gap-3 items-center">
             <button 
-              onClick={() => setTamañoDibujo(1)} 
-              className={`px-2 py-1 text-xs rounded ${tamañoDibujo === 1 ? "bg-purple-500 text-white" : "bg-purple-200"}`}
+              className="btn-undo px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-all"
+              onClick={undoLastSelection}
             >
-              Muy pequeño
-            </button>
-            <button 
-              onClick={() => setTamañoDibujo(2)} 
-              className={`px-2 py-1 text-xs rounded ${tamañoDibujo === 2 ? "bg-purple-500 text-white" : "bg-purple-200"}`}
-            >
-              Pequeño
-            </button>
-            <button 
-              onClick={() => setTamañoDibujo(3)} 
-              className={`px-2 py-1 text-xs rounded ${tamañoDibujo === 3 ? "bg-purple-500 text-white" : "bg-purple-200"}`}
-            >
-              Normal
-            </button>
-            <button 
-              onClick={() => setTamañoDibujo(4)} 
-              className={`px-2 py-1 text-xs rounded ${tamañoDibujo === 4 ? "bg-purple-500 text-white" : "bg-purple-200"}`}
-            >
-              Grande
-            </button>
-          </div>
-          
-          {/* Herramientas de Dibujo */}
-          <div className="flex gap-2">
-            <button 
-              onClick={() => setHerramienta("lipo")} 
-              className={`px-3 py-1 rounded ${herramienta === "lipo" ? "bg-red-500 text-white" : "bg-red-200"}`}
-            >
-              Liposucción
-            </button>
-            <button 
-              onClick={() => setHerramienta("lipotras")} 
-              className={`px-3 py-1 rounded ${herramienta === "lipotras" ? "bg-blue-500 text-white" : "bg-blue-200"}`}
-            >
-              Lipotransferencia
-            </button>
-            <button 
-              onClick={() => setHerramienta("musculo")} 
-              className={`px-3 py-1 rounded ${herramienta === "musculo" ? "bg-green-500 text-white" : "bg-green-200"}`}
-            >
-              Amarre Músculos
-            </button>
-            <button 
-              onClick={() => setHerramienta("incision")} 
-              className={`px-3 py-1 rounded ${herramienta === "incision" ? "bg-orange-500 text-white" : "bg-orange-200"}`}
-            >
-              Incisión
-            </button>
-            <button 
-              onClick={deseleccionarHerramienta}
-              className={`px-3 py-1 rounded ${!herramienta ? "bg-gray-500 text-white" : "bg-gray-200"}`}
-            >
-              Deseleccionar
-            </button>
-            <button onClick={deshacer} className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
               Deshacer
             </button>
-            <button onClick={borrarTodo} className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400">
-              Borrar Todo
+            
+            <button 
+              className="btn-reset px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all"
+              onClick={resetAllSelections}
+            >
+              Reestablecer Todo
             </button>
+            
+            <button 
+              className={`btn-draw px-4 py-2 rounded-lg transition-all ${isDrawingMode ? 'bg-purple-600 text-white shadow-inner' : 'bg-purple-500 text-white hover:bg-purple-600'}`}
+              onClick={toggleDrawingMode}
+            >
+              {isDrawingMode ? '✏️ Trazo Libre (Activado)' : '✏️ Trazo Libre'}
+            </button>
+            
+            <button 
+              className={`btn-text px-4 py-2 rounded-lg transition-all ${isTextMode ? 'bg-green-600 text-white shadow-inner' : 'bg-green-500 text-white hover:bg-green-600'}`}
+              onClick={toggleTextMode}
+            >
+              {isTextMode ? '📝 Agregar Texto (Activado)' : '📝 Agregar Texto'}
+            </button>
+            
+            <div className="relative" ref={saveDropdownRef}>
+              <button 
+                className="btn-save px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all"
+                onClick={() => setShowSaveDropdown(!showSaveDropdown)}
+              >
+                💾 Guardar
+              </button>
+              
+              {showSaveDropdown && (
+                <div className="save-dropdown absolute right-0 mt-2 bg-white rounded-lg shadow-xl z-50 border">
+                  <div 
+                    className="save-option px-4 py-3 hover:bg-gray-100 cursor-pointer"
+                    onClick={() => handleSaveSchema('png')}
+                  >
+                    Guardar como PNG
+                  </div>
+                  <div 
+                    className="save-option px-4 py-3 hover:bg-gray-100 cursor-pointer"
+                    onClick={() => handleSaveSchema('pdf')}
+                  >
+                    Guardar como PDF
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sliders */}
+          <div className="control-group flex flex-wrap gap-6 mt-4">
+            <div className="slider-control flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
+              <label className="text-gray-700 font-medium">Grosor trazo:</label>
+              <input 
+                type="range" 
+                min="1" 
+                max="10" 
+                value={currentStrokeWidth}
+                onChange={(e) => updateStrokeWidth(parseInt(e.target.value))}
+                className="w-32 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="value-display font-semibold text-blue-600 min-w-8 text-right">
+                {currentStrokeWidth}
+              </span>
+            </div>
+
+            <div className="slider-control flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
+              <label className="text-gray-700 font-medium">Tamaño texto:</label>
+              <input 
+                type="range" 
+                min="8" 
+                max="48" 
+                value={currentTextSize}
+                onChange={(e) => updateTextSize(parseInt(e.target.value))}
+                className="w-32 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="value-display font-semibold text-blue-600 min-w-8 text-right">
+                {currentTextSize}
+              </span>
+            </div>
+          </div>
+
+          {/* Selector de procedimiento */}
+          <div className="control-group flex flex-wrap items-center gap-3 mt-4">
+            <label className="text-gray-700 font-medium">Procedimiento:</label>
+            <div className="procedure-selector flex gap-2">
+              <div 
+                className={`procedure-option px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${selectedProcedure === 'liposuction' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-300 hover:border-gray-400'}`}
+                onClick={() => selectProcedure('liposuction')}
+                data-procedure="liposuction"
+              >
+                Liposucción
+              </div>
+              <div 
+                className={`procedure-option px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${selectedProcedure === 'lipotransfer' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-300 hover:border-gray-400'}`}
+                onClick={() => selectProcedure('lipotransfer')}
+                data-procedure="lipotransfer"
+              >
+                Lipotransferencia
+              </div>
+            </div>
+          </div>
+
+          {/* Leyenda */}
+          <div className="flex flex-wrap gap-4 mt-4">
+            <div className="legend-item flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
+              <svg className="legend-pattern w-10 h-8 border border-gray-300 rounded">
+                <defs>
+                  <pattern id="legend-lipo" patternUnits="userSpaceOnUse" width="3" height="3" patternTransform="rotate(45)">
+                    <line x1="0" y1="0" x2="0" y2="3" stroke="#FF0000" strokeWidth="2"/>
+                  </pattern>
+                </defs>
+                <rect width="40" height="30" fill="url(#legend-lipo)"/>
+              </svg>
+              <span className="text-gray-700">Liposucción</span>
+            </div>
+
+            <div className="legend-item flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
+              <svg className="legend-pattern w-10 h-8 border border-gray-300 rounded">
+                <defs>
+                  <pattern id="legend-transfer" patternUnits="userSpaceOnUse" width="2.5" height="2.5">
+                    <line x1="0" y1="0" x2="0" y2="2.5" stroke="#0000FF" strokeWidth="1.5"/>
+                    <line x1="0" y1="0" x2="2.5" y2="0" stroke="#0000FF" strokeWidth="1.5"/>
+                  </pattern>
+                </defs>
+                <rect width="40" height="30" fill="url(#legend-transfer)"/>
+              </svg>
+              <span className="text-gray-700">Lipotransferencia</span>
+            </div>
           </div>
         </div>
 
-        {/* Indicador de estado actual */}
-        <div className="text-sm text-gray-600 mb-2">
-          Zoom: {Math.round(zoom * 100)}% | 
-          Tamaño: {getNombreTamaño(tamañoDibujo)} | 
-          Herramienta: {herramienta ? herramienta : "Ninguna"} | 
-          Dibujos: {dibujos.length} | 
-          Usa la rueda del mouse para hacer zoom | 
-          Ctrl + arrastrar o botón medio para mover
+        {/* Contenedor de ambos esquemas - UNO ABAJO DEL OTRO */}
+        <div className="schemas-wrapper space-y-8">
+          {/* Esquema Corporal */}
+          <div className="schema-section bg-white rounded-xl p-6 shadow-md">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Esquema Corporal Femenino</h2>
+            <div className="svg-container flex justify-center items-center min-h-[400px]">
+              <object
+                ref={bodySvgRef}
+                id="body-schema"
+                data="/images/schema.svg"
+                type="image/svg+xml"
+                width="800"
+                height="1000"
+                className="max-w-full h-auto"
+              >
+                Tu navegador no soporta SVG
+              </object>
+            </div>
+          </div>
+
+          {/* Esquema Facial */}
+          <div className="schema-section bg-white rounded-xl p-6 shadow-md">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Esquema Facial</h2>
+            <div className="svg-container flex justify-center items-center min-h-[400px]">
+              <object
+                ref={facialSvgRef}
+                id="facial-schema"
+                data="/images/schema-facial.svg"
+                type="image/svg+xml"
+                width="800"
+                height="600"
+                className="max-w-full h-auto"
+              >
+                Tu navegador no soporta SVG
+              </object>
+            </div>
+          </div>
         </div>
 
-        {/* Canvas con eventos */}
-        <canvas
-          ref={canvasRef}
-          width={600}
-          height={800}
-          onClick={handleDraw}
-          onMouseDown={handleMouseDown}
-          onMouseMove={(e) => {
-            handleMouseMove(e)
-            if (e.buttons === 1 && !e.ctrlKey && !isDragging && herramienta) handleDraw(e)
-          }}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
-          className="border rounded cursor-crosshair"
-          style={{
-            cursor: isDragging ? 'grabbing' : herramienta ? 'crosshair' : 'default'
-          }}
-        />
+        {/* Indicadores de estado */}
+        <div className="text-sm text-gray-600 mt-4">
+          Modo: {isDrawingMode ? 'Trazo Libre' : isTextMode ? 'Texto' : 'Selección'} | 
+          Procedimiento: {selectedProcedure === 'liposuction' ? 'Liposucción' : 'Lipotransferencia'} | 
+          Zonas marcadas: {Object.keys(zoneMarkings).length} | 
+          Historial: {selectionHistory.length} acciones
+        </div>
       </section>
+
+      {/* Modal para texto */}
+      {showTextModal && (
+        <>
+          <div className="modal-overlay fixed inset-0 bg-black bg-opacity-50 z-50" onClick={closeTextModal}></div>
+          <div className="text-input-modal fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white p-8 rounded-xl shadow-2xl z-50">
+            <h3 className="text-xl font-bold mb-4">Agregar Texto</h3>
+            <input
+              type="text"
+              id="textInput"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder="Escribe el texto aquí..."
+              className="w-full border-2 border-gray-300 p-3 rounded-lg mb-4 focus:border-blue-500 focus:outline-none"
+              maxLength={50}
+              autoFocus
+            />
+            <div className="modal-buttons flex justify-end gap-3">
+              <button 
+                onClick={closeTextModal}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={addTextToSVG}
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+              >
+                Agregar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* CIRUGÍAS PREVIAS Y NOTAS */}
       <section className="p-4 border rounded bg-white">

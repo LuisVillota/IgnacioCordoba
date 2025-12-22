@@ -18,12 +18,6 @@ export function Header({ user, onLogout }: HeaderProps) {
         </div>
 
         <div className="flex items-center space-x-4">
-          <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">
-            <Bell size={20} />
-          </button>
-          <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">
-            <HelpCircle size={20} />
-          </button>
           <button
             onClick={onLogout}
             className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition"
