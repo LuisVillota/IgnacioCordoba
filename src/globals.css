@@ -44,6 +44,50 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* Estilos para los diferentes modos */
+.drawing-mode {
+  cursor: crosshair !important;
+}
+
+.line-mode {
+  cursor: crosshair !important;
+}
+
+.text-mode {
+  cursor: text !important;
+}
+
+.zone-mode {
+  cursor: crosshair !important;
+}
+
+/* Para deshabilitar la interacción con zonas cuando no estamos en modo zona */
+svg:not(.zone-mode) .zone {
+  cursor: default !important;
+  pointer-events: none !important;
+}
+
+/* Solo permitir interacción con zonas cuando estamos en modo zona */
+svg.zone-mode .zone {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+/* Estilos para elementos de dibujo */
+.free-draw-path {
+  pointer-events: none;
+}
+
+.straight-line {
+  pointer-events: none;
+}
+
+.user-added-text {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
