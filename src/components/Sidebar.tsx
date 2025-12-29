@@ -29,8 +29,7 @@ const menuItemsByRole = {
     { icon: FileText, label: "Cotizaciones", href: "cotizaciones" },
     { icon: Scissors, label: "Programación", href: "programacion" },
     { icon: AlertCircle, label: "Sala de Espera", href: "sala-espera" },
-    { icon: BarChart3, label: "Procedimientos", href: "procedimientos" }, // Mantenido para admin
-    { icon: FileText, label: "Auditoría", href: "auditoria" },
+    { icon: BarChart3, label: "Procedimientos", href: "procedimientos" },
   ],
   secretaria: [
     { icon: Home, label: "Inicio", href: "home" },
@@ -39,7 +38,7 @@ const menuItemsByRole = {
     { icon: FileText, label: "Cotizaciones", href: "cotizaciones" },
     { icon: AlertCircle, label: "Sala de Espera", href: "sala-espera" },
     { icon: CreditCard, label: "Ordenes para Examenes", href: "ordenExamen" },
-    { icon: BarChart3, label: "Procedimientos", href: "procedimientos" }, // Agregado para secretaria
+    { icon: BarChart3, label: "Procedimientos", href: "procedimientos" },
   ],
   doctor: [
     { icon: Home, label: "Inicio", href: "home" },
@@ -48,13 +47,11 @@ const menuItemsByRole = {
     { icon: Stethoscope, label: "Historia Clínica", href: "historia" },
     { icon: Scissors, label: "Plan Quirúrgico", href: "plan" },
     { icon: AlertCircle, label: "Sala de Espera", href: "sala-espera" },
-    // Sin Procedimientos para doctor
   ],
   programacion: [
     { icon: Home, label: "Inicio", href: "home" },
     { icon: Scissors, label: "Programación", href: "programacion" },
     { icon: AlertCircle, label: "Sala de Espera", href: "sala-espera" },
-    // Sin Procedimientos para programacion
   ],
 }
 

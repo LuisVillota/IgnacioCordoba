@@ -45,7 +45,6 @@ const tiposDeVisita = {
   programacion_quirurgica: { label: "Programación Quirúrgica", duracion: 60 },
 }
 
-// Función para formatear fecha a YYYY-MM-DD
 const formatDate = (date: Date | string): string => {
   if (!date) return ''
   
@@ -62,23 +61,18 @@ const formatDate = (date: Date | string): string => {
   }
 }
 
-// Función para formatear hora a HH:MM
 const formatTime = (timeString: string): string => {
   if (!timeString) return '09:00'
   
-  // Si ya está en formato HH:MM, retornar
   if (/^\d{2}:\d{2}$/.test(timeString)) return timeString
   
-  // Si viene como '14:30:00' (con segundos), extraer solo HH:MM
   const match = timeString.match(/^(\d{2}:\d{2})/)
   return match ? match[1] : '09:00'
 }
 
-// Función para limpiar y formatear hora a HH:MM (sin segundos)
 const cleanTimeFormat = (timeString: string): string => {
   if (!timeString) return '09:00'
   
-  // Extraer solo horas y minutos
   const match = timeString.match(/^(\d{2}):(\d{2})/)
   if (match) {
     const horas = match[1]
@@ -89,55 +83,39 @@ const cleanTimeFormat = (timeString: string): string => {
   return '09:00'
 }
 
-// Función para transformar cita del backend al frontend
 const transformBackendCita = (backendCita: any): Cita => {
-  console.log("🔧 Transformando cita del backend:", backendCita)
   
   let fecha = ''
   let hora = ''
   
-  // Manejar diferentes formatos de fecha_hora
   if (backendCita.fecha_hora) {
     const fechaHoraStr = backendCita.fecha_hora.toString()
-    console.log("📅 Fecha_hora original:", fechaHoraStr)
     
-    // Si es string como '2024-01-15 14:30:00'
     if (fechaHoraStr.includes(' ')) {
       const [datePart, timePart] = fechaHoraStr.split(' ')
       fecha = datePart
       hora = timePart ? formatTime(timePart) : '09:00'
-      console.log("📊 Separado fecha:", fecha, "hora:", hora)
     } 
-    // Si es string como '2024-01-15T14:30:00.000Z'
     else if (fechaHoraStr.includes('T')) {
       const dateObj = new Date(fechaHoraStr)
       fecha = formatDate(dateObj)
       hora = dateObj.toTimeString().slice(0, 5)
-      console.log("📊 ISO fecha:", fecha, "hora:", hora)
     }
-    // Si es un objeto Date
     else if (backendCita.fecha_hora instanceof Date) {
       fecha = formatDate(backendCita.fecha_hora)
       hora = backendCita.fecha_hora.toTimeString().slice(0, 5)
-      console.log("📊 Date objeto fecha:", fecha, "hora:", hora)
     }
   } else if (backendCita.fecha && backendCita.hora) {
-    // Si vienen separados
     fecha = backendCita.fecha
     hora = formatTime(backendCita.hora)
-    console.log("📊 Datos separados fecha:", fecha, "hora:", hora)
   }
   
-  // Si no hay fecha, usar hoy
   if (!fecha) {
     fecha = formatDate(new Date())
-    console.log("⚠️ No se encontró fecha, usando hoy:", fecha)
   }
 
-  // Determinar estado
   let estado: Cita["estado"] = "pendiente"
   if (backendCita.estado_id) {
-    // Mapear ID de estado a nombre
     switch(backendCita.estado_id) {
       case 1: estado = "cancelada"; break;
       case 2: estado = "confirmada"; break;
@@ -159,7 +137,6 @@ const transformBackendCita = (backendCita: any): Cita => {
     else if (estadoLower.includes('pendient')) estado = "pendiente"
   }
 
-  // Determinar tipo de cita
   let tipo_cita: Cita["tipo_cita"] = "consulta"
   if (backendCita.tipo) {
     const tipoLower = backendCita.tipo.toLowerCase()
@@ -184,11 +161,9 @@ const transformBackendCita = (backendCita: any): Cita => {
     doctor_nombre: backendCita.doctor_nombre || backendCita.doctor || backendCita.usuario_nombre || 'Dr. No Especificado',
   }
 
-  console.log("✅ Cita transformada:", cita)
   return cita
 }
 
-// Función para transformar paciente
 const transformBackendPaciente = (backendPaciente: any): Paciente => {
   return {
     id: backendPaciente.id?.toString() || '',
@@ -200,53 +175,38 @@ const transformBackendPaciente = (backendPaciente: any): Paciente => {
   }
 }
 
-// Función para ordenar citas por fecha (ascendente) y hora (ascendente)
 const ordenarCitasPorFechaHoraAscendente = (citasArray: Cita[]): Cita[] => {
-  console.log("📊 Ordenando citas por fecha y hora ascendente")
   
   const citasOrdenadas = citasArray.sort((a, b) => {
-    // Primero comparar por fecha (ascendente - más antigua primero)
     const fechaA = new Date(a.fecha).getTime()
     const fechaB = new Date(b.fecha).getTime()
     
-    console.log(`📅 Comparando fechas: ${a.fecha} (${fechaA}) vs ${b.fecha} (${fechaB})`)
-    
     if (fechaA !== fechaB) {
-      const resultado = fechaA - fechaB // Ascendente: más antigua primero
-      console.log(`📅 Resultado por fecha: ${resultado}`)
-      return resultado
+      return fechaA - fechaB
     }
     
-    // Si es la misma fecha, ordenar por hora (ascendente - más temprana primero)
     const [horaA, minutoA] = a.hora.split(':').map(Number)
     const [horaB, minutoB] = b.hora.split(':').map(Number)
     
     const minutosA = horaA * 60 + (minutoA || 0)
     const minutosB = horaB * 60 + (minutoB || 0)
     
-    console.log(`⏰ Comparando horas: ${a.hora} (${minutosA} min) vs ${b.hora} (${minutosB} min)`)
-    
-    const resultado = minutosA - minutosB // Ascendente: más temprana primero
-    console.log(`⏰ Resultado por hora: ${resultado}`)
-    return resultado
+    return minutosA - minutosB
   })
   
-  console.log("✅ Citas ordenadas:", citasOrdenadas.map(c => `${c.fecha} ${c.hora} - ${c.paciente_nombre}`))
   return citasOrdenadas
 }
 
-// Función para convertir estado a ID
 const getEstadoId = (estado: string): number => {
   switch(estado) {
-    case 'pendiente': return 4;  // ID 4 = pendiente según el backend
-    case 'confirmada': return 2; // ID 2 = confirmada
-    case 'completada': return 3; // ID 3 = completada
-    case 'cancelada': return 1;  // ID 1 = cancelada
-    default: return 4; // Por defecto pendiente
+    case 'pendiente': return 4;
+    case 'confirmada': return 2;
+    case 'completada': return 3;
+    case 'cancelada': return 1;
+    default: return 4;
   }
 }
 
-// Componente de modal para conflictos de horario
 function ConflictoHorarioModal({ 
   conflicto, 
   onCancel, 
@@ -374,7 +334,6 @@ export function AgendaPage() {
   const [conflictoHorario, setConflictoHorario] = useState<CitaConflict | null>(null)
   const [pendienteGuardar, setPendienteGuardar] = useState<Omit<Cita, "id"> | null>(null)
 
-  // Cargar citas y pacientes al iniciar
   useEffect(() => {
     loadData()
   }, [])
@@ -382,9 +341,7 @@ export function AgendaPage() {
   const testBackendConnection = async () => {
     setTestingConnection(true)
     try {
-      console.log("🔌 Probando conexión con el backend...")
       const result = await api.testConnection()
-      console.log("Resultado del test:", result)
       
       if (result.success) {
         toast.success("✅ Backend conectado correctamente")
@@ -394,7 +351,6 @@ export function AgendaPage() {
         return false
       }
     } catch (error) {
-      console.error("Error testing connection:", error)
       toast.error("❌ Error al probar conexión con el backend")
       return false
     } finally {
@@ -406,13 +362,10 @@ export function AgendaPage() {
     try {
       setLoading(true)
       setError(null)
-      console.log("📥 Cargando datos de la agenda...")
       
-      // Primero probar la conexión
       const isBackendAvailable = await testBackendConnection()
       
       if (!isBackendAvailable) {
-        console.log("⚠️ Backend no disponible, sin datos de ejemplo")
         setCitas([])
         setPacientes([])
         setUseMockData(false)
@@ -420,20 +373,14 @@ export function AgendaPage() {
         return
       }
       
-      // Intentar cargar datos reales
       try {
-        // Cargar citas
-        console.log("📋 Cargando citas...")
         let citasResponse
         try {
           citasResponse = await api.getCitas(100, 0)
-          console.log("📋 Respuesta de citas:", citasResponse)
         } catch (citaError: any) {
-          console.error("❌ Error al obtener citas:", citaError)
           throw new Error(`No se pudieron cargar las citas: ${handleApiError(citaError)}`)
         }
         
-        // Manejar diferentes estructuras de respuesta
         let citasArray: any[] = []
         
         if (Array.isArray(citasResponse)) {
@@ -443,7 +390,6 @@ export function AgendaPage() {
         } else if (citasResponse?.data && Array.isArray(citasResponse.data)) {
           citasArray = citasResponse.data
         } else if (citasResponse && typeof citasResponse === 'object') {
-          // Intentar extraer citas de un objeto
           const possibleKeys = ['citas', 'appointments', 'items', 'results']
           for (const key of possibleKeys) {
             if (Array.isArray(citasResponse[key])) {
@@ -453,41 +399,17 @@ export function AgendaPage() {
           }
         }
         
-        console.log(`📊 Encontradas ${citasArray.length} citas del backend`)
-        
-        if (citasArray.length > 0) {
-          console.log("📝 Primeras 3 citas del backend:")
-          citasArray.slice(0, 3).forEach((cita, i) => {
-            console.log(`  ${i + 1}.`, cita)
-          })
-        }
-        
         const transformedCitas = citasArray.map(transformBackendCita)
         const citasOrdenadas = ordenarCitasPorFechaHoraAscendente(transformedCitas)
         
-        console.log("📅 Resumen de citas transformadas y ordenadas:")
-        if (citasOrdenadas.length > 0) {
-          citasOrdenadas.forEach((cita, i) => {
-            console.log(`  ${i + 1}. ${cita.fecha} ${cita.hora} - ${cita.paciente_nombre} ${cita.paciente_apellido}`)
-          })
-        } else {
-          console.log("  No hay citas para mostrar")
-        }
-        
-        // Verificar que las citas tengan fechas válidas
         const validCitas = citasOrdenadas.filter(c => c.fecha && c.hora)
-        console.log(`✅ ${validCitas.length} citas válidas (con fecha y hora)`)
         
         setCitas(validCitas)
         
-        // Cargar pacientes
-        console.log("👥 Cargando pacientes...")
         let pacientesResponse
         try {
           pacientesResponse = await api.getPacientes(100, 0)
-          console.log("👥 Respuesta de pacientes:", pacientesResponse)
         } catch (pacienteError: any) {
-          console.error("❌ Error al obtener pacientes:", pacienteError)
           throw new Error(`No se pudieron cargar los pacientes: ${handleApiError(pacienteError)}`)
         }
         
@@ -500,7 +422,6 @@ export function AgendaPage() {
         } else if (pacientesResponse?.data && Array.isArray(pacientesResponse.data)) {
           pacientesArray = pacientesResponse.data
         } else if (pacientesResponse && typeof pacientesResponse === 'object') {
-          // Intentar extraer pacientes de un objeto
           const possibleKeys = ['pacientes', 'patients', 'items', 'results']
           for (const key of possibleKeys) {
             if (Array.isArray(pacientesResponse[key])) {
@@ -510,26 +431,19 @@ export function AgendaPage() {
           }
         }
         
-        console.log(`👤 Encontrados ${pacientesArray.length} pacientes`)
         const transformedPacientes = pacientesArray.map(transformBackendPaciente)
-        console.log("🏥 Pacientes transformados:", transformedPacientes)
         setPacientes(transformedPacientes)
         
         setUseMockData(false)
         
         if (validCitas.length === 0) {
-          console.log("ℹ️ No hay citas en la base de datos")
           toast.info("No hay citas programadas. ¡Crea tu primera cita!")
         }
         if (transformedPacientes.length === 0) {
-          console.log("⚠️ No hay pacientes en la base de datos")
           toast.warning("No hay pacientes registrados.")
         }
         
       } catch (apiError: any) {
-        console.warn("⚠️ Error cargando datos reales", apiError)
-        
-        // No usar datos de ejemplo, solo mostrar error
         setCitas([])
         setPacientes([])
         setUseMockData(false)
@@ -539,12 +453,10 @@ export function AgendaPage() {
       }
       
     } catch (error: any) {
-      console.error("❌ Error crítico cargando datos:", error)
       const errorMsg = error.message || "Error desconocido al cargar datos"
       setError(errorMsg)
       toast.error("Error al cargar los datos: " + errorMsg)
       
-      // Sin datos de ejemplo
       setCitas([])
       setPacientes([])
       setUseMockData(false)
@@ -572,43 +484,27 @@ export function AgendaPage() {
       return coincide
     })
     
-    console.log(`📊 Citas para ${fechaFormateada}: ${citasFiltradas.length} citas`)
-    if (citasFiltradas.length > 0) {
-      console.log("📝 Citas sin ordenar:", citasFiltradas.map(c => `${c.hora} - ${c.paciente_nombre}`))
-    }
-    
-    // Ordenar por hora ASCENDENTE (de más temprana a más tardía)
     const citasOrdenadas = citasFiltradas.sort((a, b) => {
-      // Convertir horas a minutos para comparación numérica
       const [horaA, minutoA] = a.hora.split(':').map(Number)
       const [horaB, minutoB] = b.hora.split(':').map(Number)
       
       const minutosA = horaA * 60 + (minutoA || 0)
       const minutosB = horaB * 60 + (minutoB || 0)
       
-      const resultado = minutosA - minutosB // ASCENDENTE (temprano → tarde)
-      console.log(`⏰ Ordenando: ${a.hora} (${minutosA}) vs ${b.hora} (${minutosB}) = ${resultado}`)
-      return resultado
+      return minutosA - minutosB
     })
-    
-    if (citasOrdenadas.length > 0) {
-      console.log("✅ Citas ordenadas para", fechaFormateada, ":", citasOrdenadas.map(c => `${c.hora} - ${c.paciente_nombre}`))
-    }
     
     return citasOrdenadas
   }
 
-  // Función para verificar conflictos de horario
   const verificarConflictoHorario = (nuevaCita: Omit<Cita, "id">, idExcluir?: string): CitaConflict | null => {
     const nuevaFecha = formatDate(nuevaCita.fecha)
     const nuevaHoraInicio = nuevaCita.hora
     const nuevaHoraFin = agregarMinutos(nuevaCita.hora, nuevaCita.duracion)
     
     for (const cita of citas) {
-      // Excluir la cita que se está editando
       if (idExcluir && cita.id === idExcluir) continue
       
-      // Solo considerar citas no canceladas
       if (cita.estado === "cancelada") continue
       
       const citaFecha = formatDate(cita.fecha)
@@ -617,7 +513,6 @@ export function AgendaPage() {
       const citaHoraInicio = cita.hora
       const citaHoraFin = agregarMinutos(cita.hora, cita.duracion)
       
-      // Verificar superposición
       if (!(nuevaHoraInicio >= citaHoraFin || nuevaHoraFin <= citaHoraInicio)) {
         const horasSuperpuestas = Math.min(
           minutosDesdeHora(nuevaHoraFin) - minutosDesdeHora(citaHoraInicio),
@@ -642,7 +537,6 @@ export function AgendaPage() {
     return null
   }
 
-  // Helper para convertir hora a minutos
   const minutosDesdeHora = (hora: string): number => {
     const [h, m] = hora.split(":").map(Number)
     return h * 60 + m
@@ -650,120 +544,82 @@ export function AgendaPage() {
 
   const handleSaveCita = async (data: Omit<Cita, "id">) => {
     try {
-      console.log("💾 handleSaveCita llamado con datos:", data)
-      
-      // Validar datos requeridos
       if (!data.id_paciente || !data.fecha || !data.hora || !data.id_usuario) {
         toast.error("Por favor completa todos los campos requeridos")
         return
       }
       
-      // Convertir id_usuario a número
       const usuarioId = parseInt(data.id_usuario);
       if (isNaN(usuarioId)) {
-        data.id_usuario = "1"; // Usar valor por defecto
+        data.id_usuario = "1";
       }
       
-      // Verificar formato de fecha
       if (!/^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) {
         toast.error("Formato de fecha inválido. Use YYYY-MM-DD")
         return
       }
       
-      // Verificar formato de hora
       if (!/^\d{2}:\d{2}/.test(data.hora)) {
         toast.error("Formato de hora inválido. Use HH:MM")
         return
       }
       
-      // Verificar conflictos de horario
       const conflicto = verificarConflictoHorario(data, editingId || undefined)
       
       if (conflicto) {
-        console.log("⚠️ Conflicto de horario detectado:", conflicto)
         setConflictoHorario(conflicto)
         setPendienteGuardar(data)
         return
       }
       
-      // Si no hay conflicto, proceder con el guardado
       await guardarCitaSinConflicto(data)
       
     } catch (error: any) {
-      console.error('❌ Error al procesar guardado de cita:', error)
       toast.error('Error al guardar la cita: ' + (error.message || "Error desconocido"))
     }
   }
 
   const guardarCitaSinConflicto = async (data: Omit<Cita, "id">) => {
     try {
-      console.log("💾 guardarCitaSinConflicto:", data)
+      const horaFormateada = cleanTimeFormat(data.hora)
       
-      // Usar API real (sin datos mockeados)
-      try {
-        // Limpiar y formatear la hora para asegurar formato HH:MM
-        const horaFormateada = cleanTimeFormat(data.hora)
+      const citaData = {
+        paciente_id: parseInt(data.id_paciente),
+        usuario_id: parseInt(data.id_usuario) || 1,
+        fecha_hora: `${data.fecha}T${horaFormateada}:00`,
+        tipo: data.tipo_cita === "programacion_quirurgica" ? "program_quir" : data.tipo_cita,
+        duracion_minutos: data.duracion,
+        estado_id: getEstadoId(data.estado),
+        notas: data.observaciones || ''
+      };
+      
+      if (editingId) {
+        await api.updateCita(parseInt(editingId), citaData)
+        await loadData()
         
-        // Preparar datos para API en el formato correcto
-        const citaData = {
-          paciente_id: parseInt(data.id_paciente),
-          usuario_id: parseInt(data.id_usuario) || 1, // Usar usuario por defecto
-          fecha_hora: `${data.fecha}T${horaFormateada}:00`, // Formato: YYYY-MM-DDTHH:MM:SS (CORREGIDO)
-          tipo: data.tipo_cita === "programacion_quirurgica" ? "program_quir" : data.tipo_cita,
-          duracion_minutos: data.duracion,
-          estado_id: getEstadoId(data.estado),
-          notas: data.observaciones || ''
-        };
+        toast.success('Cita actualizada exitosamente')
+        setEditingId(null)
+      } else {
+        await api.createCita(citaData)
+        await loadData()
         
-        console.log("📤 Enviando a API:", citaData)
-        
-        if (editingId) {
-          // Actualizar cita existente
-          console.log("🔄 Actualizando cita ID:", editingId)
-          const response = await api.updateCita(parseInt(editingId), citaData)
-          console.log("✅ Respuesta de actualización:", response)
-          
-          // Recargar datos del backend para reflejar cambios
-          await loadData()
-          
-          toast.success('Cita actualizada exitosamente')
-          setEditingId(null)
-        } else {
-          // Crear nueva cita
-          console.log("🆕 Creando nueva cita")
-          const response = await api.createCita(citaData)
-          console.log("✅ Respuesta de creación:", response)
-          
-          // Recargar datos del backend para reflejar cambios
-          await loadData()
-          
-          toast.success('Cita creada exitosamente')
-        }
-        
-        setShowForm(false)
-        
-      } catch (apiError: any) {
-        console.error('❌ Error en API al guardar cita:', apiError)
-        const errorMsg = handleApiError(apiError)
-        toast.error(`Error: ${errorMsg}`)
-        
-        // Sin datos mockeados, solo mostrar error
-        toast.error('No se pudo guardar la cita. Por favor, inténtalo de nuevo.')
+        toast.success('Cita creada exitosamente')
       }
       
-    } catch (error: any) {
-      console.error('❌ Error general guardando cita:', error)
-      toast.error('Error al guardar la cita: ' + (error.message || "Error desconocido"))
+      setShowForm(false)
+      
+    } catch (apiError: any) {
+      const errorMsg = handleApiError(apiError)
+      toast.error(`Error: ${errorMsg}`)
+      toast.error('No se pudo guardar la cita. Por favor, inténtalo de nuevo.')
     }
   }
 
   const handleOverrideConflicto = async () => {
     if (!pendienteGuardar) return
     
-    console.log("⚠️ Creando cita a pesar del conflicto")
     await guardarCitaSinConflicto(pendienteGuardar)
     
-    // Limpiar estados
     setConflictoHorario(null)
     setPendienteGuardar(null)
     
@@ -771,7 +627,6 @@ export function AgendaPage() {
   }
 
   const handleCancelConflicto = () => {
-    console.log("❌ Cancelando creación por conflicto")
     setConflictoHorario(null)
     setPendienteGuardar(null)
     toast.info("Creación de cita cancelada por conflicto de horario")
@@ -786,20 +641,15 @@ export function AgendaPage() {
   const handleDelete = async (id: string) => {
     if (confirm("¿Estás seguro de que deseas eliminar esta cita?")) {
       try {
-        console.log("🗑️ Eliminando cita ID:", id)
         await api.deleteCita(parseInt(id))
-        
-        // Recargar datos del backend
         await loadData()
         
         toast.success('Cita eliminada exitosamente')
         
-        // Si la cita seleccionada es la que se eliminó, limpiar
         if (selectedCita?.id === id) {
           setSelectedCita(null)
         }
       } catch (error: any) {
-        console.error('❌ Error eliminando cita:', error)
         toast.error('Error eliminando cita: ' + handleApiError(error))
       }
     }
@@ -814,29 +664,19 @@ export function AgendaPage() {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
   const monthName = currentDate.toLocaleString("es-ES", { month: "long", year: "numeric" })
 
-  // Buscar paciente por ID
   const getPacienteById = (id: string) => {
     return pacientes.find(p => p.id === id)
   }
 
-  // Función para generar días del mes
   const renderCalendarDays = () => {
     const today = new Date()
     const todayStr = formatDate(today)
     
-    console.log("📅 Generando calendario para el mes:", monthName)
-    console.log("📅 Hoy es:", todayStr)
-    
     return days.map((day) => {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
       const dateStr = formatDate(date)
-      const daysCitas = citasDelDia(dateStr) // Ya está ordenada por hora ascendente
+      const daysCitas = citasDelDia(dateStr)
       const isToday = todayStr === dateStr
-      
-      if (daysCitas.length > 0) {
-        console.log(`📊 Día ${day}: ${daysCitas.length} citas ordenadas:`, 
-          daysCitas.map(c => `${c.hora} - ${c.paciente_nombre}`))
-      }
 
       return (
         <div
@@ -1024,9 +864,7 @@ export function AgendaPage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Calendar */}
           <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            {/* Calendar Header */}
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-800 capitalize">{monthName}</h2>
               <div className="flex items-center space-x-4">
@@ -1061,7 +899,6 @@ export function AgendaPage() {
               </div>
             </div>
 
-            {/* Days of week */}
             <div className="grid grid-cols-7 gap-2 mb-2">
               {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((day) => (
                 <div key={day} className="text-center font-semibold text-gray-600 py-2 text-sm">
@@ -1070,7 +907,6 @@ export function AgendaPage() {
               ))}
             </div>
 
-            {/* Calendar Days */}
             <div className="grid grid-cols-7 gap-2">
               {Array.from({ length: firstDay }).map((_, i) => (
                 <div key={`empty-${i}`} className="aspect-square p-2 rounded-lg border border-transparent" />
@@ -1079,9 +915,7 @@ export function AgendaPage() {
             </div>
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-6">
-            {/* Filters */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-800 mb-4">Filtrar por Estado</h3>
               <div className="space-y-2">
@@ -1108,7 +942,6 @@ export function AgendaPage() {
               </div>
             </div>
 
-            {/* Today's Appointments */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-gray-800">Citas de Hoy</h3>
@@ -1185,7 +1018,6 @@ export function AgendaPage() {
               </div>
             </div>
 
-            {/* Quick Stats */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-800 mb-4">Estadísticas Rápidas</h3>
               <div className="grid grid-cols-2 gap-3">
@@ -1216,7 +1048,6 @@ export function AgendaPage() {
           </div>
         </div>
 
-        {/* Modals */}
         {showForm && (
           <CitaForm
             cita={selectedCita || undefined}
@@ -1246,7 +1077,6 @@ export function AgendaPage() {
           />
         )}
 
-        {/* Modal de conflicto de horario */}
         {conflictoHorario && (
           <ConflictoHorarioModal
             conflicto={conflictoHorario}

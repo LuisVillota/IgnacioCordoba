@@ -20,19 +20,15 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // Usar el email como username (o el valor que el usuario ingrese)
-      const username = email // El usuario puede ingresar email o username directamente
-      console.log(`🔐 Login intento: username="${username}"`)
+      const username = email
       
       const success = await login(username, password)
       if (success) {
-        console.log('✅ Login exitoso, redirigiendo al dashboard...')
         router.push('/')
       } else {
         setError("Credenciales incorrectas")
       }
     } catch (err: any) {
-      console.error('❌ Error en login:', err)
       setError(err.message || "Error al iniciar sesión. Intenta nuevamente.")
     } finally {
       setLoading(false)
@@ -43,14 +39,12 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#99d6e8]/20 via-white to-[#669933]/20 p-4">
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-2xl p-8 border border-gray-100">
-          {/* Logo */}
           <div className="text-center mb-8">
             <img src="/images/logo.jpg" alt="Clínica Hernán Ignacio Córdoba" className="h-28 mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-[#1a6b32]">Cirugía Plástica</h1>
             <p className="text-gray-600 text-sm mt-2">Sistema de Gestión Médica</p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
@@ -107,7 +101,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Información */}
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm font-semibold text-blue-800 mb-2">💡 Información</p>
@@ -118,7 +111,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Footer */}
         <p className="text-center text-xs text-gray-500 mt-6">Sistema de Gestión Médica Quirúrgico-Plástica v1.0</p>
       </div>
     </div>

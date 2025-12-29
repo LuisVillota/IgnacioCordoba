@@ -31,7 +31,6 @@ interface Paciente {
   numero_documento: string;
 }
 
-// Servicios incluidos fijos
 const serviciosIncluidosFijos = [
   { servicio_nombre: "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", requiere: false },
   { servicio_nombre: "ANESTESIOLOGO", requiere: false },
@@ -43,9 +42,8 @@ const serviciosIncluidosFijos = [
 ]
 
 export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormProps) {
-  // Estado inicial del formulario
   const [formData, setFormData] = useState({
-    paciente_id: cotizacion?.paciente_id || "",
+    paciente_id: cotizacion?.paciente_id?.toString() || "",
     usuario_id: "1",
     estado: cotizacion?.estado || "pendiente",
     items: cotizacion?.items || [],
@@ -53,12 +51,11 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
     observaciones: cotizacion?.observaciones || "",
   })
 
-  // Estados para datos dinámicos del backend
   const [procedimientos, setProcedimientos] = useState<ProcedimientoCatalogo[]>([])
   const [adicionales, setAdicionales] = useState<AdicionalCatalogo[]>([])
   const [otrosAdicionales, setOtrosAdicionales] = useState<AdicionalCatalogo[]>([])
   const [pacientes, setPacientes] = useState<Paciente[]>([])
-  
+  const [pacienteSeleccionado, setPacienteSeleccionado] = useState<Paciente | null>(null)
   const [loading, setLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -66,31 +63,19 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
   const [selectedAdicional, setSelectedAdicional] = useState<string>("")
   const [selectedOtroAdicional, setSelectedOtroAdicional] = useState<string>("")
 
-  // Ref para prevenir envíos duplicados
   const isSubmittingRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Función para calcular totales
   const calculateTotals = () => {
-    console.log("🔢 Calculando totales de items:", formData.items);
-    
     let subtotalProcedimientos = 0;
     let subtotalAdicionales = 0;
     let subtotalOtrosAdicionales = 0;
     
-    formData.items.forEach((item, index) => {
+    formData.items.forEach((item) => {
       const cantidad = Number(item.cantidad) || 1;
       const precioUnitario = Number(item.precio_unitario) || 0;
       const subtotal = cantidad * precioUnitario;
       
-      console.log(`Item ${index}: ${item.nombre}`, {
-        tipo: item.tipo,
-        cantidad,
-        precioUnitario,
-        subtotal
-      });
-      
-      // Clasificar por tipo
       if (item.tipo === "procedimiento") {
         subtotalProcedimientos += subtotal;
       } else if (item.tipo === "adicional") {
@@ -102,13 +87,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
     
     const total = subtotalProcedimientos + subtotalAdicionales + subtotalOtrosAdicionales;
     
-    console.log("💰 Totales calculados:", {
-      subtotalProcedimientos,
-      subtotalAdicionales,
-      subtotalOtrosAdicionales,
-      total
-    });
-    
     return {
       subtotalProcedimientos,
       subtotalAdicionales,
@@ -117,36 +95,38 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
     };
   }
 
-  // Usar useMemo para calcular totales eficientemente
   const totals = useMemo(() => calculateTotals(), [formData.items]);
 
-  // Cargar datos del backend
   useEffect(() => {
     loadInitialData()
   }, [])
 
-  // Función para cargar datos iniciales - MODIFICADA para usar api desde props
+  useEffect(() => {
+    if (cotizacion?.paciente_id && pacientes.length > 0) {
+      const pacienteId = cotizacion.paciente_id.toString();
+      const paciente = pacientes.find(p => p.id.toString() === pacienteId);
+      
+      if (paciente) {
+        setPacienteSeleccionado(paciente);
+      }
+    }
+  }, [cotizacion, pacientes]);
+
   async function loadInitialData() {
     try {
       setLoading(true)
       
-      // Necesitamos importar api aquí o pasarlo por props
-      // Por simplicidad, vamos a importarlo directamente
       const { api } = await import("../lib/api");
       
-      // Cargar procedimientos
       const procRes = await api.getProcedimientos()
       setProcedimientos(procRes.procedimientos || [])
       
-      // Cargar adicionales
       const addRes = await api.getAdicionales()
       setAdicionales(addRes.adicionales || [])
       
-      // Cargar otros adicionales
       const oaRes = await api.getOtrosAdicionales()
       setOtrosAdicionales(oaRes.otros_adicionales || [])
       
-      // Cargar pacientes
       const pacRes = await api.getPacientes(100)
       setPacientes(pacRes.pacientes || [])
       
@@ -175,16 +155,12 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
 
   const handleAddItem = (tipo: "procedimiento" | "adicional" | "otroAdicional") => {
     let itemToAdd: ProcedimientoCatalogo | AdicionalCatalogo | undefined
-    let sourceArray: (ProcedimientoCatalogo | AdicionalCatalogo)[] = []
 
     if (tipo === "procedimiento" && selectedProcedimiento) {
-      sourceArray = procedimientos
       itemToAdd = procedimientos.find((p) => p.id.toString() === selectedProcedimiento)
     } else if (tipo === "adicional" && selectedAdicional) {
-      sourceArray = adicionales
       itemToAdd = adicionales.find((a) => a.id.toString() === selectedAdicional)
     } else if (tipo === "otroAdicional" && selectedOtroAdicional) {
-      sourceArray = otrosAdicionales
       itemToAdd = otrosAdicionales.find((oa) => oa.id.toString() === selectedOtroAdicional)
     }
 
@@ -209,7 +185,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
       items: [...prev.items, newItem],
     }))
 
-    // Reset selection y limpiar error
     if (tipo === "procedimiento") {
       setSelectedProcedimiento("")
       setErrors(prev => ({ ...prev, procedimiento: "" }))
@@ -253,6 +228,17 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
     })
   }
 
+  const handlePacienteChange = (pacienteId: string) => {
+    setFormData(prev => ({ ...prev, paciente_id: pacienteId }));
+    
+    if (pacienteId) {
+      const paciente = pacientes.find(p => p.id.toString() === pacienteId);
+      setPacienteSeleccionado(paciente || null);
+    } else {
+      setPacienteSeleccionado(null);
+    }
+  }
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
@@ -262,32 +248,22 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
     return Object.keys(newErrors).length === 0
   }
 
-  // 🎯 FUNCIÓN DE SUBMIT MODIFICADA - SOLO PREPARA DATOS, NO LLAMA API
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log("🟡 [SUBMIT] Iniciando handleSubmit - SOLO PREPARACIÓN DE DATOS");
-    
-    // PROTECCIÓN CONTRA DOBLE ENVÍO - Usamos ref y state
     if (isSubmitting || isSubmittingRef.current) {
-      console.log("⚠️ [SUBMIT] Ya se está enviando, ignorando...");
       return;
     }
     
     if (!validateForm()) {
-      console.log("❌ [SUBMIT] Validación fallida");
       return;
     }
     
-    // BLOQUEAR INMEDIATAMENTE
     setIsSubmitting(true);
     isSubmittingRef.current = true;
     
     try {
-      console.log("📋 [SUBMIT] Preparando datos para pasar al componente padre...");
-      
-      // Preparar datos para el backend
       const backendData = transformBackendToFrontend.cotizacionToBackend({
         ...formData,
         subtotalProcedimientos: totals.subtotalProcedimientos,
@@ -297,17 +273,12 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
         validez_dias: 7
       });
 
-      console.log("📤 [SUBMIT] Datos preparados para backend:", backendData);
+      const pacienteInfo = pacienteSeleccionado || pacientes.find(p => p.id.toString() === formData.paciente_id);
 
-      // Buscar información del paciente para mostrar
-      const pacienteInfo = pacientes.find(p => p.id.toString() === formData.paciente_id);
-
-      // Crear objeto de respuesta para el callback
       const responseData = {
-        // Datos para mostrar en la UI
         ...formData,
         ...totals,
-        id: cotizacion?.id || '', // Si es edición, mantener el ID
+        id: cotizacion?.id || '',
         fecha_creacion: cotizacion?.fecha_creacion || new Date().toISOString().split('T')[0],
         fecha_vencimiento: cotizacionHelpers.calcularFechaVencimiento(7),
         validez_dias: 7,
@@ -316,24 +287,17 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
         usuario_nombre: "Dr Hernan Ignacio Cordoba",
         paciente_documento: pacienteInfo?.numero_documento || '',
         
-        // Información adicional para el padre
         _isEditing: !!cotizacion?.id,
         _originalId: cotizacion?.id || '',
-        _backendData: backendData // Datos crudos para que el padre haga la llamada
+        _backendData: backendData
       }
 
-      console.log("📋 [SUBMIT] Datos listos para pasar al padre:", responseData);
-
-      // Llamar al callback de éxito - el padre se encarga de llamar a la API
       onSave(responseData);
-
-      // Cerrar el formulario inmediatamente
       onClose();
 
     } catch (error: any) {
-      console.error('❌ [SUBMIT] Error preparando datos:', error);
+      console.error('Error preparando datos:', error);
       
-      // Manejar errores específicos
       if (error.message.includes('tuple indices must be integers or slices')) {
         alert("Error en la transformación de datos. Contacta al administrador.");
       } else if (error.message.includes("generated column 'total'")) {
@@ -344,14 +308,15 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
     } finally {
       setIsSubmitting(false);
       isSubmittingRef.current = false;
-      console.log("🔄 [SUBMIT] Estado resetado");
     }
   }
 
-  // Filtrar items por tipo para mostrar en secciones separadas
   const itemsProcedimientos = formData.items.filter(item => item.tipo === "procedimiento")
   const itemsAdicionales = formData.items.filter(item => item.tipo === "adicional")
   const itemsOtrosAdicionales = formData.items.filter(item => item.tipo === "otroAdicional")
+
+  const mostrarInfoPaciente = pacienteSeleccionado || 
+    (cotizacion?.paciente_id && pacientes.find(p => p.id.toString() === cotizacion.paciente_id.toString()));
 
   if (loading && !cotizacion) {
     return (
@@ -366,9 +331,18 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
-          <h2 className="text-xl font-bold text-gray-800">{cotizacion ? "Editar Cotización" : "Nueva Cotización"}</h2>
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">{cotizacion ? "Editar Cotización" : "Nueva Cotización"}</h2>
+            {mostrarInfoPaciente && (
+              <p className="text-sm text-gray-600 mt-1">
+                Paciente: <span className="font-semibold">{mostrarInfoPaciente.nombre} {mostrarInfoPaciente.apellido}</span>
+                {mostrarInfoPaciente.numero_documento && (
+                  <span className="ml-2">(Documento: {mostrarInfoPaciente.numero_documento})</span>
+                )}
+              </p>
+            )}
+          </div>
           <button 
             type="button"
             onClick={onClose} 
@@ -379,20 +353,34 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
           </button>
         </div>
 
-        {/* Form */}
         <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Paciente */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Paciente *</label>
+            
+            {cotizacion && mostrarInfoPaciente && (
+              <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="font-medium text-blue-800">
+                  {mostrarInfoPaciente.nombre} {mostrarInfoPaciente.apellido}
+                </p>
+                <p className="text-sm text-blue-600">
+                  Documento: {mostrarInfoPaciente.numero_documento}
+                </p>
+                <p className="text-xs text-blue-500 mt-1">
+                  (Paciente cargado automáticamente de la cotización)
+                </p>
+                <input type="hidden" value={formData.paciente_id} name="paciente_id" />
+              </div>
+            )}
+            
             <select
               value={formData.paciente_id}
-              onChange={(e) => setFormData(prev => ({ ...prev, paciente_id: e.target.value }))}
-              disabled={loading || isSubmitting}
+              onChange={(e) => handlePacienteChange(e.target.value)}
+              disabled={loading || isSubmitting || (!!cotizacion && !!mostrarInfoPaciente)}
               className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${
                 errors.paciente_id ? "border-red-500" : "border-gray-300"
-              } ${(loading || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""}`}
+              } ${(loading || isSubmitting || (!!cotizacion && !!mostrarInfoPaciente)) ? "opacity-50 cursor-not-allowed" : ""}`}
             >
-              <option value="">-- Selecciona un paciente --</option>
+              {!cotizacion && <option value="">-- Selecciona un paciente --</option>}
               {pacientes.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nombre} {p.apellido} ({p.numero_documento})
@@ -400,9 +388,14 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
               ))}
             </select>
             {errors.paciente_id && <p className="text-xs text-red-600 mt-1">{errors.paciente_id}</p>}
+            
+            {cotizacion && mostrarInfoPaciente && (
+              <p className="text-xs text-gray-500 mt-1">
+                Para cambiar el paciente, elimina la selección actual primero
+              </p>
+            )}
           </div>
 
-          {/* Doctor/Usuario - Fijo */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Doctor Responsable</label>
             <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
@@ -412,7 +405,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             <p className="text-xs text-gray-500 mt-1">Doctor asignado automáticamente</p>
           </div>
 
-          {/* Sección INCLUYE - Tabla con checkboxes */}
           <div className="bg-blue-50 p-4 rounded-lg">
             <h3 className="font-bold text-blue-800 mb-3">INCLUYE</h3>
             <div className="overflow-x-auto">
@@ -445,11 +437,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             </div>
           </div>
 
-          {/* VALORES DE PROCEDIMIENTOS */}
           <div>
             <h3 className="font-bold text-gray-800 mb-3">VALORES DE PROCEDIMIENTOS</h3>
             
-            {/* Add Procedimiento */}
             <div className="flex gap-2 mb-4">
               <select
                 value={selectedProcedimiento}
@@ -478,7 +468,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             </div>
             {errors.procedimiento && <p className="text-xs text-red-600 mb-2">{errors.procedimiento}</p>}
 
-            {/* Items Table - Procedimientos */}
             {itemsProcedimientos.length > 0 && (
               <div className="bg-gray-50 rounded-lg p-4 space-y-3 mb-4">
                 {itemsProcedimientos.map((item) => (
@@ -523,11 +512,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             )}
           </div>
 
-          {/* ADICIONALES */}
           <div>
             <h3 className="font-bold text-gray-800 mb-3">ADICIONALES</h3>
             
-            {/* Add Adicional */}
             <div className="flex gap-2 mb-4">
               <select
                 value={selectedAdicional}
@@ -556,7 +543,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             </div>
             {errors.adicional && <p className="text-xs text-red-600 mb-2">{errors.adicional}</p>}
 
-            {/* Items Table - Adicionales */}
             {itemsAdicionales.length > 0 && (
               <div className="bg-gray-50 rounded-lg p-4 space-y-3 mb-4">
                 {itemsAdicionales.map((item) => (
@@ -601,11 +587,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             )}
           </div>
 
-          {/* OTROS ADICIONALES */}
           <div>
             <h3 className="font-bold text-gray-800 mb-3">OTROS ADICIONALES</h3>
             
-            {/* Add Otro Adicional */}
             <div className="flex gap-2 mb-4">
               <select
                 value={selectedOtroAdicional}
@@ -634,7 +618,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             </div>
             {errors.otroAdicional && <p className="text-xs text-red-600 mb-2">{errors.otroAdicional}</p>}
 
-            {/* Items Table - Otros Adicionales */}
             {itemsOtrosAdicionales.length > 0 && (
               <div className="bg-gray-50 rounded-lg p-4 space-y-3 mb-4">
                 {itemsOtrosAdicionales.map((item) => (
@@ -679,7 +662,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             )}
           </div>
 
-          {/* Totals */}
           <div className="bg-gradient-to-r from-[#1a6b32]/10 to-[#99d6e8]/10 rounded-lg p-4 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-gray-700">Subtotal Procedimientos:</span>
@@ -707,7 +689,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             </div>
           </div>
 
-          {/* Estado */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Estado</label>
             <select
@@ -723,7 +704,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             </select>
           </div>
 
-          {/* Observaciones */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Observaciones</label>
             <textarea
@@ -736,7 +716,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             />
           </div>
 
-          {/* 🎯 BOTONES */}
           <div className="flex items-center space-x-3 pt-4 border-t border-gray-200">
             <button
               type="submit"

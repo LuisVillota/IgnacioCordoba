@@ -28,7 +28,6 @@ export function OrdenExamenesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterEstado, setFilterEstado] = useState<string>("todos")
 
-  // Cargar pacientes de la base de datos
   useEffect(() => {
     loadPacientes()
   }, [])
@@ -36,13 +35,11 @@ export function OrdenExamenesPage() {
   const loadPacientes = async () => {
     try {
       setLoading(true)
-      console.log("📥 Cargando pacientes desde la base de datos...")
       
       const response = await api.getPacientes(100, 0)
       
       let pacientesArray: Paciente[] = []
       
-      // Manejar diferentes formatos de respuesta
       if (Array.isArray(response)) {
         pacientesArray = response.map(transformPacienteFromBackend)
       } else if (response?.pacientes && Array.isArray(response.pacientes)) {
@@ -51,11 +48,9 @@ export function OrdenExamenesPage() {
         pacientesArray = response.data.map(transformPacienteFromBackend)
       }
       
-      console.log(`✅ ${pacientesArray.length} pacientes cargados`)
       setPacientes(pacientesArray)
       
     } catch (error: any) {
-      console.error("❌ Error cargando pacientes:", error)
       toast.error("Error cargando pacientes: " + handleApiError(error))
       setPacientes([])
     } finally {
@@ -80,9 +75,7 @@ export function OrdenExamenesPage() {
     }
   }
 
-  // Filtrar pacientes según búsqueda y filtros
   const filteredPacientes = pacientes.filter(paciente => {
-    // Filtro por búsqueda
     const searchLower = searchTerm.toLowerCase()
     const matchesSearch = 
       paciente.nombres.toLowerCase().includes(searchLower) ||
@@ -91,7 +84,6 @@ export function OrdenExamenesPage() {
       paciente.telefono?.toLowerCase().includes(searchLower) ||
       paciente.email?.toLowerCase().includes(searchLower)
     
-    // Filtro por estado
     const matchesEstado = filterEstado === "todos" || paciente.estado_paciente === filterEstado
     
     return matchesSearch && matchesEstado
@@ -105,13 +97,11 @@ export function OrdenExamenesPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Lista de Pacientes */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="mb-4">
               <h2 className="text-lg font-semibold text-gray-800 mb-3">Seleccionar Paciente</h2>
               
-              {/* Barra de búsqueda */}
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
@@ -123,7 +113,6 @@ export function OrdenExamenesPage() {
                 />
               </div>
               
-              {/* Filtros */}
               <div className="flex items-center space-x-2 mb-4">
                 <Filter size={18} className="text-gray-500" />
                 <select
@@ -229,12 +218,10 @@ export function OrdenExamenesPage() {
           </div>
         </div>
 
-        {/* Formulario de Orden de Exámenes */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow h-full">
             {selectedPaciente ? (
               <>
-                {/* Encabezado del paciente seleccionado */}
                 <div className="p-6 border-b border-gray-200 bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div>
@@ -260,7 +247,6 @@ export function OrdenExamenesPage() {
                   </div>
                 </div>
 
-                {/* Formulario principal */}
                 <div className="p-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Nueva Orden de Exámenes</h3>
                   <OrdenExamenesForm 

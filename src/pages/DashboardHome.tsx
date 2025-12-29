@@ -35,26 +35,18 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
       if (!refreshing) setLoading(true)
       setError(null)
       
-      // Obtener total de pacientes usando la API existente
       const pacientesResponse = await api.getPacientes(10000)
       const totalPacientes = pacientesResponse.pacientes?.length || 0
       
-      // Intentar obtener citas de hoy
       let citasHoy = 0
       let citasData: any[] = []
       
       try {
-        // Obtener todas las citas
         const citasResponse = await api.getCitas(1000)
         
-        // Verificar el formato de la respuesta
-        console.log("📊 Respuesta de citas:", citasResponse)
-        
-        // Determinar si la respuesta es un array o tiene una propiedad
         if (Array.isArray(citasResponse)) {
           citasData = citasResponse
         } else if (citasResponse && typeof citasResponse === 'object') {
-          // Si es objeto, buscar propiedades que puedan contener el array
           const possibleKeys = ['citas', 'data', 'items', 'appointments']
           for (const key of possibleKeys) {
             if (Array.isArray(citasResponse[key])) {
@@ -64,41 +56,32 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
           }
         }
         
-        console.log(`📊 Total de citas obtenidas: ${citasData.length}`)
-        
         if (citasData.length > 0) {
-          // Transformar citas al formato del frontend si es necesario
           const citasTransformadas = citasData.map((cita: any) => 
             transformBackendToFrontend.cita(cita)
           )
           
-          // Filtrar citas de hoy
           const today = new Date()
           const todayStr = today.toISOString().split('T')[0]
           
           citasHoy = citasTransformadas.filter((cita: any) => {
             if (!cita.fecha) return false
             
-            // Comparar solo la parte de la fecha (YYYY-MM-DD)
             const citaDateStr = cita.fecha
             return citaDateStr === todayStr
           }).length
           
-          console.log(`📊 Citas de hoy: ${citasHoy}`)
-          
-          // Obtener citas recientes para mostrar
           const citasRecientesFiltradas = citasTransformadas
             .sort((a: any, b: any) => {
               const dateA = new Date(`${a.fecha}T${a.hora}`)
               const dateB = new Date(`${b.fecha}T${b.hora}`)
               return dateB.getTime() - dateA.getTime()
             })
-            .slice(0, 3) // Tomar solo las 3 más recientes
+            .slice(0, 3)
         
           setCitasRecientes(citasRecientesFiltradas)
         }
       } catch (citasError) {
-        console.warn('Error fetching citas de hoy:', citasError)
         citasHoy = 0
       }
       
@@ -108,7 +91,6 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
       })
       
     } catch (err: any) {
-      console.error('Error cargando estadísticas:', err)
       setError('Error al cargar las estadísticas del dashboard')
       
       setStats({
@@ -163,10 +145,9 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
         </button>
       </div>
 
-      {/* Mensaje de error */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-600">❌ Error: {error}</p>
+          <p className="text-red-600">Error: {error}</p>
           <button 
             onClick={fetchDashboardStats}
             className="mt-2 text-sm text-red-700 underline"
@@ -176,7 +157,6 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
         </div>
       )}
 
-      {/* Loading State */}
       {loading && (
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1a6b32] mx-auto mb-4"></div>
@@ -184,7 +164,6 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
         </div>
       )}
 
-      {/* Stats Grid */}
       {!loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {statCards.map(
@@ -209,7 +188,6 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
         </div>
       )}
 
-      {/* Quick Access - Solo Citas Recientes */}
       {!loading && hasPermission("ver_agenda" as Permission) && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">

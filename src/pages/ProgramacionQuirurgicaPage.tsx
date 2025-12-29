@@ -1,36 +1,33 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Edit2, Eye, Trash2, Scissors, RefreshCw, AlertCircle } from "lucide-react"
+import { Plus, Edit2, Eye, Trash2, Scissors, RefreshCw, AlertCircle, Calendar } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { ProgramacionForm } from "../components/ProgramacionForm"
 import { ProgramacionModal } from "../components/ProgramacionModal"
 import { api, handleApiError } from "../lib/api"
 
-// Interfaz para datos que van al BACKEND (con números)
 export interface ProgramacionBackend {
   numero_documento: string
   fecha: string
   hora: string
   duracion: number
-  procedimiento_id: number  // ¡NÚMERO!
+  procedimiento_id: number
   anestesiologo: string
   estado: "Programado" | "Aplazado" | "Confirmado" | "En Quirofano" | "Operado" | "Cancelado"
   observaciones: string
 }
 
-// Interfaz para datos en el FRONTEND (con strings para selects)
 export interface Programacion {
   id: string
   numero_documento: string
   fecha: string
   hora: string
   duracion: number
-  procedimiento_id: string  // String para compatibilidad con selects HTML
+  procedimiento_id: string
   anestesiologo: string
   estado: "Programado" | "Aplazado" | "Confirmado" | "En Quirofano" | "Operado" | "Cancelado"
   observaciones: string
-  // Campos adicionales para mostrar
   paciente_nombre?: string
   paciente_apellido?: string
   procedimiento_nombre?: string
@@ -43,15 +40,15 @@ export function ProgramacionQuirurgicaPage() {
   const [selectedProgramacion, setSelectedProgramacion] = useState<Programacion | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterEstado, setFilterEstado] = useState<string>("todas")
+  const [filterFecha, setFilterFecha] = useState<"todas" | "hoy">("todas")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
-  // Cargar programaciones del backend
   useEffect(() => {
     loadProgramaciones()
-  }, [filterEstado, refreshKey])
+  }, [filterEstado, filterFecha, refreshKey])
 
   const loadProgramaciones = async () => {
     setLoading(true)
@@ -64,7 +61,6 @@ export function ProgramacionQuirurgicaPage() {
       }
       
       if (filterEstado !== "todas") {
-        // Convertir estado del frontend al formato del backend
         const estadoMap: Record<string, string> = {
           "programado": "Programado",
           "confirmado": "Confirmado",
@@ -78,28 +74,31 @@ export function ProgramacionQuirurgicaPage() {
           params.estado = estadoMap[filterEstado]
         }
       }
+
+      if (filterFecha === "hoy") {
+        const hoy = new Date().toISOString().split('T')[0]
+        params.fecha_inicio = hoy
+        params.fecha_fin = hoy
+      }
       
       const response = await api.getAgendaProcedimientos(
         params.limit,
         params.offset,
-        undefined, // fecha
+        undefined,
         params.estado,
-        undefined, // numero_documento
-        undefined, // fecha_inicio
-        undefined  // fecha_fin
+        undefined,
+        params.fecha_inicio,
+        params.fecha_fin
       )
-      
-      console.log("📥 Programaciones recibidas:", response)
       
       if (response && response.procedimientos) {
         const programacionesFormateadas = response.procedimientos.map((proc: any) => ({
           id: proc.id.toString(),
           numero_documento: proc.numero_documento || "",
           fecha: proc.fecha,
-          hora: proc.hora.substring(0, 5), // Tomar solo HH:MM
+          hora: proc.hora.substring(0, 5),
           duracion: proc.duracion || 60,
-          // ⚠️ CORRECCIÓN IMPORTANTE: Mantener como STRING para los selects
-          procedimiento_id: proc.procedimiento_id?.toString() || "0", 
+          procedimiento_id: proc.procedimiento_id?.toString() || "0",
           anestesiologo: proc.anestesiologo || "",
           estado: proc.estado as Programacion["estado"],
           observaciones: proc.observaciones || "",
@@ -109,27 +108,18 @@ export function ProgramacionQuirurgicaPage() {
           procedimiento_precio: proc.procedimiento_precio
         }))
         
-        console.log("📊 Programaciones formateadas:", programacionesFormateadas)
         setProgramaciones(programacionesFormateadas)
       } else {
         setProgramaciones([])
       }
     } catch (err: any) {
-      console.error("Error cargando programaciones:", err)
       setError(handleApiError(err))
     } finally {
       setLoading(false)
     }
   }
 
-  // Función para editar programación
   const handleEdit = (prog: Programacion) => {
-    console.log("✏️ Editando programación:", {
-      id: prog.id,
-      procedimiento_id: prog.procedimiento_id,
-      tipo_procedimiento_id: typeof prog.procedimiento_id
-    })
-    
     setSelectedProgramacion(prog)
     setEditingId(prog.id)
     setShowForm(true)
@@ -145,26 +135,17 @@ export function ProgramacionQuirurgicaPage() {
     setSuccessMessage(null)
     
     try {
-      // ⚠️ CORRECCIÓN CRÍTICA: Asegurar parseo correcto
       const procedimientoIdStr = data.procedimiento_id;
-      console.log("🔍 Validando procedimiento_id:", {
-        valor_recibido: procedimientoIdStr,
-        tipo: typeof procedimientoIdStr
-      });
 
-      // Verificar que no esté vacío
       if (!procedimientoIdStr || procedimientoIdStr.trim() === "") {
         setError("Por favor selecciona un procedimiento válido");
         setLoading(false);
         return;
       }
 
-      // Convertir a número
       const procedimientoIdNum = parseInt(procedimientoIdStr, 10);
       
-      // Validar la conversión
       if (isNaN(procedimientoIdNum)) {
-        console.error("❌ Error: No se pudo convertir a número:", procedimientoIdStr);
         setError("ID de procedimiento inválido. El valor no es un número.");
         setLoading(false);
         return;
@@ -176,56 +157,41 @@ export function ProgramacionQuirurgicaPage() {
         return;
       }
 
-      // Preparar datos para backend
       const datosParaBackend = {
         numero_documento: data.numero_documento,
         fecha: data.fecha,
         hora: data.hora.includes(":") && data.hora.split(":").length === 2 ? 
-              data.hora + ":00" : // Agregar segundos si no los tiene
-              data.hora, // Ya tiene segundos
-        procedimiento_id: procedimientoIdNum, // ¡Asegurar que es número!
+              data.hora + ":00" : 
+              data.hora,
+        procedimiento_id: procedimientoIdNum,
         duracion: data.duracion,
         anestesiologo: data.anestesiologo,
         estado: data.estado,
         observaciones: data.observaciones
       }
 
-      console.log("📤 Enviando datos al backend:", datosParaBackend);
-      console.log("📤 Tipo de procedimiento_id:", typeof datosParaBackend.procedimiento_id);
-
       let response;
       if (editingId) {
-        // Validar que editingId también sea número
         const editingIdNum = parseInt(editingId);
         if (isNaN(editingIdNum)) {
           setError("ID de edición inválido");
           setLoading(false);
           return;
         }
-        console.log(`🔄 Actualizando programación ID: ${editingIdNum}`);
         response = await api.updateAgendaProcedimiento(editingIdNum, datosParaBackend);
       } else {
-        console.log("➕ Creando nueva programación");
         response = await api.createAgendaProcedimiento(datosParaBackend);
       }
-
-      console.log("✅ Respuesta del backend:", response);
       
-      // Si llegamos aquí, fue exitoso
       setSuccessMessage(editingId ? "Actualizado correctamente" : "Creado correctamente");
       
-      // Recargar y cerrar
       setRefreshKey(prev => prev + 1);
       setShowForm(false);
       setEditingId(null);
       setSelectedProgramacion(null);
 
     } catch (err: any) {
-      console.error("❌ Error guardando programación:", err);
-      
-      // Manejar errores específicos
       const errorMsg = err.message || "";
-      console.log("📋 Error detallado:", errorMsg);
       
       if (errorMsg.includes("procedimiento_id") || 
           errorMsg.includes("valid integer") || 
@@ -262,7 +228,6 @@ export function ProgramacionQuirurgicaPage() {
         setSuccessMessage("Programación cancelada exitosamente");
         setRefreshKey(prev => prev + 1);
       } catch (err: any) {
-        console.error("Error eliminando programación:", err);
         setError(handleApiError(err));
       } finally {
         setLoading(false);
@@ -313,7 +278,6 @@ export function ProgramacionQuirurgicaPage() {
           </div>
         </div>
 
-        {/* Mensajes de éxito/error */}
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
             <AlertCircle className="text-red-500 mr-2 mt-0.5 flex-shrink-0" size={20} />
@@ -334,27 +298,56 @@ export function ProgramacionQuirurgicaPage() {
           </div>
         )}
 
-        {/* Filter */}
-        <div className="mb-6 flex items-center space-x-4">
-          <span className="text-sm font-medium text-gray-700">Filtrar:</span>
-          <div className="flex space-x-2 overflow-x-auto">
-            {["todas", "Programado", "Confirmado", "Aplazado", "En Quirofano", "Operado", "Cancelado"].map((estado) => (
-              <button
-                key={estado}
-                onClick={() => setFilterEstado(estado.toLowerCase().replace(" ", "_"))}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
-                  filterEstado === estado.toLowerCase().replace(" ", "_")
-                    ? "bg-[#1a6b32] text-white"
-                    : "bg-white text-gray-700 border border-gray-300 hover:border-[#1a6b32]"
-                }`}
-              >
-                {estado === "todas" ? "Todas" : estado}
-              </button>
-            ))}
+        <div className="mb-6 flex flex-col space-y-4">
+          <div className="flex items-center space-x-4">
+            <span className="text-sm font-medium text-gray-700">Filtrar por fecha:</span>
+            <div className="flex space-x-2">
+              {["todas", "hoy"].map((fecha) => (
+                <button
+                  key={fecha}
+                  onClick={() => setFilterFecha(fecha as "todas" | "hoy")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center space-x-2 ${
+                    filterFecha === fecha
+                      ? "bg-[#1a6b32] text-white"
+                      : "bg-white text-gray-700 border border-gray-300 hover:border-[#1a6b32]"
+                  }`}
+                >
+                  {fecha === "todas" ? (
+                    <>
+                      <Calendar size={16} />
+                      <span>Todas las fechas</span>
+                    </>
+                  ) : (
+                    <>
+                      <Calendar size={16} />
+                      <span>Procedimientos de hoy</span>
+                    </>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <span className="text-sm font-medium text-gray-700">Filtrar por estado:</span>
+            <div className="flex space-x-2 overflow-x-auto">
+              {["todas", "Programado", "Confirmado", "Aplazado", "En Quirofano", "Operado", "Cancelado"].map((estado) => (
+                <button
+                  key={estado}
+                  onClick={() => setFilterEstado(estado.toLowerCase().replace(" ", "_"))}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
+                    filterEstado === estado.toLowerCase().replace(" ", "_")
+                      ? "bg-[#1a6b32] text-white"
+                      : "bg-white text-gray-700 border border-gray-300 hover:border-[#1a6b32]"
+                  }`}
+                >
+                  {estado === "todas" ? "Todos" : estado}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Loading indicator */}
         {loading && (
           <div className="mb-6 flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1a6b32]"></div>
@@ -362,7 +355,6 @@ export function ProgramacionQuirurgicaPage() {
           </div>
         )}
 
-        {/* Table */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -456,7 +448,6 @@ export function ProgramacionQuirurgicaPage() {
           </div>
         </div>
 
-        {/* Modals */}
         {showForm && (
           <ProgramacionForm
             programacion={selectedProgramacion || undefined}

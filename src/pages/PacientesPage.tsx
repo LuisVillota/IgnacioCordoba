@@ -36,12 +36,10 @@ export function PacientesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Cargar pacientes desde la API
   useEffect(() => {
     fetchPacientes()
   }, [])
 
-  // Actualizar selectedPaciente cuando se actualice la lista de pacientes
   useEffect(() => {
     if (selectedPaciente) {
       const pacienteActualizado = pacientes.find(p => p.id === selectedPaciente.id)
@@ -60,7 +58,6 @@ export function PacientesPage() {
       setPacientes(transformedPacientes)
     } catch (err: any) {
       setError(handleApiError(err))
-      console.error('Error cargando pacientes:', err)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -76,7 +73,6 @@ export function PacientesPage() {
 
   const handleSavePaciente = async (data: Omit<Paciente, "id" | "fecha_registro">) => {
     try {
-      // Preparar datos para el backend
       const backendData = {
         numero_documento: data.documento,
         tipo_documento: data.tipo_documento || "CC",
@@ -91,34 +87,28 @@ export function PacientesPage() {
       }
 
       if (editingId) {
-        // Actualizar paciente existente
         await api.updatePaciente(parseInt(editingId), backendData)
         
-        // Crear el paciente actualizado
         const pacienteActualizado = {
           ...data,
           id: editingId,
           fecha_registro: pacientes.find(p => p.id === editingId)?.fecha_registro || ""
         }
 
-        // Actualizar lista local
         const nuevosPacientes = pacientes.map(p => 
           p.id === editingId ? pacienteActualizado : p
         )
         setPacientes(nuevosPacientes)
 
-        // Si el paciente está siendo visualizado en el modal, actualizarlo también
         if (selectedPaciente && selectedPaciente.id === editingId) {
           setSelectedPaciente(pacienteActualizado)
         }
         
         setEditingId(null)
       } else {
-        // Crear nuevo paciente
         const response = await api.createPaciente(backendData)
         
         if (response.success) {
-          // Obtener el paciente recién creado para incluir todos los datos
           const newPacienteResponse = await api.getPaciente(response.paciente_id)
           const newPaciente = transformBackendToFrontend.paciente(newPacienteResponse)
           
@@ -128,7 +118,6 @@ export function PacientesPage() {
       setShowForm(false)
     } catch (err: any) {
       alert(`Error: ${handleApiError(err)}`)
-      console.error('Error guardando paciente:', err)
     }
   }
 
@@ -142,14 +131,12 @@ export function PacientesPage() {
     if (confirm("¿Estás seguro de que deseas eliminar este paciente?")) {
       try {
         await api.deletePaciente(parseInt(id))
-        // Si el paciente eliminado es el que está seleccionado, cerrar el modal
         if (selectedPaciente && selectedPaciente.id === id) {
           setSelectedPaciente(null)
         }
         setPacientes(pacientes.filter((p) => p.id !== id))
       } catch (err: any) {
         alert(`Error: ${handleApiError(err)}`)
-        console.error('Error eliminando paciente:', err)
       }
     }
   }
@@ -159,7 +146,6 @@ export function PacientesPage() {
     fetchPacientes()
   }
 
-  // Si el usuario no tiene permisos para ver pacientes, no mostrar nada
   if (!user || !hasAnyPermission(user.rol, ["ver_pacientes"])) {
     return null
   }
@@ -200,10 +186,9 @@ export function PacientesPage() {
         </div>
       </div>
 
-      {/* Mensajes de error/estado */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-600">❌ Error: {error}</p>
+          <p className="text-red-600">Error: {error}</p>
           <button 
             onClick={fetchPacientes}
             className="mt-2 text-sm text-red-700 underline"
@@ -213,7 +198,6 @@ export function PacientesPage() {
         </div>
       )}
 
-      {/* Search Bar */}
       <div className="mb-6">
         <div className="relative">
           <Search className="absolute left-3 top-3 text-gray-400" size={20} />
@@ -228,7 +212,6 @@ export function PacientesPage() {
         </div>
       </div>
 
-      {/* Loading State */}
       {loading && (
         <div className="text-center py-12">
           <Loader2 className="animate-spin mx-auto mb-4 text-[#1a6b32]" size={40} />
@@ -236,7 +219,6 @@ export function PacientesPage() {
         </div>
       )}
 
-      {/* Pacientes Table */}
       {!loading && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
@@ -324,7 +306,6 @@ export function PacientesPage() {
         </div>
       )}
 
-      {/* Modals */}
       {showForm && (
         <PacienteForm
           paciente={selectedPaciente || undefined}

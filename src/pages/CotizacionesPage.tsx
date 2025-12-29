@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Edit2, Eye, Trash2, Download, Loader2 } from "lucide-react"
+import { Plus, Edit2, Eye, Download, Loader2 } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { CotizacionForm } from "../components/CotizacionForm"
 import { CotizacionModal } from "../components/CotizacionModal"
@@ -39,7 +39,6 @@ export interface Cotizacion {
   observaciones: string
   validez_dias: number
   fecha_vencimiento: string
-  // Datos adicionales para mostrar
   paciente_nombre?: string
   paciente_apellido?: string
   paciente_documento?: string
@@ -55,7 +54,6 @@ export interface Paciente {
   email?: string
 }
 
-// Tipo para controlar qué modal está activo
 type ModalType = 'none' | 'form' | 'view' | 'pago'
 
 export function CotizacionesPage() {
@@ -66,7 +64,6 @@ export function CotizacionesPage() {
   const [error, setError] = useState<string | null>(null)
   const [descargandoPDF, setDescargandoPDF] = useState<string | null>(null)
   
-  // Estados para controlar modales
   const [activeModal, setActiveModal] = useState<ModalType>('none')
   const [selectedCotizacion, setSelectedCotizacion] = useState<Cotizacion | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -74,7 +71,6 @@ export function CotizacionesPage() {
   
   const [filterEstado, setFilterEstado] = useState<string>("todas")
 
-  // Cargar datos iniciales
   useEffect(() => {
     fetchData()
     fetchPacientes()
@@ -84,27 +80,19 @@ export function CotizacionesPage() {
     setLoading(true)
     setError(null)
     try {
-      console.log("📋 Cargando cotizaciones...")
-      
       const response = await api.getCotizaciones()
-      console.log("✅ Datos de cotizaciones recibidos:", response)
       
       if (response && response.cotizaciones) {
         const cotizacionesTransformadas = response.cotizaciones.map(transformBackendToFrontend.cotizacion)
-        console.log("🔄 Cotizaciones transformadas:", cotizacionesTransformadas)
         setCotizaciones(cotizacionesTransformadas)
       } else {
-        console.log("⚠️ No hay cotizaciones en la respuesta")
         setCotizaciones([])
       }
     } catch (err: any) {
-      console.error("❌ Error cargando cotizaciones:", err)
       const errorMessage = handleApiError(err)
       setError(errorMessage)
       
-      // Si el endpoint no existe aún, mostrar lista vacía
       if (err.message.includes("404") || err.message.includes("No encontrado")) {
-        console.log("📋 Endpoint de cotizaciones no existe aún, mostrando lista vacía")
         setCotizaciones([])
       }
     } finally {
@@ -115,17 +103,13 @@ export function CotizacionesPage() {
 
   const fetchPacientes = async () => {
     try {
-      console.log("📋 Cargando pacientes para cotizaciones...")
       const response = await api.getPacientes()
       
       if (response && response.pacientes) {
         const pacientesTransformados = response.pacientes.map(transformBackendToFrontend.paciente)
-        console.log("✅ Pacientes cargados:", pacientesTransformados.length)
         setPacientes(pacientesTransformados)
       }
     } catch (err: any) {
-      console.error("❌ Error cargando pacientes:", err)
-      // No es crítico si falla, seguimos sin pacientes
     }
   }
 
@@ -138,53 +122,31 @@ export function CotizacionesPage() {
     ? cotizaciones 
     : cotizaciones.filter((c) => c.estado === filterEstado)
 
-  // 🎯 FUNCIÓN ACTUALIZADA PARA GUARDAR COTIZACIÓN
   const handleSaveCotizacion = async (formData: any) => {
     try {
-      console.log("💾 [PAGE] Recibiendo datos del formulario:", formData)
-      
-      // CERRAR INMEDIATAMENTE EL FORMULARIO
       setActiveModal('none')
       setSelectedCotizacion(null)
       setEditingId(null)
       
-      // Verificar si tenemos los datos del backend
       if (!formData._backendData) {
         throw new Error("No se recibieron datos válidos del formulario")
       }
       
-      console.log("📤 [PAGE] Datos para backend:", formData._backendData)
-      
       let response;
       if (formData._isEditing && formData._originalId) {
-        // Actualizar cotización existente
         const cotizacionId = parseInt(formData._originalId)
-        console.log(`🔄 [PAGE] Actualizando cotización ID: ${cotizacionId}`)
-        
         response = await api.updateCotizacion(cotizacionId, formData._backendData)
-        console.log("✅ [PAGE] Cotización actualizada:", response)
-        
-        // Mostrar mensaje de éxito
         alert("Cotización actualizada exitosamente")
       } else {
-        // Crear nueva cotización
-        console.log("➕ [PAGE] Creando nueva cotización")
-        
         response = await api.createCotizacion(formData._backendData)
-        console.log("✅ [PAGE] Nueva cotización creada:", response)
-        
-        // Mostrar mensaje de éxito
         alert("Cotización creada exitosamente")
       }
       
-      // Refrescar datos después de guardar
       await refreshData()
       
     } catch (err: any) {
-      console.error("❌ [PAGE] Error guardando cotización:", err)
       const errorMessage = handleApiError(err)
       
-      // Reabrir el formulario en caso de error
       if (formData._isEditing) {
         setEditingId(formData._originalId)
         setSelectedCotizacion({
@@ -208,72 +170,27 @@ export function CotizacionesPage() {
         })
         setActiveModal('form')
       } else {
-        // Para nueva cotización, mantener el formulario cerrado
         alert(`Error al guardar la cotización: ${errorMessage}`)
       }
     }
   }
 
-  // Funciones para manejar modales
   const handleView = (cotizacion: Cotizacion) => {
-    console.log("👁️ Viendo cotización:", cotizacion)
     setSelectedCotizacion(cotizacion)
     setActiveModal('view')
   }
 
   const handleEdit = (cotizacion: Cotizacion) => {
-    console.log("✏️ Editando cotización:", cotizacion)
     setSelectedCotizacion(cotizacion)
     setEditingId(cotizacion.id)
     setActiveModal('form')
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Estás seguro de que deseas eliminar esta cotización?")) return
-
-    try {
-      const cotizacionId = parseInt(id)
-      console.log(`🗑️ Eliminando cotización ID: ${cotizacionId}`)
-      
-      const response = await api.deleteCotizacion(cotizacionId)
-      console.log("✅ Cotización eliminada:", response)
-      
-      // Actualizar estado local
-      setCotizaciones(cotizaciones.filter((c) => c.id !== id))
-      
-      // Si la cotización seleccionada es la que se eliminó, limpiar selección
-      if (selectedCotizacion?.id === id) {
-        setSelectedCotizacion(null)
-        setActiveModal('none')
-      }
-      
-      alert("Cotización eliminada exitosamente")
-      
-    } catch (err: any) {
-      console.error("❌ Error eliminando cotización:", err)
-      const errorMessage = handleApiError(err)
-      
-      if (errorMessage.includes("404") || errorMessage.includes("No encontrado")) {
-        // Si el backend dice que no existe, actualizar UI igualmente
-        setCotizaciones(cotizaciones.filter((c) => c.id !== id))
-        if (selectedCotizacion?.id === id) {
-          setSelectedCotizacion(null)
-          setActiveModal('none')
-        }
-        alert("Cotización eliminada exitosamente")
-      } else {
-        alert(`Error al eliminar: ${errorMessage}`)
-      }
-    }
-  }
-
   const handleDescargarPDF = async (cotizacion: Cotizacion) => {
     try {
-      // Buscar información del paciente
       let pacienteData: any = null
       
       if (cotizacion.paciente_nombre && cotizacion.paciente_apellido) {
-        // Si ya tenemos los datos del paciente en la cotización
         pacienteData = {
           id: cotizacion.id_paciente,
           nombres: cotizacion.paciente_nombre,
@@ -281,10 +198,8 @@ export function CotizacionesPage() {
           documento: cotizacion.paciente_documento || ''
         }
       } else {
-        // Buscar en la lista de pacientes
         const paciente = pacientes.find((p) => p.id === cotizacion.id_paciente)
         if (!paciente) {
-          // Intentar obtener del backend
           try {
             const pacienteResponse = await api.getPaciente(parseInt(cotizacion.id_paciente))
             pacienteData = transformBackendToFrontend.paciente(pacienteResponse)
@@ -304,7 +219,6 @@ export function CotizacionesPage() {
 
       setDescargandoPDF(cotizacion.id)
       
-      // Usar la función de generación de PDF existente
       try {
         await generarPDFCotizacion({
           cotizacion: {
@@ -316,14 +230,12 @@ export function CotizacionesPage() {
           serviciosIncluidos: cotizacion.serviciosIncluidos
         })
       } catch (error) {
-        console.error("❌ Error descargando PDF:", error)
         alert("Error al descargar el PDF. Por favor, intente nuevamente.")
       } finally {
         setDescargandoPDF(null)
       }
       
     } catch (err: any) {
-      console.error("❌ Error en handleDescargarPDF:", err)
       alert("Error al preparar el PDF: " + handleApiError(err))
       setDescargandoPDF(null)
     }
@@ -336,12 +248,8 @@ export function CotizacionesPage() {
     facturada: "bg-blue-100 text-blue-800",
   }
 
-  // Función para importar la generación de PDF
   const generarPDFCotizacion = async (data: any) => {
     try {
-      console.log("📄 Generando PDF para:", data)
-      
-      // Implementación básica - puedes reemplazar esto con tu lógica real
       const blob = new Blob([`PDF Cotización ${data.cotizacion.id}`], { type: 'application/pdf' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -353,35 +261,28 @@ export function CotizacionesPage() {
       window.URL.revokeObjectURL(url)
       
     } catch (error) {
-      console.error("Error generando PDF:", error)
       throw error
     }
   }
 
-  // Funciones para abrir/cerrar modales
   const openNewForm = () => {
-    console.log("📝 Abriendo formulario para nueva cotización")
     setEditingId(null)
     setSelectedCotizacion(null)
     setActiveModal('form')
   }
 
   const handleCloseAllModals = () => {
-    console.log("🧹 Cerrando todos los modales")
     setActiveModal('none')
     setSelectedCotizacion(null)
     setEditingId(null)
   }
 
   const handleTabChange = (newTab: string) => {
-    console.log("🔀 Cambiando filtro a:", newTab)
     setFilterEstado(newTab)
   }
 
-  // Función para el botón editar dentro del modal
   const handleEditFromModal = () => {
     if (selectedCotizacion) {
-      console.log("📝 Abriendo formulario de edición desde modal")
       setEditingId(selectedCotizacion.id)
       setActiveModal('form')
     }
@@ -390,7 +291,6 @@ export function CotizacionesPage() {
   return (
     <ProtectedRoute permissions={["ver_cotizaciones"]}>
       <div className="p-8">
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Cotizaciones</h1>
@@ -398,7 +298,6 @@ export function CotizacionesPage() {
           </div>
           
           <div className="flex gap-2">
-            {/* Botón de refrescar */}
             <button
               onClick={refreshData}
               disabled={loading || refreshing}
@@ -422,7 +321,6 @@ export function CotizacionesPage() {
           </div>
         </div>
 
-        {/* Estado de carga/error */}
         {(loading || refreshing) && (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="h-8 w-8 animate-spin text-[#1a6b32]" />
@@ -452,7 +350,6 @@ export function CotizacionesPage() {
           </div>
         )}
 
-        {/* Filter */}
         {!loading && !refreshing && !error && (
           <>
             <div className="mb-6 flex items-center space-x-4">
@@ -475,7 +372,6 @@ export function CotizacionesPage() {
               </div>
             </div>
 
-            {/* Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -557,16 +453,6 @@ export function CotizacionesPage() {
                                     <Edit2 size={18} />
                                   </button>
                                 </ProtectedRoute>
-                                <ProtectedRoute permissions={["editar_cotizacion"]}>
-                                  <button
-                                    onClick={() => handleDelete(cot.id)}
-                                    disabled={refreshing}
-                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
-                                    title="Eliminar"
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </ProtectedRoute>
                               </div>
                             </td>
                           </tr>
@@ -578,7 +464,6 @@ export function CotizacionesPage() {
               </div>
             </div>
 
-            {/* Contador y botón de refrescar */}
             {!loading && !refreshing && filteredCotizaciones.length > 0 && (
               <div className="mt-4 flex justify-between items-center text-sm text-gray-600">
                 <span>
@@ -598,9 +483,6 @@ export function CotizacionesPage() {
           </>
         )}
 
-        {/* MODALES */}
-        
-        {/* Modal de Pago */}
         {selectedPago && (
           <PagoModal
             cotizacion={selectedPago}
@@ -610,7 +492,6 @@ export function CotizacionesPage() {
           />
         )}
 
-        {/* Modal de Formulario (crear/editar) */}
         {activeModal === 'form' && (
           <CotizacionForm
             cotizacion={selectedCotizacion || undefined}
@@ -619,7 +500,6 @@ export function CotizacionesPage() {
           />
         )}
 
-        {/* Modal de Vista */}
         {activeModal === 'view' && selectedCotizacion && (
           <CotizacionModal
             cotizacion={selectedCotizacion}
