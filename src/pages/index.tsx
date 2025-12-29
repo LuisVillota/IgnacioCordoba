@@ -8,7 +8,6 @@ export default function Home() {
   const router = useRouter()
 
   useEffect(() => {
-    // Si no está autenticado, redirigir al login
     if (!auth?.user) {
       router.push('/login')
     }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Edit2, Trash2, Loader2, RefreshCw } from "lucide-react"
+import { Plus, Edit2, Loader2, RefreshCw } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { ProcedimientoForm } from "../components/ProcedimientoForm"
 import { ProcedimientoModal } from "../components/ProcedimientoModal"
@@ -9,7 +9,7 @@ import { AdicionalForm } from "../components/AdicionalForm"
 import { AdicionalModal } from "../components/AdicionalModal"
 import { OtroAdicionalForm } from "../components/OtroAdicionalForm"
 import { OtroAdicionalModal } from "../components/OtroAdicionalModal"
-import { api, transformBackendToFrontend, handleApiError } from "../lib/api"
+import { api, handleApiError } from "../lib/api"
 
 export interface ItemBase {
   id: string
@@ -47,7 +47,6 @@ export function ProcedimientosPage() {
     otros: "Nuevo Otro Adicional",
   }[tab]
 
-  // Cargar datos iniciales
   useEffect(() => {
     fetchData()
   }, [tab])
@@ -56,14 +55,10 @@ export function ProcedimientosPage() {
     setLoading(true)
     setError(null)
     try {
-      console.log(`Cargando datos de ${tab}...`)
-      
       switch (tab) {
         case "procedimientos":
           const procedimientosData = await api.getCatalogoProcedimientos()
-          console.log("Datos de procedimientos recibidos:", procedimientosData)
           
-          // Procesar la respuesta según el formato esperado
           let procsArray: any[] = []
           if (Array.isArray(procedimientosData)) {
             procsArray = procedimientosData
@@ -73,7 +68,6 @@ export function ProcedimientosPage() {
             } else if (procedimientosData.data) {
               procsArray = procedimientosData.data
             } else {
-              // Intentar extraer cualquier array del objeto
               const keys = Object.keys(procedimientosData)
               for (const key of keys) {
                 if (Array.isArray(procedimientosData[key])) {
@@ -90,13 +84,11 @@ export function ProcedimientosPage() {
             precio: parseFloat(item.precio || item.Precio || item.precio_base || 0)
           }))
           
-          console.log("Procedimientos formateados:", formattedProcs)
           setProcedimientos(formattedProcs)
           break
 
         case "adicionales":
           const adicionalesData = await api.getAdicionales()
-          console.log("Datos de adicionales recibidos:", adicionalesData)
           
           let addArray: any[] = []
           if (Array.isArray(adicionalesData)) {
@@ -123,13 +115,11 @@ export function ProcedimientosPage() {
             precio: parseFloat(item.precio || item.Precio || 0)
           }))
           
-          console.log("Adicionales formateados:", formattedAdds)
           setAdicionales(formattedAdds)
           break
 
         case "otros":
           const otrosData = await api.getOtrosAdicionales()
-          console.log("Datos de otros adicionales recibidos:", otrosData)
           
           let otrosArray: any[] = []
           if (Array.isArray(otrosData)) {
@@ -156,19 +146,15 @@ export function ProcedimientosPage() {
             precio: parseFloat(item.precio || item.Precio || 0)
           }))
           
-          console.log("Otros adicionales formateados:", formattedOtros)
           setOtros(formattedOtros)
           break
       }
     } catch (err: any) {
-      console.error(`Error cargando datos de ${tab}:`, err)
       const errorMessage = handleApiError(err)
       setError(errorMessage)
       
-      // Si el endpoint no existe, mostrar datos vacíos
       if (err.message.includes("404") || err.message.includes("No encontrado")) {
-        console.log(`Endpoint para ${tab} no existe aún, mostrando lista vacía`)
-        setData([]) // Inicializar array vacío
+        setData([])
       }
     } finally {
       setLoading(false)
@@ -176,7 +162,6 @@ export function ProcedimientosPage() {
     }
   }
 
-  // Función para refrescar datos manualmente
   const refreshData = async () => {
     setRefreshing(true)
     await fetchData()
@@ -184,10 +169,7 @@ export function ProcedimientosPage() {
 
   const handleSave = async (item: Omit<ItemBase, "id">) => {
     try {
-      console.log(`Guardando ${tab}:`, item)
-      
       if (editingId) {
-        // Actualizar
         const idNumber = parseInt(editingId.trim())
         if (isNaN(idNumber)) {
           alert("ID inválido para actualización")
@@ -212,14 +194,9 @@ export function ProcedimientosPage() {
             break
         }
 
-        console.log("Respuesta de actualización:", response)
-
-        // Después de actualizar, refrescar datos automáticamente
         await refreshData()
-        
         setEditingId(null)
       } else {
-        // Crear nuevo
         const dataToSend = {
           nombre: item.nombre,
           precio: item.precio
@@ -238,95 +215,35 @@ export function ProcedimientosPage() {
             break
         }
 
-        console.log("Respuesta de creación:", newItem)
-
-        // Después de crear, refrescar datos automáticamente
         await refreshData()
       }
       setShowForm(false)
       setSelected(null)
     } catch (err: any) {
-      console.error("Error guardando:", err)
       alert(handleApiError(err))
     }
   }
 
   const handleEdit = (item: ItemBase) => {
-    console.log("Editando item:", item)
     setSelected(item)
     setEditingId(item.id)
     setShowForm(true)
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Estás seguro de que deseas eliminar este registro?")) return
-
-    try {
-      // Validar y convertir el ID
-      const idNumber = parseInt(id.trim())
-      
-      // Verificar que sea un número válido
-      if (isNaN(idNumber)) {
-        console.error("ID inválido:", id)
-        alert("ID inválido. Por favor, recarga la página e intenta nuevamente.")
-        return
-      }
-
-      console.log(`Eliminando ${tab} con ID:`, idNumber)
-
-      let response: any
-      switch (tab) {
-        case "procedimientos":
-          response = await api.deleteCatalogoProcedimiento(idNumber)
-          break
-        case "adicionales":
-          response = await api.deleteAdicional(idNumber)
-          break
-        case "otros":
-          response = await api.deleteOtroAdicional(idNumber)
-          break
-      }
-
-      console.log("Respuesta de eliminación:", response)
-
-      // **SOLUCIÓN: Refrescar datos automáticamente después de eliminar**
-      await refreshData()
-      
-      // Mostrar mensaje de éxito
-      alert("Registro eliminado exitosamente")
-      
-    } catch (err: any) {
-      console.error("Error eliminando:", err)
-      const errorMessage = handleApiError(err)
-      
-      // **MEJORA: Si hay error pero probablemente fue eliminado, refrescar datos igualmente**
-      if (errorMessage.includes("404") || errorMessage.includes("No encontrado") || errorMessage.includes("eliminado")) {
-        // Refrescar datos para sincronizar con el backend
-        await refreshData()
-        alert("Registro eliminado exitosamente")
-      } else {
-        alert(`Error al eliminar: ${errorMessage}`)
-      }
-    }
-  }
-
   const openNewForm = () => {
-    console.log("Abriendo nuevo formulario para", tab)
     setSelected(null)
     setEditingId(null)
     setShowForm(true)
   }
 
   const handleCloseForm = () => {
-    console.log("Cerrando formulario")
     setShowForm(false)
     setSelected(null)
     setEditingId(null)
-    refreshData() // Refrescar datos automáticamente
+    refreshData()
   }
 
   const handleTabChange = (newTab: Tab) => {
-    console.log("Cambiando tab a:", newTab)
     setTab(newTab)
     setSelected(null)
     setShowForm(false)
@@ -337,7 +254,6 @@ export function ProcedimientosPage() {
     <ProtectedRoute permissions={["ver_procedimientos"]}>
       <div className="p-8">
 
-        {/* HEADER */}
         <div className="flex justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">Procedimientos</h1>
@@ -345,7 +261,6 @@ export function ProcedimientosPage() {
           </div>
 
           <div className="flex gap-2">
-            {/* Botón de refrescar */}
             <button
               onClick={refreshData}
               disabled={loading || refreshing}
@@ -356,7 +271,6 @@ export function ProcedimientosPage() {
               {refreshing ? "Refrescando..." : "Refrescar"}
             </button>
 
-            {/* Botón de nuevo */}
             <button
               onClick={openNewForm}
               className="flex items-center gap-2 bg-[#1a6b32] text-white px-4 py-2 rounded-lg hover:bg-[#155a27] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -368,7 +282,6 @@ export function ProcedimientosPage() {
           </div>
         </div>
 
-        {/* TABS */}
         <div className="flex gap-4 mb-6">
           {[
             { key: "procedimientos", label: "Procedimientos" },
@@ -390,7 +303,6 @@ export function ProcedimientosPage() {
           ))}
         </div>
 
-        {/* MENSAJES DE ERROR/CARGA */}
         {(loading || refreshing) && (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="h-8 w-8 animate-spin text-[#1a6b32]" />
@@ -420,7 +332,6 @@ export function ProcedimientosPage() {
           </div>
         )}
 
-        {/* TABLE */}
         {!loading && !refreshing && !error && (
           <>
             <div className="bg-white border rounded-lg overflow-hidden">
@@ -473,17 +384,6 @@ export function ProcedimientosPage() {
                             >
                               <Edit2 size={18} />
                             </button>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDelete(item.id)
-                              }}
-                              className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
-                              title="Eliminar"
-                              disabled={refreshing}
-                            >
-                              <Trash2 size={18} />
-                            </button>
                           </div>
                         </td>
                       </tr>
@@ -493,7 +393,6 @@ export function ProcedimientosPage() {
               </table>
             </div>
 
-            {/* Contador de items y botón de refrescar */}
             <div className="mt-4 flex justify-between items-center text-sm text-gray-600">
               <span>
                 Mostrando {data.length} {tab}
@@ -510,7 +409,6 @@ export function ProcedimientosPage() {
           </>
         )}
 
-        {/* FORMS */}
         {showForm && tab === "procedimientos" && (
           <ProcedimientoForm
             procedimiento={selected || undefined}
@@ -535,7 +433,6 @@ export function ProcedimientosPage() {
           />
         )}
 
-        {/* MODALS */}
         {selected && !showForm && tab === "procedimientos" && (
           <ProcedimientoModal
             procedimiento={selected}

@@ -50,15 +50,12 @@ export function HistoriaClinicaPage() {
   const [loading, setLoading] = useState({ pacientes: false, historias: false, saving: false })
   const [error, setError] = useState<string | null>(null)
   
-  // Ref para evitar doble guardado
   const isSavingRef = useRef(false)
 
-  // Cargar pacientes al iniciar
   useEffect(() => {
     loadPacientes()
   }, [])
 
-  // Cargar historias cuando se selecciona un paciente
   useEffect(() => {
     if (selectedPacienteId) {
       loadHistorias(parseInt(selectedPacienteId))
@@ -70,19 +67,15 @@ export function HistoriaClinicaPage() {
       setLoading(prev => ({ ...prev, pacientes: true }))
       setError(null)
       
-      console.log("🔄 Cargando pacientes desde backend...")
       const response = await api.getPacientes(100, 0)
       
-      // Transformar pacientes del backend al formato del frontend
       const pacientesTransformados = response.pacientes?.map((paciente: any) => 
         transformBackendToFrontend.paciente(paciente)
       ) || []
       
-      console.log(`✅ ${pacientesTransformados.length} pacientes cargados`)
       setPacientes(pacientesTransformados)
     } catch (error) {
       const errorMessage = handleApiError(error)
-      console.error("❌ Error cargando pacientes:", errorMessage)
       setError(`Error cargando pacientes: ${errorMessage}`)
     } finally {
       setLoading(prev => ({ ...prev, pacientes: false }))
@@ -94,10 +87,7 @@ export function HistoriaClinicaPage() {
       setLoading(prev => ({ ...prev, historias: true }))
       setError(null)
       
-      console.log(`🔄 Cargando historias para paciente ID: ${pacienteId}...`)
-      
       const response = await api.getHistoriasByPaciente(pacienteId)
-      console.log("📥 Respuesta de historias:", response)
       
       let historiasTransformadas: HistoriaClinica[] = []
       
@@ -106,7 +96,6 @@ export function HistoriaClinicaPage() {
           transformBackendToFrontend.historiaClinica(historia)
         )
       } else if (response && typeof response === 'object') {
-        // Si es un objeto con una propiedad que contiene el array
         const historiasArray = response.historias || response.data || [];
         if (Array.isArray(historiasArray)) {
           historiasTransformadas = historiasArray.map((historia: any) => 
@@ -115,15 +104,12 @@ export function HistoriaClinicaPage() {
         }
       }
       
-      console.log(`✅ ${historiasTransformadas.length} historias cargadas`)
       setHistorias(historiasTransformadas)
       
     } catch (error) {
-      console.error("❌ Error cargando historias:", error)
       const errorMessage = handleApiError(error)
       
       if (errorMessage.includes("404")) {
-        // Si es 404, mostrar mensaje específico
         setError("El endpoint de historias clínicas no está configurado en el backend")
         setHistorias([])
       } else {
@@ -136,11 +122,7 @@ export function HistoriaClinicaPage() {
   }
 
   const handleSaveHistoria = async (data: Omit<HistoriaClinica, "id" | "fecha_creacion">) => {
-    console.log("📋 handleSaveHistoria llamado con datos:", data)
-    
-    // Evitar doble guardado - verificar si ya estamos guardando
     if (isSavingRef.current) {
-      console.log("⚠️ Ya se está guardando, ignorando llamada duplicada")
       return
     }
     
@@ -149,21 +131,13 @@ export function HistoriaClinicaPage() {
       setLoading(prev => ({ ...prev, saving: true }))
       setError(null)
       
-      console.log("💾 Iniciando proceso de guardado...")
-      
-      // SIMPLEMENTE recargar las historias después de guardar
-      // El formulario ya se encargó de guardar todo
       await loadHistorias(parseInt(selectedPacienteId))
       
-      // Limpiar estados
       setEditingId(null)
       setShowForm(false)
       
-      console.log("✅ Proceso de guardado completado")
-      
     } catch (error) {
       const errorMessage = handleApiError(error)
-      console.error("❌ Error en proceso de guardado:", errorMessage)
       setError(`Error: ${errorMessage}`)
     } finally {
       setLoading(prev => ({ ...prev, saving: false }))
@@ -186,24 +160,16 @@ export function HistoriaClinicaPage() {
       setLoading(prev => ({ ...prev, saving: true }))
       setError(null)
       
-      console.log(`🗑️ Eliminando historia ${historiaId}...`)
-      
-      // 1. Eliminar la historia de la BD
       await api.deleteHistoriaClinica(parseInt(historiaId))
-      console.log(`✅ Historia ${historiaId} eliminada`)
       
-      // 2. Actualizar el estado local inmediatamente (optimistic update)
       setHistorias(prev => prev.filter(h => h.id !== historiaId))
       
-      // 3. Mostrar mensaje de éxito
       alert('Historia clínica eliminada exitosamente')
       
     } catch (error: any) {
       const errorMessage = handleApiError(error)
-      console.error("❌ Error eliminando historia:", errorMessage)
       
       if (errorMessage.includes('404') || errorMessage.includes('no encontrado')) {
-        // Si es 404, la historia ya no existe, actualizar lista
         await loadHistorias(parseInt(selectedPacienteId))
         setError('La historia ya fue eliminada.')
       } else if (errorMessage.includes('IntegrityError') || errorMessage.includes('relacionados')) {
@@ -212,7 +178,6 @@ export function HistoriaClinicaPage() {
         setError(`Error eliminando historia: ${errorMessage}`)
       }
       
-      // Recargar historias para sincronizar
       await loadHistorias(parseInt(selectedPacienteId))
       
     } finally {
@@ -223,7 +188,6 @@ export function HistoriaClinicaPage() {
   const paciente = pacientes.find((p) => p.id === selectedPacienteId)
   const pacienteHistorias = historias.filter((h) => h.id_paciente === selectedPacienteId)
 
-  // Pantalla inicial: selección de paciente
   if (!selectedPacienteId) {
     return (
       <ProtectedRoute allowedRoles={["admin", "doctor", "recepcionista"]}>
@@ -292,7 +256,6 @@ export function HistoriaClinicaPage() {
     )
   }
 
-  // Pantalla de historias del paciente seleccionado
   return (
     <ProtectedRoute allowedRoles={["admin", "doctor", "recepcionista"]}>
       <div className="p-8">
@@ -473,7 +436,6 @@ export function HistoriaClinicaPage() {
           </div>
         )}
 
-        {/* Modals */}
         {showForm && (
           <HistoriaForm
             historia={selectedHistoria || undefined}

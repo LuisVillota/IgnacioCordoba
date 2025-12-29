@@ -2,28 +2,26 @@ import { createContext, useState, useEffect, ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { Permission, rolePermissions } from '@/types/permissions';
 
-// Interface que coincide con tu backend
 export interface BackendUser {
   id: number;
   username: string;
   nombre: string;
   email: string;
-  rol: keyof typeof rolePermissions;  // "admin" | "secretaria" | "doctor" | "programacion"
+  rol: keyof typeof rolePermissions;
   activo: boolean;
 }
 
-// Interface para compatibilidad con tu frontend existente
 export interface User {
-  id: string;  // Convertir de number a string para compatibilidad
+  id: string;
   nombre_completo: string;
   email: string;
-  rol: keyof typeof rolePermissions; // Usa el tipo de rolePermissions
+  rol: keyof typeof rolePermissions;
   estado: "activo" | "inactivo";
 }
 
 export interface AuthContextType {
   user: User | null;
-  backendUser: BackendUser | null; // Usuario del backend
+  backendUser: BackendUser | null;
   token: string | null;
   logout: () => void;
   hasPermission: (permission: Permission) => boolean;
@@ -40,9 +38,7 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Mapear usuario del backend al formato del frontend
 const mapBackendToFrontendUser = (backendUser: BackendUser): User => {
-  // Verificar que el rol exista en rolePermissions
   const validRol = backendUser.rol in rolePermissions ? backendUser.rol : 'secretaria' as keyof typeof rolePermissions;
   
   return {
@@ -60,7 +56,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Cargar sesión desde localStorage al iniciar
   useEffect(() => {
     const loadSession = async () => {
       const storedUser = localStorage.getItem('user');
@@ -73,7 +68,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setBackendUser(parsedUser.backendUser);
           setToken(storedToken);
         } catch (error) {
-          console.error('Error cargando sesión:', error);
           logout();
         }
       }
@@ -86,53 +80,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
       setLoading(true);
-      console.log('🔐 Intentando login con:', { username });
       
       const response = await api.login(username, password);
       
-      console.log('📥 Respuesta del backend:', response);
-      
-      // Verificar la estructura de la respuesta
-      // Tu backend devuelve { success, message, usuario, token } 
       if (response.success && response.usuario) {
         const backendUserData: BackendUser = {
           id: response.usuario.id,
           username: response.usuario.username,
           nombre: response.usuario.nombre,
           email: response.usuario.email,
-          rol: response.usuario.rol, // Asegúrate que el backend devuelve uno de: "admin", "secretaria", "doctor", "programacion"
+          rol: response.usuario.rol,
           activo: response.usuario.activo
         };
         
-        console.log('👤 Backend user data:', backendUserData);
-        console.log('🔑 Rol recibido:', backendUserData.rol);
-        console.log('📋 Roles disponibles:', Object.keys(rolePermissions));
-        
         const frontendUser = mapBackendToFrontendUser(backendUserData);
         
-        // Guardar ambos formatos
         const fullUserData = {
           ...frontendUser,
-          backendUser: backendUserData // Guardar también el usuario original del backend
+          backendUser: backendUserData
         };
         
         setUser(frontendUser);
         setBackendUser(backendUserData);
-        setToken(response.token || response.access_token || 'simulado_para_desarrollo');
+        setToken(response.token || response.access_token || '');
         
         localStorage.setItem('user', JSON.stringify(fullUserData));
-        localStorage.setItem('token', response.token || response.access_token || 'simulado_para_desarrollo');
+        localStorage.setItem('token', response.token || response.access_token || '');
         
-        console.log('✅ Login exitoso, usuario:', frontendUser);
         return true;
       } else {
-        console.error('❌ Login falló, respuesta:', response);
         return false;
       }
-    } catch (error: any) {
-      console.error('❌ Error en login:', error);
-      console.error('Mensaje de error:', error.message);
-      console.error('Stack trace:', error.stack);
+    } catch (error) {
       return false;
     } finally {
       setLoading(false);
@@ -145,32 +124,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setToken(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
-    console.log('👋 Sesión cerrada');
   };
 
-  // Función para verificar permisos individuales
   const hasPermission = (permission: Permission): boolean => {
     if (!user) {
-      console.log('❌ No hay usuario, no se puede verificar permiso');
       return false;
     }
     
     const permissions = rolePermissions[user.rol] || [];
-    const hasPerm = permissions.includes(permission);
-    
-    console.log(`🔍 Verificando permiso ${permission} para rol ${user.rol}:`, hasPerm);
-    console.log('Permisos disponibles:', permissions);
-    
-    return hasPerm;
+    return permissions.includes(permission);
   };
 
-  // Función para verificar si tiene al menos uno de los permisos
   const hasAnyPermission = (permissions: Permission[]): boolean => {
     if (!user) return false;
     return permissions.some(p => hasPermission(p));
   };
 
-  // Función para verificar si tiene todos los permisos
   const hasAllPermissions = (permissions: Permission[]): boolean => {
     if (!user) return false;
     return permissions.every(p => hasPermission(p));
