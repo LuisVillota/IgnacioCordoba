@@ -1,4 +1,3 @@
-// components/ProgramacionModal.tsx
 "use client"
 
 import { X, Calendar, Clock, Scissors, User, MapPin, AlertCircle, Clipboard } from "lucide-react"
@@ -10,6 +9,63 @@ interface ProgramacionModalProps {
   onClose: () => void
   onEdit?: () => void
 }
+
+// Función para formatear hora en formato 12 horas
+const formatHora = (hora: string): string => {
+  if (!hora) return "00:00";
+  
+  try {
+    // Si es un formato PT14H (duración ISO 8601)
+    if (hora.startsWith('PT')) {
+      const horasMatch = hora.match(/PT(\d+)H/);
+      const horas = horasMatch ? parseInt(horasMatch[1]) : 0;
+      
+      // Formato 12 horas con AM/PM
+      const ampm = horas >= 12 ? 'PM' : 'AM';
+      const horas12 = horas % 12 || 12;
+      
+      return `${horas12.toString().padStart(2, '0')}:00 ${ampm}`;
+    }
+    
+    // Si ya es un formato HH:MM:SS o HH:MM
+    if (hora.includes(':')) {
+      const partes = hora.split(':');
+      const horas = parseInt(partes[0]);
+      const minutos = partes[1] ? parseInt(partes[1]) : 0;
+      
+      // Formato 12 horas con AM/PM
+      const ampm = horas >= 12 ? 'PM' : 'AM';
+      const horas12 = horas % 12 || 12;
+      
+      return `${horas12.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')} ${ampm}`;
+    }
+    
+    // Si es solo un número
+    const horasNum = parseInt(hora);
+    if (!isNaN(horasNum)) {
+      const ampm = horasNum >= 12 ? 'PM' : 'AM';
+      const horas12 = horasNum % 12 || 12;
+      return `${horas12.toString().padStart(2, '0')}:00 ${ampm}`;
+    }
+    
+    return hora;
+  } catch (error) {
+    console.error("❌ Error formateando hora:", error, "hora original:", hora);
+    return hora;
+  }
+};
+
+// Función para formatear moneda
+const formatCurrency = (amount: number | undefined): string => {
+  if (!amount) return "$0";
+  
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount);
+};
 
 export function ProgramacionModal({ programacion, onClose, onEdit }: ProgramacionModalProps) {
   const estadoColors: Record<string, string> = {
@@ -63,18 +119,16 @@ export function ProgramacionModal({ programacion, onClose, onEdit }: Programacio
               <Scissors size={16} className="mr-2" />
               Procedimiento
             </h4>
-            <p className="text-gray-800 font-medium">{programacion.procedimiento_nombre}</p>
+            <p className="text-gray-800 font-medium">{programacion.procedimiento_nombre || "No especificado"}</p>
             <div className="grid grid-cols-2 gap-4 mt-2">
               <div>
                 <p className="text-sm text-gray-600">Duración</p>
-                <p className="text-gray-800">{programacion.duracion} minutos</p>
+                <p className="text-gray-800">{programacion.duracion || 60} minutos</p>
               </div>
-              {programacion.procedimiento_precio && (
-                <div>
-                  <p className="text-sm text-gray-600">Precio</p>
-                  <p className="text-gray-800">${programacion.procedimiento_precio.toLocaleString("es-CO")}</p>
-                </div>
-              )}
+              <div>
+                <p className="text-sm text-gray-600">Precio</p>
+                <p className="text-gray-800">{formatCurrency(programacion.procedimiento_precio)}</p>
+              </div>
             </div>
           </div>
 
@@ -92,7 +146,7 @@ export function ProgramacionModal({ programacion, onClose, onEdit }: Programacio
                 <Clock size={16} className="mr-2" />
                 Hora
               </h4>
-              <p className="text-gray-800">{programacion.hora}</p>
+              <p className="text-gray-800">{formatHora(programacion.hora)}</p>
             </div>
           </div>
 

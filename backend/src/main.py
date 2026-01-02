@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query  
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import pymysql
@@ -8,6 +8,8 @@ from datetime import datetime, time, date
 from pydantic import BaseModel
 from typing import Optional, Dict, List
 from enum import Enum
+from typing import Union
+from pydantic import validator
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -34,16 +36,6 @@ app.add_middleware(
 )
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-
-try:
-    from app.api.routes import procedimiento, adicional, otro_adicional
-    
-    app.include_router(procedimiento.router, prefix=API_V1_STR, tags=["procedimientos"])
-    app.include_router(adicional.router, prefix=API_V1_STR, tags=["adicionales"])
-    app.include_router(otro_adicional.router, prefix=API_V1_STR, tags=["otros_adicionales"])
-    
-except ImportError as e:
-    pass
 
 def parse_int_safe(value):
     if value is None:
@@ -200,16 +192,16 @@ class CotizacionCreate(BaseModel):
     paciente_id: int
     usuario_id: int
     plan_id: Optional[int] = None
-    estado_id: int = 1
+    estado_id: int = None
     items: List[CotizacionItemBase] = []
     servicios_incluidos: List[CotizacionServicioIncluido] = []
-    subtotal_procedimientos: float = 0
-    subtotal_adicionales: float = 0
-    subtotal_otros_adicionales: float = 0
-    total: Optional[float] = None
-    validez_dias: int = 7
+    total: Optional[float] = None 
     observaciones: Optional[str] = None
     fecha_vencimiento: Optional[str] = None
+    validez_dias: Optional[int] = 7
+    subtotal_procedimientos: Optional[float] = 0.0
+    subtotal_adicionales: Optional[float] = 0.0
+    subtotal_otros_adicionales: Optional[float] = 0.0
 
 class CotizacionUpdate(BaseModel):
     paciente_id: Optional[int] = None
@@ -222,12 +214,8 @@ class CotizacionUpdate(BaseModel):
     subtotal_adicionales: Optional[float] = None
     subtotal_otros_adicionales: Optional[float] = None
     total: Optional[float] = None
-    validez_dias: Optional[int] = None
     observaciones: Optional[str] = None
     fecha_vencimiento: Optional[str] = None
-
-from pydantic import validator
-from typing import Union
 
 class EstadoProcedimiento(str, Enum):
     PROGRAMADO = "Programado"
@@ -251,20 +239,17 @@ class AgendaProcedimientoBase(BaseModel):
     def convert_procedimiento_id(cls, v):
         if v is None:
             raise ValueError('procedimiento_id es requerido')
-        
         if isinstance(v, int):
             return v
-        
         if isinstance(v, str):
             try:
                 return int(v)
             except (ValueError, TypeError):
-                raise ValueError(f'procedimiento_id debe ser un número válido. Recibido: {v} (tipo: {type(v).__name__})')
-        
+                raise ValueError(f'procedimiento_id debe ser un numero valido. Recibido: {v}')
         try:
             return int(v)
         except (ValueError, TypeError):
-            raise ValueError(f'procedimiento_id debe ser un número. Recibido: {v} (tipo: {type(v).__name__})')
+            raise ValueError(f'procedimiento_id debe ser un numero. Recibido: {v}')
 
 class AgendaProcedimientoCreate(AgendaProcedimientoBase):
     pass
@@ -282,928 +267,166 @@ class AgendaProcedimientoUpdate(BaseModel):
     def convert_update_procedimiento_id(cls, v):
         if v is None:
             return None
-        
         if isinstance(v, int):
             return v
-        
         if isinstance(v, str):
             try:
                 if v.strip() == "":
                     return None
                 return int(v)
             except (ValueError, TypeError):
-                raise ValueError(f'procedimiento_id debe ser un número válido. Recibido: {v}')
-        
+                raise ValueError(f'procedimiento_id debe ser un numero valido. Recibido: {v}')
         try:
             return int(v)
         except (ValueError, TypeError):
-            raise ValueError(f'procedimiento_id debe ser un número. Recibido: {v} (tipo: {type(v).__name__})')
+            raise ValueError(f'procedimiento_id debe ser un numero. Recibido: {v}')
         
 class AgendaProcedimientoResponse(AgendaProcedimientoBase):
     id: int
     paciente_nombre: Optional[str] = None
     paciente_apellido: Optional[str] = None
     procedimiento_nombre: Optional[str] = None
+
+# ====================== MODELOS PARA PLAN QUIRÚRGICO ======================
+
+class PlanQuirurgicoBase(BaseModel):
+    paciente_id: int
+    usuario_id: int
+    estado_id: int = 1  # Por defecto: borrador
+    procedimiento_desc: Optional[str] = None
+    anestesiologo: Optional[str] = None
+    materiales_requeridos: Optional[str] = None
+    notas_preoperatorias: Optional[str] = None
+    riesgos: Optional[str] = None
+    hora: Optional[str] = None
+    fecha_programada: Optional[str] = None
     
-class DisponibilidadCheck(BaseModel):
-    fecha: date
-    hora: str
-    duracion: int
-    exclude_id: Optional[int] = None
-
-@app.get("/api/agenda-procedimientos", response_model=dict)
-def get_agenda_procedimientos(
-    limit: int = 100, 
-    offset: int = 0,
-    fecha: Optional[str] = None,
-    estado: Optional[str] = None,
-    numero_documento: Optional[str] = None,
-    fecha_inicio: Optional[str] = None,
-    fecha_fin: Optional[str] = None
-):
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                query = """
-                    SELECT 
-                        ap.*,
-                        p.nombre as paciente_nombre,
-                        p.apellido as paciente_apellido,
-                        proc.nombre as procedimiento_nombre
-                    FROM agenda_procedimientos ap
-                    JOIN paciente p ON ap.numero_documento = p.numero_documento
-                    JOIN procedimiento proc ON ap.procedimiento_id = proc.id
-                    WHERE 1=1
-                """
-                params = []
-                
-                if fecha:
-                    query += " AND ap.fecha = %s"
-                    params.append(fecha)
-                
-                if fecha_inicio and fecha_fin:
-                    query += " AND ap.fecha BETWEEN %s AND %s"
-                    params.extend([fecha_inicio, fecha_fin])
-                
-                if estado:
-                    query += " AND ap.estado = %s"
-                    params.append(estado)
-                
-                if numero_documento:
-                    query += " AND ap.numero_documento = %s"
-                    params.append(numero_documento)
-                
-                query += " ORDER BY ap.fecha DESC, ap.hora DESC"
-                query += " LIMIT %s OFFSET %s"
-                params.extend([limit, offset])
-                
-                cursor.execute(query, params)
-                procedimientos = cursor.fetchall()
-                
-                count_query = """
-                    SELECT COUNT(*) as total FROM agenda_procedimientos ap WHERE 1=1
-                """
-                count_params = []
-                
-                if fecha:
-                    count_query += " AND ap.fecha = %s"
-                    count_params.append(fecha)
-                
-                if fecha_inicio and fecha_fin:
-                    count_query += " AND ap.fecha BETWEEN %s AND %s"
-                    count_params.extend([fecha_inicio, fecha_fin])
-                
-                if estado:
-                    count_query += " AND ap.estado = %s"
-                    count_params.append(estado)
-                
-                if numero_documento:
-                    count_query += " AND ap.numero_documento = %s"
-                    count_params.append(numero_documento)
-                
-                cursor.execute(count_query, count_params)
-                total = cursor.fetchone()['total']
-                
-                return {
-                    "procedimientos": procedimientos,
-                    "total": total,
-                    "limit": limit,
-                    "offset": offset
-                }
-                
-    except Exception as e:
-        error_msg = str(e)
-        if "agenda_procedimientos" in error_msg.lower():
-            return {"procedimientos": [], "total": 0}
-        raise HTTPException(status_code=500, detail=error_msg)
-
-@app.get("/api/agenda-procedimientos/{procedimiento_id}", response_model=dict)
-def get_agenda_procedimiento(procedimiento_id: int):
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT 
-                        ap.*,
-                        p.nombre as paciente_nombre,
-                        p.apellido as paciente_apellido,
-                        p.telefono as paciente_telefono,
-                        p.email as paciente_email,
-                        proc.nombre as procedimiento_nombre,
-                        proc.precio as procedimiento_precio
-                    FROM agenda_procedimientos ap
-                    JOIN paciente p ON ap.numero_documento = p.numero_documento
-                    JOIN procedimiento proc ON ap.procedimiento_id = proc.id
-                    WHERE ap.id = %s
-                """, (procedimiento_id,))
-                
-                procedimiento = cursor.fetchone()
-                if not procedimiento:
-                    raise HTTPException(status_code=404, detail="Procedimiento agendado no encontrado")
-                
-                return procedimiento
-                
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/agenda-procedimientos", response_model=dict)
-def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
-    try:
-        from datetime import datetime, timedelta
-        
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT nombre, apellido FROM paciente 
-                    WHERE numero_documento = %s
-                """, (procedimiento.numero_documento,))
-                
-                paciente = cursor.fetchone()
-                if not paciente:
-                    raise HTTPException(
-                        status_code=404, 
-                        detail=f"Paciente con documento {procedimiento.numero_documento} no encontrado"
-                    )
-                
-                cursor.execute("""
-                    SELECT id, nombre FROM procedimiento 
-                    WHERE id = %s
-                """, (procedimiento.procedimiento_id,))
-                
-                proc = cursor.fetchone()
-                if not proc:
-                    raise HTTPException(
-                        status_code=404, 
-                        detail=f"Procedimiento con ID {procedimiento.procedimiento_id} no encontrado"
-                    )
-                
-                duracion = procedimiento.duracion or 60
-                
-                hora_inicio = procedimiento.hora
-                hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') + 
-                           timedelta(minutes=duracion)).strftime('%H:%M:%S')
-                
-                cursor.execute("""
-                    SELECT id, fecha, hora, duracion, estado 
-                    FROM agenda_procedimientos 
-                    WHERE fecha = %s 
-                    AND estado NOT IN ('Cancelado', 'Operado')
-                    AND (
-                        (TIME(%s) >= TIME(hora) AND TIME(%s) < ADDTIME(TIME(hora), SEC_TO_TIME(duracion * 60)))
-                        OR
-                        (TIME(hora) >= TIME(%s) AND TIME(hora) < TIME(%s))
-                    )
-                """, (
-                    procedimiento.fecha,
-                    hora_inicio, hora_inicio,
-                    hora_inicio, hora_fin
-                ))
-                
-                conflictos = cursor.fetchall()
-                if conflictos:
-                    conflicto_info = conflictos[0]
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"Conflicto de horario. Ya existe un procedimiento programado para esa hora. ID conflicto: {conflicto_info['id']}"
-                    )
-                
-                cursor.execute("""
-                    INSERT INTO agenda_procedimientos (
-                        numero_documento, fecha, hora, procedimiento_id,
-                        duracion, anestesiologo, estado, observaciones
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    procedimiento.numero_documento,
-                    procedimiento.fecha,
-                    procedimiento.hora,
-                    procedimiento.procedimiento_id,
-                    procedimiento.duracion,
-                    procedimiento.anestesiologo or "",
-                    procedimiento.estado.value,
-                    procedimiento.observaciones or ""
-                ))
-                
-                procedimiento_id = cursor.lastrowid
-                conn.commit()
-                
-                return {
-                    "success": True,
-                    "message": "Procedimiento agendado exitosamente",
-                    "procedimiento_id": procedimiento_id,
-                    "paciente_nombre": f"{paciente['nombre']} {paciente['apellido']}",
-                    "procedimiento_nombre": proc['nombre']
-                }
-                
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={
-            "error": "Error creando procedimiento agendado",
-            "message": str(e)
-        })
-
-@app.put("/api/agenda-procedimientos/{procedimiento_id}", response_model=dict)
-def update_agenda_procedimiento(procedimiento_id: int, procedimiento: AgendaProcedimientoUpdate):
-    try:
-        from datetime import datetime, timedelta
-        
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT * FROM agenda_procedimientos 
-                    WHERE id = %s
-                """, (procedimiento_id,))
-                
-                procedimiento_existente = cursor.fetchone()
-                if not procedimiento_existente:
-                    raise HTTPException(status_code=404, detail="Procedimiento agendado no encontrado")
-                
-                fecha = procedimiento.fecha if procedimiento.fecha else procedimiento_existente['fecha']
-                hora = procedimiento.hora if procedimiento.hora else procedimiento_existente['hora']
-                duracion = procedimiento.duracion if procedimiento.duracion is not None else (procedimiento_existente['duracion'] or 60)
-                
-                if procedimiento.fecha or procedimiento.hora or procedimiento.duracion is not None:
-                    hora_inicio = hora
-                    hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') + 
-                               timedelta(minutes=duracion)).strftime('%H:%M:%S')
-                    
-                    cursor.execute("""
-                        SELECT id, fecha, hora, duracion, estado 
-                        FROM agenda_procedimientos 
-                        WHERE fecha = %s 
-                        AND id != %s
-                        AND estado NOT IN ('Cancelado', 'Operado')
-                        AND (
-                            (TIME(%s) >= TIME(hora) AND TIME(%s) < ADDTIME(TIME(hora), SEC_TO_TIME(duracion * 60)))
-                            OR
-                            (TIME(hora) >= TIME(%s) AND TIME(hora) < TIME(%s))
-                        )
-                    """, (
-                        fecha,
-                        procedimiento_id,
-                        hora_inicio, hora_inicio,
-                        hora_inicio, hora_fin
-                    ))
-                    
-                    conflictos = cursor.fetchall()
-                    if conflictos:
-                        conflicto_info = conflictos[0]
-                        raise HTTPException(
-                            status_code=409,
-                            detail=f"Conflicto de horario. Ya existe un procedimiento programado para esa hora. ID conflicto: {conflicto_info['id']}"
-                        )
-                
-                update_fields = []
-                values = []
-                
-                if procedimiento.fecha is not None:
-                    update_fields.append("fecha = %s")
-                    values.append(procedimiento.fecha)
-                
-                if procedimiento.hora is not None:
-                    update_fields.append("hora = %s")
-                    values.append(procedimiento.hora)
-                
-                if procedimiento.procedimiento_id is not None:
-                    update_fields.append("procedimiento_id = %s")
-                    values.append(procedimiento.procedimiento_id)
-                    
-                    cursor.execute("SELECT id FROM procedimiento WHERE id = %s", (procedimiento.procedimiento_id,))
-                    if not cursor.fetchone():
-                        raise HTTPException(status_code=404, detail="Procedimiento no encontrado")
-                
-                if procedimiento.duracion is not None:
-                    update_fields.append("duracion = %s")
-                    values.append(procedimiento.duracion)
-                
-                if procedimiento.anestesiologo is not None:
-                    update_fields.append("anestesiologo = %s")
-                    values.append(procedimiento.anestesiologo)
-                
-                if procedimiento.estado is not None:
-                    update_fields.append("estado = %s")
-                    values.append(procedimiento.estado.value)
-                
-                if procedimiento.observaciones is not None:
-                    update_fields.append("observaciones = %s")
-                    values.append(procedimiento.observaciones)
-                
-                if not update_fields:
-                    raise HTTPException(status_code=400, detail="No se proporcionaron datos para actualizar")
-                
-                values.append(procedimiento_id)
-                
-                query = f"UPDATE agenda_procedimientos SET {', '.join(update_fields)} WHERE id = %s"
-                cursor.execute(query, values)
-                conn.commit()
-                
-                return {
-                    "success": True,
-                    "message": "Procedimiento agendado actualizado exitosamente",
-                    "procedimiento_id": procedimiento_id
-                }
-                
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={
-            "error": "Error actualizando procedimiento agendado",
-            "message": str(e)
-        })
-
-@app.delete("/api/agenda-procedimientos/{procedimiento_id}", response_model=dict)
-def delete_agenda_procedimiento(procedimiento_id: int):
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM agenda_procedimientos WHERE id = %s", (procedimiento_id,))
-                procedimiento_existente = cursor.fetchone()
-                if not procedimiento_existente:
-                    raise HTTPException(status_code=404, detail="Procedimiento agendado no encontrado")
-                
-                cursor.execute("DELETE FROM agenda_procedimientos WHERE id = %s", (procedimiento_id,))
-                conn.commit()
-                
-                return {
-                    "success": True,
-                    "message": "Procedimiento agendado eliminado exitosamente",
-                    "procedimiento_id": procedimiento_id
-                }
-                
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={
-            "error": "Error eliminando procedimiento agendado",
-            "message": str(e)
-        })
-
-@app.get("/api/agenda-procedimientos/disponibilidad", response_model=dict)
-def verificar_disponibilidad(
-    fecha: str,
-    hora: str,
-    duracion: int = 60,
-    exclude_id: Optional[int] = None,
-    procedimiento_id: Optional[str] = None
-):
-    try:
-        from datetime import datetime, timedelta
-        
-        procedimiento_id_int = None
-        if procedimiento_id and procedimiento_id.strip():
-            try:
-                procedimiento_id_int = int(procedimiento_id)
-            except ValueError:
-                procedimiento_id_int = None
-        
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                hora_inicio = hora
-                hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') + 
-                           timedelta(minutes=duracion)).strftime('%H:%M:%S')
-                
-                query = """
-                    SELECT id, fecha, hora, duracion, estado 
-                    FROM agenda_procedimientos 
-                    WHERE fecha = %s 
-                    AND estado NOT IN ('Cancelado', 'Operado')
-                """
-                params = [fecha]
-                
-                if exclude_id:
-                    query += " AND id != %s"
-                    params.append(exclude_id)
-                
-                query += """
-                    AND (
-                        (TIME(%s) >= TIME(hora) AND TIME(%s) < ADDTIME(TIME(hora), SEC_TO_TIME(duracion * 60)))
-                        OR
-                        (TIME(hora) >= TIME(%s) AND TIME(hora) < TIME(%s))
-                    )
-                """
-                params.extend([hora_inicio, hora_inicio, hora_inicio, hora_fin])
-                
-                cursor.execute(query, params)
-                conflictos = cursor.fetchall()
-                
-                disponible = len(conflictos) == 0
-                
-                return {
-                    "disponible": disponible,
-                    "conflictos": conflictos if not disponible else [],
-                    "mensaje": "Horario disponible" if disponible else "Horario no disponible"
-                }
-                
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-            
-@app.get("/api/agenda-procedimientos/estados/disponibles")
-def get_estados_procedimiento():
-    return {
-        "estados": [
-            {"value": "Programado", "label": "Programado"},
-            {"value": "Aplazado", "label": "Aplazado"},
-            {"value": "Confirmado", "label": "Confirmado"},
-            {"value": "En Quirofano", "label": "En Quirófano"},
-            {"value": "Operado", "label": "Operado"},
-            {"value": "Cancelado", "label": "Cancelado"}
-        ]
-    }
-
-@app.get("/api/agenda-procedimientos/calendario/{year}/{month}")
-def get_calendario_procedimientos(year: int, month: int):
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                fecha_inicio = f"{year}-{month:02d}-01"
-                if month == 12:
-                    fecha_fin = f"{year+1}-01-01"
-                else:
-                    fecha_fin = f"{year}-{month+1:02d}-01"
-                
-                cursor.execute("""
-                    SELECT 
-                        ap.id,
-                        ap.fecha,
-                        ap.hora,
-                        ap.estado,
-                        ap.duracion,
-                        p.nombre as paciente_nombre,
-                        p.apellido as paciente_apellido,
-                        proc.nombre as procedimiento_nombre,
-                        proc.precio as procedimiento_precio
-                    FROM agenda_procedimientos ap
-                    JOIN paciente p ON ap.numero_documento = p.numero_documento
-                    JOIN procedimiento proc ON ap.procedimiento_id = proc.id
-                    WHERE ap.fecha >= %s AND ap.fecha < %s
-                    ORDER BY ap.fecha, ap.hora
-                """, (fecha_inicio, fecha_fin))
-                
-                procedimientos = cursor.fetchall()
-                
-                calendario = {}
-                for proc in procedimientos:
-                    fecha_str = str(proc['fecha'])
-                    if fecha_str not in calendario:
-                        calendario[fecha_str] = []
-                    
-                    calendario[fecha_str].append({
-                        "id": proc['id'],
-                        "hora": proc['hora'][:5],
-                        "estado": proc['estado'],
-                        "duracion": proc['duracion'],
-                        "paciente": f"{proc['paciente_nombre']} {proc['paciente_apellido']}",
-                        "procedimiento": proc['procedimiento_nombre'],
-                        "precio": proc['procedimiento_precio']
-                    })
-                
-                return {
-                    "year": year,
-                    "month": month,
-                    "procedimientos": calendario,
-                    "total": len(procedimientos)
-                }
-                
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/cotizaciones", response_model=dict)
-def get_cotizaciones(limit: int = 50, offset: int = 0):
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT 
-                        c.id,
-                        c.paciente_id,
-                        c.usuario_id,
-                        c.plan_id,
-                        c.estado_id,
-                        ec.nombre as estado_nombre,
-                        c.total,
-                        c.subtotal_procedimientos,
-                        c.subtotal_adicionales,
-                        c.subtotal_otros_adicionales,
-                        c.validez_dias,
-                        c.observaciones,
-                        DATE(c.fecha_creacion) as fecha_creacion,
-                        DATE(c.fecha_vencimiento) as fecha_vencimiento,
-                        p.nombre as paciente_nombre,
-                        p.apellido as paciente_apellido,
-                        p.numero_documento as paciente_documento,
-                        u.nombre as usuario_nombre
-                    FROM cotizacion c
-                    JOIN paciente p ON c.paciente_id = p.id
-                    JOIN usuario u ON c.usuario_id = u.id
-                    JOIN estado_cotizacion ec ON c.estado_id = ec.id
-                    ORDER BY c.fecha_creacion DESC
-                    LIMIT %s OFFSET %s
-                """, (limit, offset))
-                cotizaciones = cursor.fetchall()
-                
-                for cotizacion in cotizaciones:
-                    cursor.execute("""
-                        SELECT 
-                            id,
-                            tipo,
-                            item_id,
-                            nombre,
-                            descripcion,
-                            cantidad,
-                            precio_unitario,
-                            subtotal
-                        FROM cotizacion_item
-                        WHERE cotizacion_id = %s
-                        ORDER BY tipo, nombre
-                    """, (cotizacion['id'],))
-                    cotizacion['items'] = cursor.fetchall()
-                    
-                    cursor.execute("""
-                        SELECT 
-                            id,
-                            servicio_nombre,
-                            requiere
-                        FROM cotizacion_servicio_incluido
-                        WHERE cotizacion_id = %s
-                    """, (cotizacion['id'],))
-                    cotizacion['servicios_incluidos'] = cursor.fetchall()
-                
-                cursor.execute("SELECT COUNT(*) as total FROM cotizacion")
-                total = cursor.fetchone()['total']
-                
-                return {
-                    "cotizaciones": cotizaciones,
-                    "total": total,
-                    "limit": limit,
-                    "offset": offset
-                }
-    except Exception as e:
-        error_msg = str(e)
-        if "cotizacion" in error_msg.lower():
-            return {"cotizaciones": [], "total": 0}
-        raise HTTPException(status_code=500, detail=error_msg)
+    # Datos básicos del paciente (se llenan automáticamente)
+    nombre_completo: Optional[str] = None
+    peso: Optional[float] = None
+    altura: Optional[float] = None
+    fecha_nacimiento: Optional[str] = None
+    imc: Optional[float] = None
+    identificacion: Optional[str] = None
+    fecha_consulta: Optional[str] = None
+    hora_consulta: Optional[str] = None
+    categoriaIMC: Optional[str] = None
+    edad_calculada: Optional[int] = None
     
-@app.get("/api/cotizaciones/{cotizacion_id}", response_model=dict)
-def get_cotizacion(cotizacion_id: int):
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT 
-                        c.*,
-                        ec.nombre as estado_nombre,
-                        p.nombre as paciente_nombre,
-                        p.apellido as paciente_apellido,
-                        p.numero_documento as paciente_documento,
-                        p.telefono as paciente_telefono,
-                        p.email as paciente_email,
-                        u.nombre as usuario_nombre
-                    FROM cotizacion c
-                    JOIN estado_cotizacion ec ON c.estado_id = ec.id
-                    JOIN paciente p ON c.paciente_id = p.id
-                    JOIN usuario u ON c.usuario_id = u.id
-                    WHERE c.id = %s
-                """, (cotizacion_id,))
-                cotizacion = cursor.fetchone()
-                
-                if not cotizacion:
-                    raise HTTPException(status_code=404, detail="Cotización no encontrada")
-                
-                cursor.execute("""
-                    SELECT 
-                        id,
-                        tipo,
-                        item_id,
-                        nombre,
-                        descripcion,
-                        cantidad,
-                        precio_unitario,
-                        subtotal
-                    FROM cotizacion_item
-                    WHERE cotizacion_id = %s
-                    ORDER BY tipo, nombre
-                """, (cotizacion_id,))
-                cotizacion['items'] = cursor.fetchall()
-                
-                cursor.execute("""
-                    SELECT 
-                        id,
-                        servicio_nombre,
-                        requiere
-                    FROM cotizacion_servicio_incluido
-                    WHERE cotizacion_id = %s
-                """, (cotizacion_id,))
-                cotizacion['servicios_incluidos'] = cursor.fetchall()
-                
-                return cotizacion
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={
-            "error": "Error obteniendo cotización",
-            "message": str(e)
-        })
+    # Datos adicionales
+    ocupacion: Optional[str] = None
+    telefono_fijo: Optional[str] = None
+    celular: Optional[str] = None
+    direccion: Optional[str] = None
+    email: Optional[str] = None
+    motivo_consulta: Optional[str] = None
+    entidad: Optional[str] = None
     
-@app.post("/api/cotizaciones", response_model=dict)
-def create_cotizacion(cotizacion: CotizacionCreate):
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        
-        with conn:
-            with conn.cursor() as cursor:
-                cotizacion_dict = cotizacion.dict()
-                cotizacion_dict.pop('total', None)
-                
-                cursor.execute("SELECT id, nombre, apellido FROM paciente WHERE id = %s", (cotizacion.paciente_id,))
-                resultado_paciente = cursor.fetchone()
-                if not resultado_paciente:
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
-                
-                paciente_nombre = resultado_paciente['nombre']
-                paciente_apellido = resultado_paciente['apellido']
-                
-                cursor.execute("SELECT id, nombre FROM usuario WHERE id = %s", (cotizacion.usuario_id,))
-                resultado_usuario = cursor.fetchone()
-                if not resultado_usuario:
-                    raise HTTPException(status_code=404, detail="Usuario no encontrado")
-                
-                usuario_nombre = resultado_usuario['nombre']
-                
-                cursor.execute("SELECT id FROM estado_cotizacion WHERE id = %s", (cotizacion.estado_id,))
-                estado = cursor.fetchone()
-                if not estado:
-                    raise HTTPException(status_code=404, detail="Estado no encontrado")
-                
-                fecha_vencimiento = cotizacion.fecha_vencimiento
-                if not fecha_vencimiento and cotizacion.validez_dias:
-                    from datetime import datetime, timedelta
-                    fecha_vencimiento = (datetime.now() + timedelta(days=cotizacion.validez_dias)).strftime('%Y-%m-%d')
-                
-                cursor.execute("""
-                    INSERT INTO cotizacion (
-                        paciente_id, usuario_id, plan_id, estado_id,
-                        subtotal_procedimientos, subtotal_adicionales,
-                        subtotal_otros_adicionales, validez_dias, observaciones,
-                        fecha_vencimiento
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    cotizacion.paciente_id,
-                    cotizacion.usuario_id,
-                    cotizacion.plan_id,
-                    cotizacion.estado_id,
-                    cotizacion.subtotal_procedimientos,
-                    cotizacion.subtotal_adicionales,
-                    cotizacion.subtotal_otros_adicionales,
-                    cotizacion.validez_dias,
-                    cotizacion.observaciones or "",
-                    fecha_vencimiento
-                ))
-                
-                cotizacion_id = cursor.lastrowid
-                
-                for item in cotizacion.items:
-                    cursor.execute("""
-                        INSERT INTO cotizacion_item (
-                            cotizacion_id, tipo, item_id, nombre,
-                            descripcion, cantidad, precio_unitario, subtotal
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        cotizacion_id,
-                        item.tipo,
-                        item.item_id,
-                        item.nombre,
-                        item.descripcion or "",
-                        item.cantidad,
-                        item.precio_unitario,
-                        item.subtotal
-                    ))
-                
-                servicios_a_insertar = cotizacion.servicios_incluidos if cotizacion.servicios_incluidos else []
-                if not servicios_a_insertar:
-                    servicios_base = [
-                        "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO",
-                        "ANESTESIOLOGO",
-                        "CONTROLES CON MEDICO Y ENFERMERA",
-                        "VALORACION CON ANESTESIOLOGO",
-                        "HEMOGRAMA DE CONTROL",
-                        "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES",
-                        "IMPLANTES"
-                    ]
-                    for servicio_nombre in servicios_base:
-                        cursor.execute("""
-                            INSERT INTO cotizacion_servicio_incluido (
-                                cotizacion_id, servicio_nombre, requiere
-                            ) VALUES (%s, %s, %s)
-                        """, (cotizacion_id, servicio_nombre, 0))
-                else:
-                    for servicio in servicios_a_insertar:
-                        cursor.execute("""
-                            INSERT INTO cotizacion_servicio_incluido (
-                                cotizacion_id, servicio_nombre, requiere
-                            ) VALUES (%s, %s, %s)
-                        """, (
-                            cotizacion_id,
-                            servicio.servicio_nombre,
-                            1 if servicio.requiere else 0
-                        ))
-                
-                conn.commit()
-                
-                cursor.execute("SELECT * FROM cotizacion WHERE id = %s", (cotizacion_id,))
-                cotizacion_creada = cursor.fetchone()
-                
-                return {
-                    "success": True,
-                    "message": "Cotización creada exitosamente",
-                    "cotizacion_id": cotizacion_id,
-                    "paciente_nombre": f"{paciente_nombre} {paciente_apellido}",
-                    "usuario_nombre": usuario_nombre,
-                    "total": float(cotizacion_creada['total']) if cotizacion_creada and cotizacion_creada['total'] else 0.00
-                }
-                
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={
-            "error": "Error creando cotización",
-            "message": str(e),
-            "type": type(e).__name__
-        })
-        
-@app.delete("/api/cotizaciones/{cotizacion_id}", response_model=dict)
-def delete_cotizacion(cotizacion_id: int):
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM cotizacion WHERE id = %s", (cotizacion_id,))
-                cotizacion_existente = cursor.fetchone()
-                if not cotizacion_existente:
-                    raise HTTPException(status_code=404, detail="Cotización no encontrada")
-                
-                cursor.execute("DELETE FROM cotizacion_item WHERE cotizacion_id = %s", (cotizacion_id,))
-                cursor.execute("DELETE FROM cotizacion_servicio_incluido WHERE cotizacion_id = %s", (cotizacion_id,))
-                cursor.execute("DELETE FROM cotizacion WHERE id = %s", (cotizacion_id,))
-                
-                conn.commit()
-                
-                return {
-                    "success": True,
-                    "message": "Cotización eliminada exitosamente",
-                    "cotizacion_id": cotizacion_id
-                }
-                
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={
-            "error": "Error eliminando cotización",
-            "message": str(e),
-            "type": type(e).__name__
-        })
+    # Antecedentes (texto plano)
+    farmacologicos: Optional[str] = None
+    traumaticos: Optional[str] = None
+    quirurgicos: Optional[str] = None
+    alergicos: Optional[str] = None
+    toxicos: Optional[str] = None
+    habitos: Optional[str] = None
     
-@app.get("/api/estados/cotizaciones")
-def get_estados_cotizaciones():
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM estado_cotizacion ORDER BY orden")
-                estados = cursor.fetchall()
-                return {"estados": estados}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={
-            "error": "Error obteniendo estados de cotización",
-            "message": str(e)
-        })
+    # Examen físico (texto plano)
+    cabeza: Optional[str] = None
+    mamas: Optional[str] = None
+    tcs: Optional[str] = None
+    abdomen: Optional[str] = None
+    gluteos: Optional[str] = None
+    extremidades: Optional[str] = None
+    pies_faneras: Optional[str] = None
+    
+    # Conducta quirúrgica
+    duracion_estimada: Optional[int] = None
+    tipo_anestesia: Optional[str] = None
+    requiere_hospitalizacion: Optional[bool] = False
+    tiempo_hospitalizacion: Optional[str] = None
+    reseccion_estimada: Optional[str] = None
+    firma_cirujano: Optional[str] = None
+    firma_paciente: Optional[str] = None
+    
+    # JSON fields (para estructuras complejas)
+    enfermedad_actual: Optional[Dict] = None
+    antecedentes: Optional[Dict] = None
+    notas_corporales: Optional[Dict] = None
+    
+    # Esquemas interactivos
+    esquema_corporal: Optional[str] = None
+    esquema_facial: Optional[str] = None
+    
+    # Otros
+    imagen_procedimiento: Optional[str] = None
+    fecha_ultimo_procedimiento: Optional[str] = None
+    descripcion_procedimiento: Optional[str] = None
+    detalles: Optional[str] = None
+    notas_del_doctor: Optional[str] = None
+    tiempo_cirugia_minutos: Optional[int] = None
 
-@app.get("/api/cotizaciones/plantilla-servicios")
-def get_plantilla_servicios():
-    servicios_base = [
-        {"servicio_nombre": "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", "requiere": False},
-        {"servicio_nombre": "ANESTESIOLOGO", "requiere": False},
-        {"servicio_nombre": "CONTROLES CON MEDICO Y ENFERMERA", "requiere": False},
-        {"servicio_nombre": "VALORACION CON ANESTESIOLOGO", "requiere": False},
-        {"servicio_nombre": "HEMOGRAMA DE CONTROL", "requiere": False},
-        {"servicio_nombre": "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", "requiere": False},
-        {"servicio_nombre": "IMPLANTES", "requiere": False},
-    ]
-    return {"servicios": servicios_base}
+class PlanQuirurgicoCreate(PlanQuirurgicoBase):
+    pass
+
+class PlanQuirurgicoUpdate(BaseModel):
+    # Actualizar campos opcionales
+    estado_id: Optional[int] = None
+    procedimiento_desc: Optional[str] = None
+    anestesiologo: Optional[str] = None
+    materiales_requeridos: Optional[str] = None
+    notas_preoperatorias: Optional[str] = None
+    riesgos: Optional[str] = None
+    hora: Optional[str] = None
+    fecha_programada: Optional[str] = None
+    
+    # Datos médicos
+    peso: Optional[float] = None
+    altura: Optional[float] = None
+    imc: Optional[float] = None
+    
+    # Antecedentes
+    farmacologicos: Optional[str] = None
+    traumaticos: Optional[str] = None
+    quirurgicos: Optional[str] = None
+    alergicos: Optional[str] = None
+    toxicos: Optional[str] = None
+    habitos: Optional[str] = None
+    
+    # Examen físico
+    cabeza: Optional[str] = None
+    mamas: Optional[str] = None
+    tcs: Optional[str] = None
+    abdomen: Optional[str] = None
+    gluteos: Optional[str] = None
+    extremidades: Optional[str] = None
+    pies_faneras: Optional[str] = None
+    
+    # Conducta quirúrgica
+    duracion_estimada: Optional[int] = None
+    tipo_anestesia: Optional[str] = None
+    requiere_hospitalizacion: Optional[bool] = None
+    tiempo_hospitalizacion: Optional[str] = None
+    reseccion_estimada: Optional[str] = None
+    firma_cirujano: Optional[str] = None
+    firma_paciente: Optional[str] = None
+    
+    # JSON fields
+    enfermedad_actual: Optional[Dict] = None
+    antecedentes: Optional[Dict] = None
+    notas_corporales: Optional[Dict] = None
+    
+    # Esquemas
+    esquema_corporal: Optional[str] = None
+    esquema_facial: Optional[str] = None
+    
+    # Otros
+    imagen_procedimiento: Optional[str] = None
+    descripcion_procedimiento: Optional[str] = None
+    detalles: Optional[str] = None
+    notas_del_doctor: Optional[str] = None
+    tiempo_cirugia_minutos: Optional[int] = None
+
+# ====================== ENDPOINTS DE SISTEMA ======================
 
 @app.get("/")
 def root():
@@ -1212,6 +435,121 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "database": "MySQL"}
+
+@app.get("/api/debug/endpoints")
+def debug_endpoints():
+    routes = []
+    for route in app.routes:
+        routes.append({
+            "path": route.path,
+            "name": route.name,
+            "methods": getattr(route, "methods", None)
+        })
+    
+    return {"endpoints": routes}
+
+@app.get("/api/test-frontend")
+def test_frontend():
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) as count FROM Paciente")
+                pacientes_count = cursor.fetchone()['count']
+                
+                cursor.execute("SELECT COUNT(*) as count FROM Usuario")
+                usuarios_count = cursor.fetchone()['count']
+                
+                cursor.execute("SELECT COUNT(*) as count FROM Cita")
+                citas_count = cursor.fetchone()['count']
+                
+                try:
+                    cursor.execute("SELECT COUNT(*) as count FROM historial_clinico")
+                    historias_count = cursor.fetchone()['count']
+                    historias_disponible = True
+                except:
+                    historias_count = 0
+                    historias_disponible = False
+                
+                try:
+                    cursor.execute("SELECT COUNT(*) as count FROM estado_sala_espera")
+                    estados_sala_count = cursor.fetchone()['count']
+                    cursor.execute("SELECT COUNT(*) as count FROM sala_espera WHERE DATE(fecha_hora_ingreso) = CURDATE()")
+                    sala_hoy_count = cursor.fetchone()['count']
+                    sala_espera_disponible = True
+                except:
+                    estados_sala_count = 0
+                    sala_hoy_count = 0
+                    sala_espera_disponible = False
+        
+        endpoints_disponibles = [
+            "/api/usuarios",
+            "/api/login",
+            "/api/pacientes",
+            "/api/pacientes/{id}",
+            "/api/citas",
+            "/api/citas/{id}",
+            "/api/estados/citas",
+            "/api/estados/quirurgicos",
+            "/api/procedimientos",
+            "/api/procedimientos/{id}",
+            "/api/adicionales",
+            "/api/adicionales/{id}",
+            "/api/otros-adicionales",
+            "/api/otros-adicionales/{id}",
+            "/api/historias-clinicas",
+            "/api/historias-clinicas/paciente/{id}",
+            "/api/historias-clinicas/{id}",
+            "/api/upload/historia/{id}",
+            "/api/debug/upload-dir",
+            "/api/debug/sala-espera",
+            "/api/test-frontend"
+        ]
+        
+        if sala_espera_disponible:
+            endpoints_disponibles.extend([
+                "/api/sala-espera",
+                "/api/sala-espera/{paciente_id}/estado",
+                "/api/sala-espera/bulk-estados",
+                "/api/sala-espera/estadisticas"
+            ])
+        
+        return {
+            "success": True,
+            "message": "Backend funcionando correctamente",
+            "frontend_url": FRONTEND_URL,
+            "backend_url": BACKEND_URL,
+            "database": "MySQL - prueba_consultorio_db",
+            "timestamp": datetime.now().isoformat(),
+            "counts": {
+                "pacientes": pacientes_count,
+                "usuarios": usuarios_count,
+                "citas": citas_count,
+                "historias_clinicas": historias_count,
+                "estados_sala_espera": estados_sala_count,
+                "sala_espera_hoy": sala_hoy_count
+            },
+            "modulos_activos": {
+                "historias_clinicas": historias_disponible,
+                "sala_espera": sala_espera_disponible
+            },
+            "endpoints_disponibles": endpoints_disponibles
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Error en el backend: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+
+# ====================== ENDPOINTS DE USUARIOS ======================
 
 @app.get("/api/usuarios")
 def get_usuarios():
@@ -1303,6 +641,8 @@ def login(username: str, password: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ====================== ENDPOINTS DE PACIENTES ======================
+
 @app.get("/api/pacientes", response_model=dict)
 def get_pacientes(limit: int = 100, offset: int = 0):
     try:
@@ -1375,7 +715,7 @@ def create_paciente(paciente: PacienteCreate):
                     (paciente.numero_documento,)
                 )
                 if cursor.fetchone():
-                    raise HTTPException(status_code=400, detail="El número de documento ya existe")
+                    raise HTTPException(status_code=400, detail="El numero de documento ya existe")
                 
                 cursor.execute("""
                     INSERT INTO Paciente (
@@ -1406,7 +746,7 @@ def create_paciente(paciente: PacienteCreate):
         raise
     except pymysql.err.IntegrityError as e:
         if "numero_documento" in str(e):
-            raise HTTPException(status_code=400, detail="El número de documento ya existe")
+            raise HTTPException(status_code=400, detail="El numero de documento ya existe")
         raise HTTPException(status_code=500, detail="Error de base de datos")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1434,7 +774,7 @@ def update_paciente(paciente_id: int, paciente: PacienteUpdate):
                 if cursor.fetchone():
                     raise HTTPException(
                         status_code=400, 
-                        detail="El número de documento ya está registrado en otro paciente"
+                        detail="El numero de documento ya esta registrado en otro paciente"
                     )
                 
                 cursor.execute("""
@@ -1522,20 +862,83 @@ def delete_paciente(paciente_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ====================== ENDPOINTS DE CITAS ======================
+
+@app.get("/api/citas")
+def get_citas(limit: int = 50, offset: int = 0):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT c.*, 
+                           p.nombre as paciente_nombre, 
+                           p.apellido as paciente_apellido,
+                           u.nombre as doctor_nombre,
+                           ec.nombre as estado_nombre,
+                           ec.color as estado_color
+                    FROM Cita c
+                    JOIN Paciente p ON c.paciente_id = p.id
+                    JOIN Usuario u ON c.usuario_id = u.id
+                    JOIN Estado_Cita ec ON c.estado_id = ec.id
+                    ORDER BY c.fecha_hora DESC
+                    LIMIT %s OFFSET %s
+                """, (limit, offset))
+                citas = cursor.fetchall()
+                return {"citas": citas}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/citas/{cita_id}")
+def get_cita(cita_id: int):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT c.*, 
+                           p.nombre as paciente_nombre, 
+                           p.apellido as paciente_apellido,
+                           u.nombre as doctor_nombre,
+                           ec.nombre as estado_nombre,
+                           ec.color as estado_color
+                    FROM Cita c
+                    JOIN Paciente p ON c.paciente_id = p.id
+                    JOIN Usuario u ON c.usuario_id = u.id
+                    JOIN Estado_Cita ec ON c.estado_id = ec.id
+                    WHERE c.id = %s
+                """, (cita_id,))
+                cita = cursor.fetchone()
+                if not cita:
+                    raise HTTPException(status_code=404, detail="Cita no encontrada")
+                return cita
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/citas", response_model=dict)
 def create_cita(cita: CitaCreate):
     try:
         from datetime import datetime
-        try:
-            fecha_hora_limpia = cita.fecha_hora.replace('Z', '')
-            if len(fecha_hora_limpia) == 16:
-                fecha_hora_limpia += ":00"
-            fecha_parseada = datetime.fromisoformat(fecha_hora_limpia)
-        except ValueError as e:
-            raise HTTPException(
-                status_code=422, 
-                detail=f"Formato de fecha/hora inválido. Use: YYYY-MM-DDTHH:MM:SS. Recibido: '{cita.fecha_hora}'"
-            )
+        fecha_hora_limpia = cita.fecha_hora.replace('Z', '')
+        if len(fecha_hora_limpia) == 16:
+            fecha_hora_limpia += ":00"
+        fecha_parseada = datetime.fromisoformat(fecha_hora_limpia)
         
         conn = pymysql.connect(
             host='localhost',
@@ -1611,74 +1014,9 @@ def create_cita(cita: CitaCreate):
     except HTTPException as he:
         raise he
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
-
-@app.get("/api/citas")
-def get_citas(limit: int = 50, offset: int = 0):
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT c.*, 
-                           p.nombre as paciente_nombre, 
-                           p.apellido as paciente_apellido,
-                           u.nombre as doctor_nombre,
-                           ec.nombre as estado_nombre,
-                           ec.color as estado_color
-                    FROM Cita c
-                    JOIN Paciente p ON c.paciente_id = p.id
-                    JOIN Usuario u ON c.usuario_id = u.id
-                    JOIN Estado_Cita ec ON c.estado_id = ec.id
-                    ORDER BY c.fecha_hora DESC
-                    LIMIT %s OFFSET %s
-                """, (limit, offset))
-                citas = cursor.fetchall()
-                return {"citas": citas}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/citas/{cita_id}")
-def get_cita(cita_id: int):
-    try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT c.*, 
-                           p.nombre as paciente_nombre, 
-                           p.apellido as paciente_apellido,
-                           u.nombre as doctor_nombre,
-                           ec.nombre as estado_nombre,
-                           ec.color as estado_color
-                    FROM Cita c
-                    JOIN Paciente p ON c.paciente_id = p.id
-                    JOIN Usuario u ON c.usuario_id = u.id
-                    JOIN Estado_Cita ec ON c.estado_id = ec.id
-                    WHERE c.id = %s
-                """, (cita_id,))
-                cita = cursor.fetchone()
-                if not cita:
-                    raise HTTPException(status_code=404, detail="Cita no encontrada")
-                return cita
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/citas/{cita_id}", response_model=dict)
 def update_cita(cita_id: int, cita: CitaUpdate):
@@ -1760,6 +1098,8 @@ def delete_cita(cita_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ====================== ENDPOINTS DE ESTADOS ======================
+
 @app.get("/api/estados/citas")
 def get_estados_citas():
     try:
@@ -1798,6 +1138,32 @@ def get_estados_quirurgicos():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/estados/cotizaciones")
+def get_estados_cotizaciones():
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM estado_cotizacion ORDER BY orden")
+                estados = cursor.fetchall()
+                return {"estados": estados}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error obteniendo estados de cotizacion",
+            "message": str(e)
+        })
+
+# ====================== ENDPOINTS DE PROCEDIMIENTOS ======================
+
 @app.get("/api/procedimientos", response_model=dict)
 def get_procedimientos():
     try:
@@ -1813,19 +1179,47 @@ def get_procedimientos():
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT 
-                        id,
-                        nombre,
-                        precio,
-                        fecha_creacion as created_at
-                    FROM procedimiento
-                    ORDER BY nombre
+                        p.id,
+                        p.codigo,
+                        p.nombre,
+                        p.descripcion,
+                        p.activo,
+                        t.precio_base as precio
+                    FROM procedimiento p
+                    LEFT JOIN tarifa t ON p.tarifa_id = t.id
+                    ORDER BY p.nombre
                 """)
                 procedimientos = cursor.fetchall()
                 return {"procedimientos": procedimientos}
     except Exception as e:
         error_msg = str(e)
-        if "procedimiento" in error_msg.lower():
-            return {"procedimientos": []}
+        if "procedimiento" in error_msg.lower() or "tarifa" in error_msg.lower():
+            try:
+                conn = pymysql.connect(
+                    host='localhost',
+                    user='root',
+                    password='root',
+                    database='prueba_consultorio_db',
+                    port=3306,
+                    cursorclass=pymysql.cursors.DictCursor
+                )
+                with conn:
+                    with conn.cursor() as cursor:
+                        cursor.execute("""
+                            SELECT 
+                                id,
+                                codigo,
+                                nombre,
+                                descripcion,
+                                activo,
+                                0 as precio
+                            FROM procedimiento
+                            ORDER BY nombre
+                        """)
+                        procedimientos = cursor.fetchall()
+                        return {"procedimientos": procedimientos}
+            except:
+                return {"procedimientos": []}
         raise HTTPException(status_code=500, detail=error_msg)
 
 @app.get("/api/procedimientos/{procedimiento_id}", response_model=dict)
@@ -1843,12 +1237,16 @@ def get_procedimiento(procedimiento_id: int):
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT 
-                        id,
-                        nombre,
-                        precio,
-                        fecha_creacion as created_at
-                    FROM procedimiento
-                    WHERE id = %s
+                        p.id,
+                        p.codigo,
+                        p.nombre,
+                        p.descripcion,
+                        p.activo,
+                        p.tarifa_id,
+                        t.precio_base as precio
+                    FROM procedimiento p
+                    LEFT JOIN tarifa t ON p.tarifa_id = t.id
+                    WHERE p.id = %s
                 """, (procedimiento_id,))
                 procedimiento = cursor.fetchone()
                 if not procedimiento:
@@ -1871,12 +1269,29 @@ def create_procedimiento(procedimiento: ProcedimientoCreate):
         )
         with conn:
             with conn.cursor() as cursor:
+                from datetime import datetime
+                fecha_vigencia = datetime.now().date()
+                
                 cursor.execute("""
-                    INSERT INTO procedimiento (nombre, precio)
-                    VALUES (%s, %s)
+                    INSERT INTO tarifa (precio_base, precio_adicional, fecha_vigencia, usuario_autorizador)
+                    VALUES (%s, %s, %s, %s)
                 """, (
+                    procedimiento.precio,
+                    0.00,
+                    fecha_vigencia,
+                    1
+                ))
+                tarifa_id = cursor.lastrowid
+                
+                cursor.execute("""
+                    INSERT INTO procedimiento (codigo, nombre, descripcion, tarifa_id, activo)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    f"PROC-{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     procedimiento.nombre,
-                    procedimiento.precio
+                    "",
+                    tarifa_id,
+                    1
                 ))
                 procedimiento_id = cursor.lastrowid
                 conn.commit()
@@ -1901,8 +1316,9 @@ def update_procedimiento(procedimiento_id: int, procedimiento: ProcedimientoUpda
         )
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM procedimiento WHERE id = %s", (procedimiento_id,))
-                if not cursor.fetchone():
+                cursor.execute("SELECT id, tarifa_id FROM procedimiento WHERE id = %s", (procedimiento_id,))
+                procedimiento_actual = cursor.fetchone()
+                if not procedimiento_actual:
                     raise HTTPException(status_code=404, detail="Procedimiento no encontrado")
                 
                 update_fields = []
@@ -1913,16 +1329,35 @@ def update_procedimiento(procedimiento_id: int, procedimiento: ProcedimientoUpda
                     values.append(procedimiento.nombre)
                 
                 if procedimiento.precio is not None:
-                    update_fields.append("precio = %s")
-                    values.append(procedimiento.precio)
+                    if procedimiento_actual['tarifa_id']:
+                        cursor.execute("""
+                            UPDATE tarifa SET precio_base = %s WHERE id = %s
+                        """, (procedimiento.precio, procedimiento_actual['tarifa_id']))
+                    else:
+                        from datetime import datetime
+                        fecha_vigencia = datetime.now().date()
+                        
+                        cursor.execute("""
+                            INSERT INTO tarifa (precio_base, precio_adicional, fecha_vigencia, usuario_autorizador)
+                            VALUES (%s, %s, %s, %s)
+                        """, (
+                            procedimiento.precio,
+                            0.00,
+                            fecha_vigencia,
+                            1
+                        ))
+                        new_tarifa_id = cursor.lastrowid
+                        update_fields.append("tarifa_id = %s")
+                        values.append(new_tarifa_id)
                 
-                if not update_fields:
+                if not update_fields and procedimiento.precio is None:
                     raise HTTPException(status_code=400, detail="No se proporcionaron datos para actualizar")
                 
-                values.append(procedimiento_id)
-                query = f"UPDATE procedimiento SET {', '.join(update_fields)} WHERE id = %s"
+                if update_fields:
+                    values.append(procedimiento_id)
+                    query = f"UPDATE procedimiento SET {', '.join(update_fields)} WHERE id = %s"
+                    cursor.execute(query, values)
                 
-                cursor.execute(query, values)
                 conn.commit()
                 
                 return {
@@ -1947,11 +1382,16 @@ def delete_procedimiento(procedimiento_id: int):
         )
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM procedimiento WHERE id = %s", (procedimiento_id,))
-                if not cursor.fetchone():
+                cursor.execute("SELECT tarifa_id FROM procedimiento WHERE id = %s", (procedimiento_id,))
+                procedimiento_info = cursor.fetchone()
+                if not procedimiento_info:
                     raise HTTPException(status_code=404, detail="Procedimiento no encontrado")
                 
                 cursor.execute("DELETE FROM procedimiento WHERE id = %s", (procedimiento_id,))
+                
+                if procedimiento_info['tarifa_id']:
+                    cursor.execute("DELETE FROM tarifa WHERE id = %s", (procedimiento_info['tarifa_id'],))
+                
                 conn.commit()
                 
                 return {
@@ -1963,6 +1403,8 @@ def delete_procedimiento(procedimiento_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ====================== ENDPOINTS DE ADICIONALES ======================
 
 @app.get("/api/adicionales", response_model=dict)
 def get_adicionales():
@@ -1979,12 +1421,16 @@ def get_adicionales():
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT 
-                        id,
-                        nombre,
-                        precio,
-                        fecha_creacion as created_at
-                    FROM adicional
-                    ORDER BY nombre
+                        a.id,
+                        a.codigo,
+                        a.nombre,
+                        a.descripcion,
+                        a.activo,
+                        t.precio_base as precio
+                    FROM adicional a
+                    LEFT JOIN tarifa t ON a.tarifa_id = t.id
+                    WHERE a.activo = 1
+                    ORDER BY a.nombre
                 """)
                 adicionales = cursor.fetchall()
                 return {"adicionales": adicionales}
@@ -2009,12 +1455,16 @@ def get_adicional(adicional_id: int):
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT 
-                        id,
-                        nombre,
-                        precio,
-                        fecha_creacion as created_at
-                    FROM adicional
-                    WHERE id = %s
+                        a.id,
+                        a.codigo,
+                        a.nombre,
+                        a.descripcion,
+                        a.activo,
+                        a.tarifa_id,
+                        t.precio_base as precio
+                    FROM adicional a
+                    LEFT JOIN tarifa t ON a.tarifa_id = t.id
+                    WHERE a.id = %s AND a.activo = 1
                 """, (adicional_id,))
                 adicional = cursor.fetchone()
                 if not adicional:
@@ -2037,12 +1487,29 @@ def create_adicional(adicional: AdicionalCreate):
         )
         with conn:
             with conn.cursor() as cursor:
+                from datetime import datetime
+                fecha_vigencia = datetime.now().date()
+                
                 cursor.execute("""
-                    INSERT INTO adicional (nombre, precio)
-                    VALUES (%s, %s)
+                    INSERT INTO tarifa (precio_base, precio_adicional, fecha_vigencia, usuario_autorizador)
+                    VALUES (%s, %s, %s, %s)
                 """, (
+                    adicional.precio,
+                    0.00,
+                    fecha_vigencia,
+                    1
+                ))
+                tarifa_id = cursor.lastrowid
+                
+                cursor.execute("""
+                    INSERT INTO adicional (codigo, nombre, descripcion, tarifa_id, activo)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    f"ADD-{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     adicional.nombre,
-                    adicional.precio
+                    "",
+                    tarifa_id,
+                    1
                 ))
                 adicional_id = cursor.lastrowid
                 conn.commit()
@@ -2067,8 +1534,9 @@ def update_adicional(adicional_id: int, adicional: AdicionalUpdate):
         )
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM adicional WHERE id = %s", (adicional_id,))
-                if not cursor.fetchone():
+                cursor.execute("SELECT id, tarifa_id FROM adicional WHERE id = %s", (adicional_id,))
+                adicional_actual = cursor.fetchone()
+                if not adicional_actual:
                     raise HTTPException(status_code=404, detail="Adicional no encontrado")
                 
                 update_fields = []
@@ -2079,16 +1547,35 @@ def update_adicional(adicional_id: int, adicional: AdicionalUpdate):
                     values.append(adicional.nombre)
                 
                 if adicional.precio is not None:
-                    update_fields.append("precio = %s")
-                    values.append(adicional.precio)
+                    if adicional_actual['tarifa_id']:
+                        cursor.execute("""
+                            UPDATE tarifa SET precio_base = %s WHERE id = %s
+                        """, (adicional.precio, adicional_actual['tarifa_id']))
+                    else:
+                        from datetime import datetime
+                        fecha_vigencia = datetime.now().date()
+                        
+                        cursor.execute("""
+                            INSERT INTO tarifa (precio_base, precio_adicional, fecha_vigencia, usuario_autorizador)
+                            VALUES (%s, %s, %s, %s)
+                        """, (
+                            adicional.precio,
+                            0.00,
+                            fecha_vigencia,
+                            1
+                        ))
+                        new_tarifa_id = cursor.lastrowid
+                        update_fields.append("tarifa_id = %s")
+                        values.append(new_tarifa_id)
                 
-                if not update_fields:
+                if not update_fields and adicional.precio is None:
                     raise HTTPException(status_code=400, detail="No se proporcionaron datos para actualizar")
                 
-                values.append(adicional_id)
-                query = f"UPDATE adicional SET {', '.join(update_fields)} WHERE id = %s"
+                if update_fields:
+                    values.append(adicional_id)
+                    query = f"UPDATE adicional SET {', '.join(update_fields)} WHERE id = %s"
+                    cursor.execute(query, values)
                 
-                cursor.execute(query, values)
                 conn.commit()
                 
                 return {
@@ -2113,11 +1600,16 @@ def delete_adicional(adicional_id: int):
         )
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM adicional WHERE id = %s", (adicional_id,))
-                if not cursor.fetchone():
+                cursor.execute("SELECT tarifa_id FROM adicional WHERE id = %s", (adicional_id,))
+                adicional_info = cursor.fetchone()
+                if not adicional_info:
                     raise HTTPException(status_code=404, detail="Adicional no encontrado")
                 
                 cursor.execute("DELETE FROM adicional WHERE id = %s", (adicional_id,))
+                
+                if adicional_info['tarifa_id']:
+                    cursor.execute("DELETE FROM tarifa WHERE id = %s", (adicional_info['tarifa_id'],))
+                
                 conn.commit()
                 
                 return {
@@ -2129,6 +1621,8 @@ def delete_adicional(adicional_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ====================== ENDPOINTS DE OTROS ADICIONALES ======================
 
 @app.get("/api/otros-adicionales", response_model=dict)
 def get_otros_adicionales():
@@ -2145,12 +1639,16 @@ def get_otros_adicionales():
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT 
-                        id,
-                        nombre,
-                        precio,
-                        fecha_creacion as created_at
-                    FROM otro_adicional
-                    ORDER BY nombre
+                        oa.id,
+                        oa.codigo,
+                        oa.nombre,
+                        oa.descripcion,
+                        oa.activo,
+                        t.precio_base as precio
+                    FROM otro_adicional oa
+                    LEFT JOIN tarifa t ON oa.tarifa_id = t.id
+                    WHERE oa.activo = 1
+                    ORDER BY oa.nombre
                 """)
                 otros_adicionales = cursor.fetchall()
                 return {"otros_adicionales": otros_adicionales}
@@ -2175,12 +1673,16 @@ def get_otro_adicional(otro_adicional_id: int):
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT 
-                        id,
-                        nombre,
-                        precio,
-                        fecha_creacion as created_at
-                    FROM otro_adicional
-                    WHERE id = %s
+                        oa.id,
+                        oa.codigo,
+                        oa.nombre,
+                        oa.descripcion,
+                        oa.activo,
+                        oa.tarifa_id,
+                        t.precio_base as precio
+                    FROM otro_adicional oa
+                    LEFT JOIN tarifa t ON oa.tarifa_id = t.id
+                    WHERE oa.id = %s AND oa.activo = 1
                 """, (otro_adicional_id,))
                 otro_adicional = cursor.fetchone()
                 if not otro_adicional:
@@ -2203,12 +1705,29 @@ def create_otro_adicional(otro_adicional: AdicionalCreate):
         )
         with conn:
             with conn.cursor() as cursor:
+                from datetime import datetime
+                fecha_vigencia = datetime.now().date()
+                
                 cursor.execute("""
-                    INSERT INTO otro_adicional (nombre, precio)
-                    VALUES (%s, %s)
+                    INSERT INTO tarifa (precio_base, precio_adicional, fecha_vigencia, usuario_autorizador)
+                    VALUES (%s, %s, %s, %s)
                 """, (
+                    otro_adicional.precio,
+                    0.00,
+                    fecha_vigencia,
+                    1
+                ))
+                tarifa_id = cursor.lastrowid
+                
+                cursor.execute("""
+                    INSERT INTO otro_adicional (codigo, nombre, descripcion, tarifa_id, activo)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    f"OAD-{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     otro_adicional.nombre,
-                    otro_adicional.precio
+                    "",
+                    tarifa_id,
+                    1
                 ))
                 otro_adicional_id = cursor.lastrowid
                 conn.commit()
@@ -2233,8 +1752,9 @@ def update_otro_adicional(otro_adicional_id: int, otro_adicional: AdicionalUpdat
         )
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM otro_adicional WHERE id = %s", (otro_adicional_id,))
-                if not cursor.fetchone():
+                cursor.execute("SELECT id, tarifa_id FROM otro_adicional WHERE id = %s", (otro_adicional_id,))
+                otro_adicional_actual = cursor.fetchone()
+                if not otro_adicional_actual:
                     raise HTTPException(status_code=404, detail="Otro adicional no encontrado")
                 
                 update_fields = []
@@ -2245,16 +1765,35 @@ def update_otro_adicional(otro_adicional_id: int, otro_adicional: AdicionalUpdat
                     values.append(otro_adicional.nombre)
                 
                 if otro_adicional.precio is not None:
-                    update_fields.append("precio = %s")
-                    values.append(otro_adicional.precio)
+                    if otro_adicional_actual['tarifa_id']:
+                        cursor.execute("""
+                            UPDATE tarifa SET precio_base = %s WHERE id = %s
+                        """, (otro_adicional.precio, otro_adicional_actual['tarifa_id']))
+                    else:
+                        from datetime import datetime
+                        fecha_vigencia = datetime.now().date()
+                        
+                        cursor.execute("""
+                            INSERT INTO tarifa (precio_base, precio_adicional, fecha_vigencia, usuario_autorizador)
+                            VALUES (%s, %s, %s, %s)
+                        """, (
+                            otro_adicional.precio,
+                            0.00,
+                            fecha_vigencia,
+                            1
+                        ))
+                        new_tarifa_id = cursor.lastrowid
+                        update_fields.append("tarifa_id = %s")
+                        values.append(new_tarifa_id)
                 
-                if not update_fields:
+                if not update_fields and otro_adicional.precio is None:
                     raise HTTPException(status_code=400, detail="No se proporcionaron datos para actualizar")
                 
-                values.append(otro_adicional_id)
-                query = f"UPDATE otro_adicional SET {', '.join(update_fields)} WHERE id = %s"
+                if update_fields:
+                    values.append(otro_adicional_id)
+                    query = f"UPDATE otro_adicional SET {', '.join(update_fields)} WHERE id = %s"
+                    cursor.execute(query, values)
                 
-                cursor.execute(query, values)
                 conn.commit()
                 
                 return {
@@ -2279,11 +1818,16 @@ def delete_otro_adicional(otro_adicional_id: int):
         )
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM otro_adicional WHERE id = %s", (otro_adicional_id,))
-                if not cursor.fetchone():
+                cursor.execute("SELECT tarifa_id FROM otro_adicional WHERE id = %s", (otro_adicional_id,))
+                otro_adicional_info = cursor.fetchone()
+                if not otro_adicional_info:
                     raise HTTPException(status_code=404, detail="Otro adicional no encontrado")
                 
                 cursor.execute("DELETE FROM otro_adicional WHERE id = %s", (otro_adicional_id,))
+                
+                if otro_adicional_info['tarifa_id']:
+                    cursor.execute("DELETE FROM tarifa WHERE id = %s", (otro_adicional_info['tarifa_id'],))
+                
                 conn.commit()
                 
                 return {
@@ -2295,6 +1839,8 @@ def delete_otro_adicional(otro_adicional_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ====================== ENDPOINTS DE HISTORIAS CLÍNICAS ======================
 
 @app.get("/api/historias-clinicas")
 def get_historias_clinicas(limit: int = 100, offset: int = 0):
@@ -2368,13 +1914,13 @@ def get_historia_clinica(historia_id: int):
                 cursor.execute("SELECT * FROM historial_clinico WHERE id = %s", (historia_id,))
                 historia = cursor.fetchone()
                 if not historia:
-                    raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+                    raise HTTPException(status_code=404, detail="Historia clinica no encontrada")
                 return historia
     except HTTPException:
         raise
     except Exception as e:
         if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
-            raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+            raise HTTPException(status_code=404, detail="Historia clinica no encontrada")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/historias-clinicas", response_model=dict)
@@ -2418,7 +1964,7 @@ def create_historia_clinica(historia: HistorialClinicoCreate):
                 
                 return {
                     "success": True,
-                    "message": "Historia clínica creada exitosamente",
+                    "message": "Historia clinica creada exitosamente",
                     "historia_id": historia_id,
                     "id": historia_id
                 }
@@ -2426,7 +1972,7 @@ def create_historia_clinica(historia: HistorialClinicoCreate):
         raise
     except Exception as e:
         if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
-            raise HTTPException(status_code=500, detail="Tabla de historias clínicas no existe.")
+            raise HTTPException(status_code=500, detail="Tabla de historias clinicas no existe.")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/historias-clinicas/{historia_id}", response_model=dict)
@@ -2443,7 +1989,7 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
                 if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+                    raise HTTPException(status_code=404, detail="Historia clinica no encontrada")
                 
                 cursor.execute("SELECT id FROM paciente WHERE id = %s", (historia.paciente_id,))
                 if not cursor.fetchone():
@@ -2479,14 +2025,14 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
                 
                 return {
                     "success": True,
-                    "message": "Historia clínica actualizada exitosamente",
+                    "message": "Historia clinica actualizada exitosamente",
                     "historia_id": historia_id
                 }
     except HTTPException:
         raise
     except Exception as e:
         if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
-            raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+            raise HTTPException(status_code=404, detail="Historia clinica no encontrada")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/historias-clinicas/{historia_id}", response_model=MessageResponse)
@@ -2503,19 +2049,21 @@ def delete_historia_clinica(historia_id: int):
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
                 if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+                    raise HTTPException(status_code=404, detail="Historia clinica no encontrada")
                 
                 cursor.execute("DELETE FROM historial_clinico WHERE id = %s", (historia_id,))
                 conn.commit()
                 
-                return MessageResponse(message="Historia clínica eliminada exitosamente")
+                return MessageResponse(message="Historia clinica eliminada exitosamente")
                 
     except HTTPException:
         raise
     except Exception as e:
         if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
-            raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+            raise HTTPException(status_code=404, detail="Historia clinica no encontrada")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ====================== ENDPOINTS DE UPLOAD DE FOTOS ======================
 
 @app.post("/api/upload/historia/{historia_id}", response_model=FileUploadResponse)
 async def upload_historia_foto(
@@ -2536,7 +2084,7 @@ async def upload_historia_foto(
                 cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
                 resultado = cursor.fetchone()
                 if not resultado:
-                    raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+                    raise HTTPException(status_code=404, detail="Historia clinica no encontrada")
         except Exception as db_error:
             raise HTTPException(status_code=500, detail=f"Error base de datos: {str(db_error)}")
         finally:
@@ -2551,7 +2099,7 @@ async def upload_historia_foto(
         max_size = 10 * 1024 * 1024
         content = await file.read()
         if len(content) > max_size:
-            raise HTTPException(status_code=400, detail="El archivo es demasiado grande. Máximo 10MB.")
+            raise HTTPException(status_code=400, detail="El archivo es demasiado grande. Maximo 10MB.")
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         filename = f"historia_{historia_id}_{timestamp}{file_ext}"
@@ -2616,7 +2164,11 @@ async def upload_historia_foto(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error subiendo archivo: {str(e)}")
+
+# ====================== ENDPOINTS DE SALA DE ESPERA ======================
 
 @app.get("/api/sala-espera")
 def get_sala_espera(mostrarTodos: bool = True):
@@ -2639,12 +2191,12 @@ def get_sala_espera(mostrarTodos: bool = True):
                     
                     if count_estados == 0:
                         estados = [
-                            ('pendiente', 'Paciente pendiente de atención', '#9CA3AF', 1),
+                            ('pendiente', 'Paciente pendiente de atencion', '#9CA3AF', 1),
                             ('llegada', 'Paciente ha llegado', '#FBBF24', 2),
                             ('confirmada', 'Cita confirmada', '#10B981', 3),
                             ('en_consulta', 'Paciente en consulta', '#3B82F6', 4),
                             ('completada', 'Consulta completada', '#8B5CF6', 5),
-                            ('no_asistio', 'Paciente no asistió', '#EF4444', 6)
+                            ('no_asistio', 'Paciente no asistio', '#EF4444', 6)
                         ]
                         
                         for estado in estados:
@@ -2809,6 +2361,8 @@ def get_sala_espera(mostrarTodos: bool = True):
                 }
                 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error obteniendo sala de espera: {str(e)}")
 
 @app.post("/api/sala-espera", response_model=dict)
@@ -2834,7 +2388,7 @@ def crear_registro_sala_espera(registro: SalaEsperaCreate):
                 if not estado:
                     cursor.execute("""
                         INSERT INTO estado_sala_espera (nombre, descripcion, color, orden)
-                        VALUES ('pendiente', 'Paciente pendiente de atención', '#9CA3AF', 1)
+                        VALUES ('pendiente', 'Paciente pendiente de atencion', '#9CA3AF', 1)
                     """)
                     estado_id = cursor.lastrowid
                     estado = {'id': estado_id}
@@ -2850,7 +2404,7 @@ def crear_registro_sala_espera(registro: SalaEsperaCreate):
                 if registro_existente:
                     return {
                         "success": True,
-                        "message": "El paciente ya está registrado en sala de espera hoy",
+                        "message": "El paciente ya esta registrado en sala de espera hoy",
                         "already_exists": True,
                         "registro_id": registro_existente['id']
                     }
@@ -2898,6 +2452,8 @@ def crear_registro_sala_espera(registro: SalaEsperaCreate):
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error creando registro: {str(e)}")
 
 @app.put("/api/sala-espera/{paciente_id}/estado", response_model=dict)
@@ -2963,7 +2519,7 @@ def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
                             (sala_espera_id, estado_anterior_id, estado_nuevo_id, fecha_hora_cambio) 
                             VALUES (%s, %s, %s, NOW())
                         """, (registro['id'], estado_anterior_id, estado['id']))
-                    except Exception as hist_error:
+                    except:
                         pass
                 else:
                     hora_cita_programada = None
@@ -3006,7 +2562,7 @@ def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
                             (sala_espera_id, estado_nuevo_id, fecha_hora_cambio) 
                             VALUES (%s, %s, NOW())
                         """, (registro_id, estado['id']))
-                    except Exception as hist_error:
+                    except:
                         pass
                 
                 conn.commit()
@@ -3022,6 +2578,8 @@ def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error actualizando estado: {str(e)}")
 
 @app.put("/api/sala-espera/bulk-estados", response_model=dict)
@@ -3073,7 +2631,7 @@ def bulk_update_estados_sala_espera(request: BulkUpdateEstadosRequest):
                         estado_id = estado_ids.get(estado_nombre)
                         
                         if not estado_id:
-                            errores.append(f"Estado '{estado_nombre}' no válido para paciente {paciente_id}")
+                            errores.append(f"Estado '{estado_nombre}' no valido para paciente {paciente_id}")
                             continue
                         
                         cursor.execute("""
@@ -3165,6 +2723,8 @@ def bulk_update_estados_sala_espera(request: BulkUpdateEstadosRequest):
                 }
                 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error actualizando estados: {str(e)}")
 
 @app.get("/api/sala-espera/estadisticas")
@@ -3260,7 +2820,1216 @@ def get_estadisticas_sala_espera():
                 }
                 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo estadísticas: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error obteniendo estadisticas: {str(e)}")
+
+# ====================== ENDPOINTS DE AGENDA DE PROCEDIMIENTOS ======================
+
+@app.get("/api/agenda-procedimientos/disponibilidad")
+def verificar_disponibilidad(
+    fecha: str,
+    hora: str,
+    duracion: int,
+    exclude_id: int | None = None,
+    procedimiento_id: int | None = None
+):
+    # 🔒 Normalizar procedimiento_id
+    if procedimiento_id is not None:
+        try:
+            procedimiento_id = int(procedimiento_id)
+            if procedimiento_id <= 0:
+                procedimiento_id = None
+        except ValueError:
+            procedimiento_id = None
+
+    print("🧪 procedimiento_id final:", procedimiento_id, type(procedimiento_id))
+
+    """
+    Verifica disponibilidad de horario para procedimientos.
+    """
+    try:
+        from datetime import datetime, timedelta
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Asegurar formato de hora
+                hora_inicio = hora
+                if hora_inicio.count(":") == 1:
+                    hora_inicio += ":00"
+                    print(f"   🕐 Hora formateada: {hora_inicio}")
+                
+                hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') + 
+                           timedelta(minutes=duracion)).strftime('%H:%M:%S')
+                
+                # Query base
+                query = """
+                    SELECT 
+                        ap.id,
+                        ap.fecha,
+                        ap.hora,
+                        ap.duracion,
+                        ap.estado,
+                        p.nombre as paciente_nombre,
+                        p.apellido as paciente_apellido,
+                        proc.nombre as procedimiento_nombre
+                    FROM agenda_procedimientos ap
+                    JOIN paciente p ON ap.numero_documento = p.numero_documento
+                    JOIN procedimiento proc ON ap.procedimiento_id = proc.id
+                    WHERE ap.fecha = %s 
+                    AND ap.estado NOT IN ('Cancelado', 'Operado')
+                """
+                params = [fecha]
+                
+                # Agregar condiciones opcionales
+                if exclude_id:
+                    query += " AND ap.id != %s"
+                    params.append(exclude_id)
+                
+                if procedimiento_id is not None and procedimiento_id != "":
+                    try:
+                        proc_id_int = int(procedimiento_id)
+                        query += " AND ap.procedimiento_id != %s"
+                        params.append(proc_id_int)
+                    except ValueError:
+                        raise HTTPException(
+                            status_code=422,
+                            detail="procedimiento_id debe ser un entero válido"
+                        )
+                
+                # Condición de solapamiento de horarios
+                query += """
+                    AND (
+                        (TIME(%s) >= TIME(ap.hora) AND TIME(%s) < ADDTIME(TIME(ap.hora), SEC_TO_TIME(ap.duracion * 60)))
+                        OR
+                        (TIME(ap.hora) >= TIME(%s) AND TIME(ap.hora) < TIME(%s))
+                    )
+                    ORDER BY ap.hora
+                """
+                params.extend([hora_inicio, hora_inicio, hora_inicio, hora_fin])
+                
+                print(f"📝 Query SQL: {query}")
+                print(f"📝 Parámetros: {params}")
+                
+                cursor.execute(query, params)
+                conflictos = cursor.fetchall()
+                
+                disponible = len(conflictos) == 0
+                
+                return {
+                    "success": True,
+                    "disponible": disponible,
+                    "conflictos": conflictos,
+                    "total_conflictos": len(conflictos),
+                    "mensaje": "Horario disponible" if disponible else "Horario no disponible",
+                }
+                
+    except Exception as e:
+        print(f"❌ ERROR CRÍTICO en verificar_disponibilidad: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": True,
+            "message": f"Error del servidor: {str(e)}",
+            "disponible": False,
+            "conflictos": []
+        } 
+
+@app.get("/api/agenda-procedimientos", response_model=dict)
+def get_agenda_procedimientos(
+    limit: int = 100, 
+    offset: int = 0,
+    fecha: Optional[str] = None,
+    estado: Optional[str] = None,
+    numero_documento: Optional[str] = None,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None
+):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                query = """
+                    SELECT 
+                        ap.*,
+                        p.nombre as paciente_nombre,
+                        p.apellido as paciente_apellido,
+                        proc.nombre as procedimiento_nombre
+                    FROM agenda_procedimientos ap
+                    JOIN paciente p ON ap.numero_documento = p.numero_documento
+                    JOIN procedimiento proc ON ap.procedimiento_id = proc.id
+                    WHERE 1=1
+                """
+                params = []
+                
+                if fecha:
+                    query += " AND ap.fecha = %s"
+                    params.append(fecha)
+                
+                if fecha_inicio and fecha_fin:
+                    query += " AND ap.fecha BETWEEN %s AND %s"
+                    params.extend([fecha_inicio, fecha_fin])
+                
+                if estado:
+                    query += " AND ap.estado = %s"
+                    params.append(estado)
+                
+                if numero_documento:
+                    query += " AND ap.numero_documento = %s"
+                    params.append(numero_documento)
+                
+                query += " ORDER BY ap.fecha DESC, ap.hora DESC"
+                query += " LIMIT %s OFFSET %s"
+                params.extend([limit, offset])
+                
+                cursor.execute(query, params)
+                procedimientos = cursor.fetchall()
+                
+                count_query = """
+                    SELECT COUNT(*) as total FROM agenda_procedimientos ap WHERE 1=1
+                """
+                count_params = []
+                
+                if fecha:
+                    count_query += " AND ap.fecha = %s"
+                    count_params.append(fecha)
+                
+                if fecha_inicio and fecha_fin:
+                    count_query += " AND ap.fecha BETWEEN %s AND %s"
+                    count_params.extend([fecha_inicio, fecha_fin])
+                
+                if estado:
+                    count_query += " AND ap.estado = %s"
+                    count_params.append(estado)
+                
+                if numero_documento:
+                    count_query += " AND ap.numero_documento = %s"
+                    count_params.append(numero_documento)
+                
+                cursor.execute(count_query, count_params)
+                total = cursor.fetchone()['total']
+                
+                return {
+                    "procedimientos": procedimientos,
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset
+                }
+                
+    except Exception as e:
+        error_msg = str(e)
+        if "agenda_procedimientos" in error_msg.lower():
+            return {"procedimientos": [], "total": 0}
+        raise HTTPException(status_code=500, detail=error_msg)
+
+@app.get("/api/agenda-procedimientos/{procedimiento_id}", response_model=dict)
+def get_agenda_procedimiento(procedimiento_id: int):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        ap.*,
+                        p.nombre as paciente_nombre,
+                        p.apellido as paciente_apellido,
+                        p.telefono as paciente_telefono,
+                        p.email as paciente_email,
+                        proc.nombre as procedimiento_nombre,
+                        proc.precio as procedimiento_precio
+                    FROM agenda_procedimientos ap
+                    JOIN paciente p ON ap.numero_documento = p.numero_documento
+                    JOIN procedimiento proc ON ap.procedimiento_id = proc.id
+                    WHERE ap.id = %s
+                """, (procedimiento_id,))
+                
+                procedimiento = cursor.fetchone()
+                if not procedimiento:
+                    raise HTTPException(status_code=404, detail="Procedimiento agendado no encontrado")
+                
+                return procedimiento
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/agenda-procedimientos", response_model=dict)
+def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
+    try:
+        from datetime import datetime, timedelta
+        
+        print(f"📥 BACKEND create_agenda_procedimiento recibió:")
+        print(f"   numero_documento: {procedimiento.numero_documento}")
+        print(f"   fecha: {procedimiento.fecha} (tipo: {type(procedimiento.fecha)})")
+        print(f"   hora: {procedimiento.hora} (tipo: {type(procedimiento.hora)})")
+        print(f"   procedimiento_id: {procedimiento.procedimiento_id} (tipo: {type(procedimiento.procedimiento_id)})")
+        print(f"   duracion: {procedimiento.duracion}")
+        print(f"   estado: {procedimiento.estado}")
+        
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT nombre, apellido FROM paciente 
+                    WHERE numero_documento = %s
+                """, (procedimiento.numero_documento,))
+                
+                paciente = cursor.fetchone()
+                if not paciente:
+                    print(f"❌ Paciente no encontrado: {procedimiento.numero_documento}")
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"Paciente con documento {procedimiento.numero_documento} no encontrado"
+                    )
+                
+                cursor.execute("""
+                    SELECT id, nombre FROM procedimiento 
+                    WHERE id = %s
+                """, (procedimiento.procedimiento_id,))
+                
+                proc = cursor.fetchone()
+                if not proc:
+                    print(f"❌ Procedimiento no encontrado: {procedimiento.procedimiento_id}")
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"Procedimiento con ID {procedimiento.procedimiento_id} no encontrado"
+                    )
+                
+                duracion = procedimiento.duracion or 60
+                
+                hora_inicio = procedimiento.hora
+                hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') + 
+                           timedelta(minutes=duracion)).strftime('%H:%M:%S')
+                
+                print(f"🔍 Verificando conflictos:")
+                print(f"   Fecha: {procedimiento.fecha}")
+                print(f"   Hora inicio: {hora_inicio}")
+                print(f"   Hora fin: {hora_fin}")
+                print(f"   Duración: {duracion} minutos")
+                
+                cursor.execute("""
+                    SELECT id, fecha, hora, duracion, estado 
+                    FROM agenda_procedimientos 
+                    WHERE fecha = %s 
+                    AND estado NOT IN ('Cancelado', 'Operado')
+                    AND (
+                        (TIME(%s) >= TIME(hora) AND TIME(%s) < ADDTIME(TIME(hora), SEC_TO_TIME(duracion * 60)))
+                        OR
+                        (TIME(hora) >= TIME(%s) AND TIME(hora) < TIME(%s))
+                    )
+                """, (
+                    procedimiento.fecha,
+                    hora_inicio, hora_inicio,
+                    hora_inicio, hora_fin
+                ))
+                
+                conflictos = cursor.fetchall()
+                if conflictos:
+                    print(f"❌ Conflictos encontrados: {len(conflictos)}")
+                    for conflicto in conflictos:
+                        print(f"   - ID: {conflicto['id']}, Hora: {conflicto['hora']}, Estado: {conflicto['estado']}")
+                    
+                    conflicto_info = conflictos[0]
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Conflicto de horario. Ya existe un procedimiento programado para esa hora. ID conflicto: {conflicto_info['id']}"
+                    )
+                
+                print(f"✅ Sin conflictos, procediendo a insertar...")
+                
+                cursor.execute("""
+                    INSERT INTO agenda_procedimientos (
+                        numero_documento, fecha, hora, procedimiento_id,
+                        duracion, anestesiologo, estado, observaciones
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    procedimiento.numero_documento,
+                    procedimiento.fecha,
+                    procedimiento.hora,
+                    procedimiento.procedimiento_id,
+                    procedimiento.duracion,
+                    procedimiento.anestesiologo or "",
+                    procedimiento.estado.value,
+                    procedimiento.observaciones or ""
+                ))
+                
+                procedimiento_id = cursor.lastrowid
+                conn.commit()
+                
+                print(f"✅ Procedimiento creado exitosamente: ID {procedimiento_id}")
+                
+                return {
+                    "success": True,
+                    "message": "Procedimiento agendado exitosamente",
+                    "procedimiento_id": procedimiento_id,
+                    "paciente_nombre": f"{paciente['nombre']} {paciente['apellido']}",
+                    "procedimiento_nombre": proc['nombre']
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"❌ ERROR creando procedimiento: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error creando procedimiento agendado",
+            "message": str(e)
+        })
+    
+@app.put("/api/agenda-procedimientos/{procedimiento_id}", response_model=dict)
+def update_agenda_procedimiento(procedimiento_id: int, procedimiento: AgendaProcedimientoUpdate):
+    try:
+        from datetime import datetime, timedelta
+        
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT * FROM agenda_procedimientos 
+                    WHERE id = %s
+                """, (procedimiento_id,))
+                
+                procedimiento_existente = cursor.fetchone()
+                if not procedimiento_existente:
+                    raise HTTPException(status_code=404, detail="Procedimiento agendado no encontrado")
+                
+                fecha = procedimiento.fecha if procedimiento.fecha else procedimiento_existente['fecha']
+                hora = procedimiento.hora if procedimiento.hora else procedimiento_existente['hora']
+                duracion = procedimiento.duracion if procedimiento.duracion is not None else (procedimiento_existente['duracion'] or 60)
+                
+                if procedimiento.fecha or procedimiento.hora or procedimiento.duracion is not None:
+                    hora_inicio = hora
+                    hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') + 
+                               timedelta(minutes=duracion)).strftime('%H:%M:%S')
+                    
+                    cursor.execute("""
+                        SELECT id, fecha, hora, duracion, estado 
+                        FROM agenda_procedimientos 
+                        WHERE fecha = %s 
+                        AND id != %s
+                        AND estado NOT IN ('Cancelado', 'Operado')
+                        AND (
+                            (TIME(%s) >= TIME(hora) AND TIME(%s) < ADDTIME(TIME(hora), SEC_TO_TIME(duracion * 60)))
+                            OR
+                            (TIME(hora) >= TIME(%s) AND TIME(hora) < TIME(%s))
+                        )
+                    """, (
+                        fecha,
+                        procedimiento_id,
+                        hora_inicio, hora_inicio,
+                        hora_inicio, hora_fin
+                    ))
+                    
+                    conflictos = cursor.fetchall()
+                    if conflictos:
+                        conflicto_info = conflictos[0]
+                        raise HTTPException(
+                            status_code=409,
+                            detail=f"Conflicto de horario. Ya existe un procedimiento programado para esa hora. ID conflicto: {conflicto_info['id']}"
+                        )
+                
+                update_fields = []
+                values = []
+                
+                if procedimiento.fecha is not None:
+                    update_fields.append("fecha = %s")
+                    values.append(procedimiento.fecha)
+                
+                if procedimiento.hora is not None:
+                    update_fields.append("hora = %s")
+                    values.append(procedimiento.hora)
+                
+                if procedimiento.procedimiento_id is not None:
+                    update_fields.append("procedimiento_id = %s")
+                    values.append(procedimiento.procedimiento_id)
+                    
+                    cursor.execute("SELECT id FROM procedimiento WHERE id = %s", (procedimiento.procedimiento_id,))
+                    if not cursor.fetchone():
+                        raise HTTPException(status_code=404, detail="Procedimiento no encontrado")
+                
+                if procedimiento.duracion is not None:
+                    update_fields.append("duracion = %s")
+                    values.append(procedimiento.duracion)
+                
+                if procedimiento.anestesiologo is not None:
+                    update_fields.append("anestesiologo = %s")
+                    values.append(procedimiento.anestesiologo)
+                
+                if procedimiento.estado is not None:
+                    update_fields.append("estado = %s")
+                    values.append(procedimiento.estado.value)
+                
+                if procedimiento.observaciones is not None:
+                    update_fields.append("observaciones = %s")
+                    values.append(procedimiento.observaciones)
+                
+                if not update_fields:
+                    raise HTTPException(status_code=400, detail="No se proporcionaron datos para actualizar")
+                
+                values.append(procedimiento_id)
+                
+                query = f"UPDATE agenda_procedimientos SET {', '.join(update_fields)} WHERE id = %s"
+                cursor.execute(query, values)
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Procedimiento agendado actualizado exitosamente",
+                    "procedimiento_id": procedimiento_id
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error actualizando procedimiento agendado",
+            "message": str(e)
+        })
+
+@app.delete("/api/agenda-procedimientos/{procedimiento_id}", response_model=dict)
+def delete_agenda_procedimiento(procedimiento_id: int):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT id FROM agenda_procedimientos WHERE id = %s", (procedimiento_id,))
+                procedimiento_existente = cursor.fetchone()
+                if not procedimiento_existente:
+                    raise HTTPException(status_code=404, detail="Procedimiento agendado no encontrado")
+                
+                cursor.execute("DELETE FROM agenda_procedimientos WHERE id = %s", (procedimiento_id,))
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Procedimiento agendado eliminado exitosamente",
+                    "procedimiento_id": procedimiento_id
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error eliminando procedimiento agendado",
+            "message": str(e)
+        })
+
+@app.get("/api/debug/params")
+def debug_params(
+    fecha: str,
+    hora: str,
+    duracion: int = Query(60),
+    exclude_id: Optional[int] = Query(None),
+    procedimiento_id: Optional[Union[int, str]] = Query(None)
+):
+    """
+    Endpoint para debuggear los parámetros recibidos
+    """
+    return {
+        "fecha": fecha,
+        "fecha_type": type(fecha).__name__,
+        "hora": hora,
+        "hora_type": type(hora).__name__,
+        "duracion": duracion,
+        "duracion_type": type(duracion).__name__,
+        "exclude_id": exclude_id,
+        "exclude_id_type": type(exclude_id).__name__ if exclude_id else "None",
+        "procedimiento_id": procedimiento_id,
+        "procedimiento_id_type": type(procedimiento_id).__name__ if procedimiento_id else "None",
+        "procedimiento_id_is_int": isinstance(procedimiento_id, int),
+        "procedimiento_id_is_str": isinstance(procedimiento_id, str),
+        "procedimiento_id_int_conversion": int(procedimiento_id) if procedimiento_id and str(procedimiento_id).isdigit() else "No convertible"
+    }
+
+@app.get("/api/agenda-procedimientos/estados/disponibles")
+def get_estados_procedimiento():
+    return {
+        "estados": [
+            {"value": "Programado", "label": "Programado"},
+            {"value": "Aplazado", "label": "Aplazado"},
+            {"value": "Confirmado", "label": "Confirmado"},
+            {"value": "En Quirofano", "label": "En Quirofano"},
+            {"value": "Operado", "label": "Operado"},
+            {"value": "Cancelado", "label": "Cancelado"}
+        ]
+    }
+
+@app.get("/api/agenda-procedimientos/calendario/{year}/{month}")
+def get_calendario_procedimientos(year: int, month: int):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                fecha_inicio = f"{year}-{month:02d}-01"
+                if month == 12:
+                    fecha_fin = f"{year+1}-01-01"
+                else:
+                    fecha_fin = f"{year}-{month+1:02d}-01"
+                
+                cursor.execute("""
+                    SELECT 
+                        ap.id,
+                        ap.fecha,
+                        ap.hora,
+                        ap.estado,
+                        ap.duracion,
+                        p.nombre as paciente_nombre,
+                        p.apellido as paciente_apellido,
+                        proc.nombre as procedimiento_nombre,
+                        proc.precio as procedimiento_precio
+                    FROM agenda_procedimientos ap
+                    JOIN paciente p ON ap.numero_documento = p.numero_documento
+                    JOIN procedimiento proc ON ap.procedimiento_id = proc.id
+                    WHERE ap.fecha >= %s AND ap.fecha < %s
+                    ORDER BY ap.fecha, ap.hora
+                """, (fecha_inicio, fecha_fin))
+                
+                procedimientos = cursor.fetchall()
+                
+                calendario = {}
+                for proc in procedimientos:
+                    fecha_str = str(proc['fecha'])
+                    if fecha_str not in calendario:
+                        calendario[fecha_str] = []
+                    
+                    calendario[fecha_str].append({
+                        "id": proc['id'],
+                        "hora": proc['hora'][:5],
+                        "estado": proc['estado'],
+                        "duracion": proc['duracion'],
+                        "paciente": f"{proc['paciente_nombre']} {proc['paciente_apellido']}",
+                        "procedimiento": proc['procedimiento_nombre'],
+                        "precio": proc['procedimiento_precio']
+                    })
+                
+                return {
+                    "year": year,
+                    "month": month,
+                    "procedimientos": calendario,
+                    "total": len(procedimientos)
+                }
+                
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ====================== ENDPOINTS DE COTIZACIONES ======================
+
+@app.get("/api/cotizaciones", response_model=dict)
+def get_cotizaciones(limit: int = 50, offset: int = 0):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        c.id,
+                        c.paciente_id,
+                        c.usuario_id,
+                        c.plan_id,
+                        c.estado_id,
+                        ec.nombre as estado_nombre,
+                        c.total,
+                        c.notas as observaciones,
+                        DATE(c.fecha_emision) as fecha_creacion,
+                        DATE(c.fecha_vencimiento) as fecha_vencimiento,
+                        p.nombre as paciente_nombre,
+                        p.apellido as paciente_apellido,
+                        p.numero_documento as paciente_documento,
+                        u.nombre as usuario_nombre
+                    FROM cotizacion c
+                    JOIN paciente p ON c.paciente_id = p.id
+                    JOIN usuario u ON c.usuario_id = u.id
+                    JOIN estado_cotizacion ec ON c.estado_id = ec.id
+                    ORDER BY c.fecha_emision DESC
+                    LIMIT %s OFFSET %s
+                """, (limit, offset))
+                cotizaciones = cursor.fetchall()
+                
+                for cotizacion in cotizaciones:
+                    cursor.execute("""
+                        SELECT 
+                            id,
+                            tipo,
+                            COALESCE(procedimiento_id, 0) as item_id,
+                            descripcion as nombre,
+                            cantidad,
+                            precio_unitario,
+                            subtotal
+                        FROM cotizacion_item
+                        WHERE cotizacion_id = %s
+                        ORDER BY tipo, descripcion
+                    """, (cotizacion['id'],))
+                    items = cursor.fetchall()
+                    
+                    # 🔴 NUEVO: Obtener servicios incluidos para cada cotización
+                    cursor.execute("""
+                        SELECT 
+                            servicio_nombre,
+                            requiere
+                        FROM cotizacion_servicio_incluido
+                        WHERE cotizacion_id = %s
+                    """, (cotizacion['id'],))
+                    servicios_incluidos = cursor.fetchall()
+                    
+                    # Si no hay servicios, usar los por defecto
+                    if not servicios_incluidos:
+                        servicios_incluidos = [
+                            {"servicio_nombre": "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", "requiere": False},
+                            {"servicio_nombre": "ANESTESIOLOGO", "requiere": False},
+                            {"servicio_nombre": "CONTROLES CON MEDICO Y ENFERMERA", "requiere": False},
+                            {"servicio_nombre": "VALORACION CON ANESTESIOLOGO", "requiere": False},
+                            {"servicio_nombre": "HEMOGRAMA DE CONTROL", "requiere": False},
+                            {"servicio_nombre": "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", "requiere": False},
+                            {"servicio_nombre": "IMPLANTES", "requiere": False},
+                        ]
+                    
+                    subtotal_procedimientos = 0
+                    subtotal_adicionales = 0
+                    subtotal_otros_adicionales = 0
+                    
+                    for item in items:
+                        if item['tipo'] == 'procedimiento':
+                            subtotal_procedimientos += float(item['subtotal'])
+                        elif item['tipo'] == 'adicional':
+                            subtotal_adicionales += float(item['subtotal'])
+                        elif item['tipo'] == 'otro_adicional':
+                            subtotal_otros_adicionales += float(item['subtotal'])
+                    
+                    cotizacion['items'] = items
+                    cotizacion['servicios_incluidos'] = servicios_incluidos  # 🔴 AGREGAR ESTO
+                    cotizacion['subtotal_procedimientos'] = subtotal_procedimientos
+                    cotizacion['subtotal_adicionales'] = subtotal_adicionales
+                    cotizacion['subtotal_otros_adicionales'] = subtotal_otros_adicionales
+                    
+                    if cotizacion['fecha_vencimiento'] and cotizacion['fecha_creacion']:
+                        try:
+                            from datetime import datetime
+                            fecha_creacion = datetime.strptime(str(cotizacion['fecha_creacion']), '%Y-%m-%d')
+                            fecha_vencimiento = datetime.strptime(str(cotizacion['fecha_vencimiento']), '%Y-%m-%d')
+                            validez_dias = (fecha_vencimiento - fecha_creacion).days
+                            cotizacion['validez_dias'] = validez_dias if validez_dias > 0 else 7
+                        except:
+                            cotizacion['validez_dias'] = 7
+                    else:
+                        cotizacion['validez_dias'] = 7
+                
+                cursor.execute("SELECT COUNT(*) as total FROM cotizacion")
+                total = cursor.fetchone()['total']
+                
+                return {
+                    "cotizaciones": cotizaciones,
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset
+                }
+    except Exception as e:
+        error_msg = str(e)
+        if "cotizacion" in error_msg.lower():
+            return {"cotizaciones": [], "total": 0}
+        raise HTTPException(status_code=500, detail=error_msg)
+        
+@app.get("/api/cotizaciones/{cotizacion_id}", response_model=dict)
+def get_cotizacion(cotizacion_id: int):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        c.*,
+                        c.notas as observaciones,
+                        ec.nombre as estado_nombre,
+                        p.nombre as paciente_nombre,
+                        p.apellido as paciente_apellido,
+                        p.numero_documento as paciente_documento,
+                        p.telefono as paciente_telefono,
+                        p.email as paciente_email,
+                        u.nombre as usuario_nombre
+                    FROM cotizacion c
+                    JOIN estado_cotizacion ec ON c.estado_id = ec.id
+                    JOIN paciente p ON c.paciente_id = p.id
+                    JOIN usuario u ON c.usuario_id = u.id
+                    WHERE c.id = %s
+                """, (cotizacion_id,))
+                cotizacion = cursor.fetchone()
+                
+                if not cotizacion:
+                    raise HTTPException(status_code=404, detail="Cotización no encontrada")
+                
+                cursor.execute("""
+                    SELECT 
+                        id,
+                        tipo,
+                        item_id,
+                        descripcion as nombre,
+                        cantidad,
+                        precio_unitario,
+                        subtotal
+                    FROM cotizacion_item
+                    WHERE cotizacion_id = %s
+                    ORDER BY tipo, descripcion
+                """, (cotizacion_id,))
+                items = cursor.fetchall()
+                
+                # 🔴 NUEVO: Obtener servicios incluidos de la BD
+                cursor.execute("""
+                    SELECT 
+                        servicio_nombre,
+                        requiere
+                    FROM cotizacion_servicio_incluido
+                    WHERE cotizacion_id = %s
+                """, (cotizacion_id,))
+                servicios_incluidos = cursor.fetchall()
+                
+                # Si no hay servicios en la BD, usar los por defecto
+                if not servicios_incluidos:
+                    servicios_incluidos = [
+                        {"servicio_nombre": "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", "requiere": False},
+                        {"servicio_nombre": "ANESTESIOLOGO", "requiere": False},
+                        {"servicio_nombre": "CONTROLES CON MEDICO Y ENFERMERA", "requiere": False},
+                        {"servicio_nombre": "VALORACION CON ANESTESIOLOGO", "requiere": False},
+                        {"servicio_nombre": "HEMOGRAMA DE CONTROL", "requiere": False},
+                        {"servicio_nombre": "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", "requiere": False},
+                        {"servicio_nombre": "IMPLANTES", "requiere": False},
+                    ]
+                
+                subtotal_procedimientos = 0
+                subtotal_adicionales = 0
+                subtotal_otros_adicionales = 0
+                
+                for item in items:
+                    if item['tipo'] == 'procedimiento':
+                        subtotal_procedimientos += float(item['subtotal'])
+                    elif item['tipo'] == 'adicional':
+                        subtotal_adicionales += float(item['subtotal'])
+                    elif item['tipo'] == 'otro_adicional':
+                        subtotal_otros_adicionales += float(item['subtotal'])
+                
+                cotizacion['items'] = items
+                cotizacion['servicios_incluidos'] = servicios_incluidos  # 🔴 AGREGAR ESTO
+                cotizacion['subtotal_procedimientos'] = subtotal_procedimientos
+                cotizacion['subtotal_adicionales'] = subtotal_adicionales
+                cotizacion['subtotal_otros_adicionales'] = subtotal_otros_adicionales
+                
+                if cotizacion['fecha_vencimiento'] and cotizacion['fecha_emision']:
+                    try:
+                        from datetime import datetime
+                        fecha_creacion = datetime.strptime(str(cotizacion['fecha_emision']), '%Y-%m-%d %H:%M:%S')
+                        fecha_vencimiento = datetime.strptime(str(cotizacion['fecha_vencimiento']), '%Y-%m-%d')
+                        validez_dias = (fecha_vencimiento - fecha_creacion.date()).days
+                        cotizacion['validez_dias'] = validez_dias if validez_dias > 0 else 7
+                    except:
+                        cotizacion['validez_dias'] = 7
+                else:
+                    cotizacion['validez_dias'] = 7
+                
+                return cotizacion
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error obteniendo cotización",
+            "message": str(e)
+        })
+    
+@app.put("/api/cotizaciones/{cotizacion_id}", response_model=dict)
+def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
+    print(f"🔄 Actualizando cotización ID: {cotizacion_id}")
+    print(f"📦 Datos recibidos: {cotizacion}")
+    
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # 1. Verificar que la cotización existe
+                cursor.execute("SELECT id FROM cotizacion WHERE id = %s", (cotizacion_id,))
+                if not cursor.fetchone():
+                    print(f"❌ Cotización {cotizacion_id} no encontrada")
+                    raise HTTPException(status_code=404, detail="Cotización no encontrada")
+                
+                # 2. Preparar campos a actualizar - SIN 'total'
+                update_fields = []
+                values = []
+                
+                if cotizacion.paciente_id is not None:
+                    cursor.execute("SELECT id FROM paciente WHERE id = %s", (cotizacion.paciente_id,))
+                    if not cursor.fetchone():
+                        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                    
+                    update_fields.append("paciente_id = %s")
+                    values.append(cotizacion.paciente_id)
+                
+                if cotizacion.usuario_id is not None:
+                    cursor.execute("SELECT id FROM usuario WHERE id = %s", (cotizacion.usuario_id,))
+                    if not cursor.fetchone():
+                        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+                    
+                    update_fields.append("usuario_id = %s")
+                    values.append(cotizacion.usuario_id)
+                
+                # En el endpoint update_cotizacion en main.py
+                if cotizacion.estado_id is not None:
+                    cursor.execute("SELECT id FROM estado_cotizacion WHERE id = %s", (cotizacion.estado_id,))
+                    if not cursor.fetchone():
+                        raise HTTPException(status_code=404, detail="Estado no encontrado")
+                    
+                    update_fields.append("estado_id = %s")
+                    values.append(cotizacion.estado_id)
+                
+                # Actualizar subtotales si se envían
+                if cotizacion.subtotal_procedimientos is not None:
+                    update_fields.append("subtotal_procedimientos = %s")
+                    values.append(float(cotizacion.subtotal_procedimientos))
+                
+                if cotizacion.subtotal_adicionales is not None:
+                    update_fields.append("subtotal_adicionales = %s")
+                    values.append(float(cotizacion.subtotal_adicionales))
+                
+                if cotizacion.subtotal_otros_adicionales is not None:
+                    update_fields.append("subtotal_otros_adicionales = %s")
+                    values.append(float(cotizacion.subtotal_otros_adicionales))
+                
+                # **IMPORTANTE: NO actualizar 'total' - es GENERATED y se calculará automáticamente**
+                # MySQL calculará: total = subtotal_procedimientos + subtotal_adicionales + subtotal_otros_adicionales
+                
+                if cotizacion.observaciones is not None:
+                    update_fields.append("notas = %s")
+                    values.append(cotizacion.observaciones)
+                
+                if cotizacion.fecha_vencimiento is not None:
+                    update_fields.append("fecha_vencimiento = %s")
+                    values.append(cotizacion.fecha_vencimiento)
+                
+                # 3. Actualizar cotización principal si hay campos
+                if update_fields:
+                    values.append(cotizacion_id)
+                    query = f"UPDATE cotizacion SET {', '.join(update_fields)} WHERE id = %s"
+                    print(f"📝 Query SQL: {query}")
+                    print(f"📝 Valores: {values}")
+                    
+                    cursor.execute(query, values)
+                    conn.commit()
+                    
+                    print(f"✅ Cotización {cotizacion_id} actualizada")
+                
+                # 4. Actualizar items si se proporcionan
+                if cotizacion.items is not None:
+                    print(f"📦 Actualizando {len(cotizacion.items)} items...")
+                    
+                    # Eliminar items existentes
+                    cursor.execute("DELETE FROM cotizacion_item WHERE cotizacion_id = %s", (cotizacion_id,))
+                    
+                    # Insertar nuevos items
+                    for item in cotizacion.items:
+                        cursor.execute("""
+                            INSERT INTO cotizacion_item (
+                                cotizacion_id, tipo, item_id, descripcion,
+                                cantidad, precio_unitario, subtotal
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """, (
+                            cotizacion_id,
+                            item.tipo,
+                            item.item_id,
+                            item.nombre,
+                            item.cantidad,
+                            float(item.precio_unitario),
+                            float(item.subtotal)
+                        ))
+                    
+                    conn.commit()
+                    print(f"✅ Items actualizados para cotización {cotizacion_id}")
+                
+                # 5. Actualizar servicios incluidos si se proporcionan
+                if cotizacion.servicios_incluidos is not None:
+                    print(f"🔧 Actualizando {len(cotizacion.servicios_incluidos)} servicios incluidos...")
+                    
+                    try:
+                        # Eliminar servicios existentes
+                        cursor.execute("DELETE FROM cotizacion_servicio_incluido WHERE cotizacion_id = %s", (cotizacion_id,))
+                        
+                        # Insertar nuevos servicios
+                        for servicio in cotizacion.servicios_incluidos:
+                            cursor.execute("""
+                                INSERT INTO cotizacion_servicio_incluido (
+                                    cotizacion_id, servicio_nombre, requiere
+                                ) VALUES (%s, %s, %s)
+                            """, (
+                                cotizacion_id,
+                                servicio.servicio_nombre,
+                                servicio.requiere
+                            ))
+                        
+                        conn.commit()
+                        print(f"✅ Servicios incluidos actualizados para cotización {cotizacion_id}")
+                        
+                    except Exception as table_error:
+                        print(f"⚠️ Tabla de servicios no disponible: {table_error}")
+                
+                return {
+                    "success": True,
+                    "message": "Cotización actualizada exitosamente",
+                    "cotizacion_id": cotizacion_id
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error actualizando cotización: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error actualizando cotización",
+            "message": str(e)
+        })
+                    
+@app.post("/api/cotizaciones", response_model=dict)
+def create_cotizacion(cotizacion: CotizacionCreate):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el paciente existe
+                cursor.execute("SELECT id, nombre, apellido FROM paciente WHERE id = %s", (cotizacion.paciente_id,))
+                paciente = cursor.fetchone()
+                if not paciente:
+                    raise HTTPException(status_code=404, detail=f"Paciente con ID {cotizacion.paciente_id} no encontrado")
+                
+                paciente_nombre = paciente['nombre']
+                paciente_apellido = paciente['apellido']
+                
+                # Verificar que el usuario existe
+                cursor.execute("SELECT id, nombre FROM usuario WHERE id = %s", (cotizacion.usuario_id,))
+                usuario = cursor.fetchone()
+                if not usuario:
+                    raise HTTPException(status_code=404, detail=f"Usuario con ID {cotizacion.usuario_id} no encontrado")
+                
+                usuario_nombre = usuario['nombre']
+                
+                # Verificar que el estado existe
+                cursor.execute("SELECT id FROM estado_cotizacion WHERE id = %s", (cotizacion.estado_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail=f"Estado de cotización con ID {cotizacion.estado_id} no encontrado")
+                
+                # Calcular fecha_vencimiento si no se proporciona
+                fecha_vencimiento = cotizacion.fecha_vencimiento
+                if not fecha_vencimiento and cotizacion.validez_dias:
+                    from datetime import datetime, timedelta
+                    fecha_vencimiento = (datetime.now() + timedelta(days=cotizacion.validez_dias)).strftime('%Y-%m-%d')
+                
+                # **CORRECCIÓN CRÍTICA: Insertar SIN el campo 'total'**
+                # El campo 'total' es GENERATED, MySQL lo calculará automáticamente
+                cursor.execute("""
+                    INSERT INTO cotizacion (
+                        paciente_id, usuario_id, plan_id, estado_id,
+                        notas, fecha_vencimiento,
+                        subtotal_procedimientos, subtotal_adicionales, subtotal_otros_adicionales
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    cotizacion.paciente_id,
+                    cotizacion.usuario_id,
+                    cotizacion.plan_id,
+                    cotizacion.estado_id,
+                    cotizacion.observaciones or "",
+                    fecha_vencimiento,
+                    cotizacion.subtotal_procedimientos if hasattr(cotizacion, 'subtotal_procedimientos') else 0,
+                    cotizacion.subtotal_adicionales if hasattr(cotizacion, 'subtotal_adicionales') else 0,
+                    cotizacion.subtotal_otros_adicionales if hasattr(cotizacion, 'subtotal_otros_adicionales') else 0
+                ))
+                
+                cotizacion_id = cursor.lastrowid
+                
+                # Insertar items
+                for item in cotizacion.items:
+                    cursor.execute("""
+                        INSERT INTO cotizacion_item (
+                            cotizacion_id, tipo, item_id, descripcion,
+                            cantidad, precio_unitario, subtotal
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        cotizacion_id,
+                        item.tipo,
+                        item.item_id,
+                        item.nombre,
+                        item.cantidad,
+                        item.precio_unitario,
+                        item.subtotal
+                    ))
+                
+                # Insertar servicios incluidos
+                for servicio in cotizacion.servicios_incluidos:
+                    cursor.execute("""
+                        INSERT INTO cotizacion_servicio_incluido (
+                            cotizacion_id, servicio_nombre, requiere
+                        ) VALUES (%s, %s, %s)
+                    """, (
+                        cotizacion_id,
+                        servicio.servicio_nombre,
+                        servicio.requiere
+                    ))
+                
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Cotización creada exitosamente",
+                    "cotizacion_id": cotizacion_id,
+                    "paciente_nombre": f"{paciente_nombre} {paciente_apellido}",
+                    "usuario_nombre": usuario_nombre
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"ERROR DETALLADO: {error_details}")
+        raise HTTPException(status_code=500, detail={
+            "error": "Error creando cotización",
+            "message": str(e),
+            "type": type(e).__name__
+        })
+                        
+@app.delete("/api/cotizaciones/{cotizacion_id}", response_model=dict)
+def delete_cotizacion(cotizacion_id: int):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT id FROM cotizacion WHERE id = %s", (cotizacion_id,))
+                cotizacion_existente = cursor.fetchone()
+                if not cotizacion_existente:
+                    raise HTTPException(status_code=404, detail="Cotizacion no encontrada")
+                
+                cursor.execute("DELETE FROM cotizacion_item WHERE cotizacion_id = %s", (cotizacion_id,))
+                cursor.execute("DELETE FROM cotizacion WHERE id = %s", (cotizacion_id,))
+                
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Cotizacion eliminada exitosamente",
+                    "cotizacion_id": cotizacion_id
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error eliminando cotizacion",
+            "message": str(e),
+            "type": type(e).__name__
+        })
+
+@app.get("/api/cotizaciones/plantilla-servicios")
+def get_plantilla_servicios():
+    servicios_base = [
+        {"servicio_nombre": "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", "requiere": False},
+        {"servicio_nombre": "ANESTESIOLOGO", "requiere": False},
+        {"servicio_nombre": "CONTROLES CON MEDICO Y ENFERMERA", "requiere": False},
+        {"servicio_nombre": "VALORACION CON ANESTESIOLOGO", "requiere": False},
+        {"servicio_nombre": "HEMOGRAMA DE CONTROL", "requiere": False},
+        {"servicio_nombre": "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", "requiere": False},
+        {"servicio_nombre": "IMPLANTES", "requiere": False},
+    ]
+    return {"servicios": servicios_base}
+
+# ====================== ENDPOINTS DE DEBUG ======================
 
 @app.get("/api/debug/upload-dir")
 def debug_upload_dir():
@@ -3341,21 +4110,14 @@ def debug_sala_espera():
                 }
     except Exception as e:
         return {"error": str(e), "tablas": []}
-
-@app.get("/api/debug/endpoints")
-def debug_endpoints():
-    routes = []
-    for route in app.routes:
-        routes.append({
-            "path": route.path,
-            "name": route.name,
-            "methods": getattr(route, "methods", None)
-        })
     
-    return {"endpoints": routes}
+# ====================== ENDPOINTS DE PLAN QUIRÚRGICO ======================
 
-@app.get("/api/test-frontend")
-def test_frontend():
+@app.get("/api/planes-quirurgicos", response_model=dict)
+def get_planes_quirurgicos(limit: int = 50, offset: int = 0):
+    """
+    Obtiene todos los planes quirúrgicos con información del paciente
+    """
     try:
         conn = pymysql.connect(
             host='localhost',
@@ -3367,90 +4129,681 @@ def test_frontend():
         )
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) as count FROM Paciente")
-                pacientes_count = cursor.fetchone()['count']
+                # Obtener total
+                cursor.execute("SELECT COUNT(*) as total FROM plan_quirurgico")
+                total = cursor.fetchone()['total']
                 
-                cursor.execute("SELECT COUNT(*) as count FROM Usuario")
-                usuarios_count = cursor.fetchone()['count']
+                # Obtener planes con información del paciente
+                cursor.execute("""
+                    SELECT 
+                        pq.*,
+                        p.nombre as paciente_nombre,
+                        p.apellido as paciente_apellido,
+                        p.numero_documento as paciente_documento,
+                        u.nombre as usuario_nombre,
+                        eq.nombre as estado_nombre,
+                        eq.color as estado_color
+                    FROM plan_quirurgico pq
+                    JOIN paciente p ON pq.paciente_id = p.id
+                    JOIN usuario u ON pq.usuario_id = u.id
+                    JOIN estado_quirurgico eq ON pq.estado_id = eq.id
+                    ORDER BY pq.fecha_creacion DESC
+                    LIMIT %s OFFSET %s
+                """, (limit, offset))
                 
-                cursor.execute("SELECT COUNT(*) as count FROM Cita")
-                citas_count = cursor.fetchone()['count']
+                planes = cursor.fetchall()
                 
-                try:
-                    cursor.execute("SELECT COUNT(*) as count FROM historial_clinico")
-                    historias_count = cursor.fetchone()['count']
-                    historias_disponible = True
-                except:
-                    historias_count = 0
-                    historias_disponible = False
+                # Formatear datos para el frontend
+                planes_formateados = []
+                for plan in planes:
+                    # Calcular IMC si no existe
+                    imc = plan['imc']
+                    if not imc and plan['peso'] and plan['altura'] and plan['altura'] > 0:
+                        imc = plan['peso'] / (plan['altura'] * plan['altura'])
+                    
+                    planes_formateados.append({
+                        'id': f"plan_{plan['id']}",
+                        'id_paciente': str(plan['paciente_id']),
+                        'id_usuario': str(plan['usuario_id']),
+                        'fecha_creacion': plan['fecha_creacion'].isoformat() if plan['fecha_creacion'] else None,
+                        'fecha_modificacion': plan['fecha_creacion'].isoformat() if plan['fecha_creacion'] else None,  # Usar misma fecha por ahora
+                        'datos_paciente': {
+                            'id': str(plan['paciente_id']),
+                            'identificacion': plan['paciente_documento'],
+                            'edad': plan['edad_calculada'] or 0,
+                            'nombre_completo': plan['nombre_completo'] or f"{plan['paciente_nombre']} {plan['paciente_apellido']}",
+                            'peso': float(plan['peso']) if plan['peso'] else 0,
+                            'altura': float(plan['altura']) if plan['altura'] else 0,
+                            'imc': float(imc) if imc else 0,
+                            'categoriaIMC': plan['categoriaIMC'] or '',
+                            'fecha_consulta': str(plan['fecha_consulta']) if plan['fecha_consulta'] else '',
+                            'hora_consulta': str(plan['hora_consulta']) if plan['hora_consulta'] else '',
+                        },
+                        'historia_clinica': {
+                            'nombre_completo': plan['nombre_completo'] or f"{plan['paciente_nombre']} {plan['paciente_apellido']}",
+                            'identificacion': plan['paciente_documento'],
+                            'ocupacion': plan['ocupacion'] or '',
+                            'fecha_nacimiento': str(plan['fecha_nacimiento']) if plan['fecha_nacimiento'] else '',
+                            'edad_calculada': plan['edad_calculada'] or 0,
+                            'entidad': plan['entidad'] or '',
+                            'telefono': plan['telefono_fijo'] or '',
+                            'celular': plan['celular'] or '',
+                            'direccion': plan['direccion'] or '',
+                            'email': plan['email'] or '',
+                            'motivo_consulta': plan['motivo_consulta'] or '',
+                            'motivo_consulta_detalle': plan['procedimiento_desc'] or '',
+                            'enfermedad_actual': json.loads(plan['enfermedad_actual']) if plan['enfermedad_actual'] else {
+                                'hepatitis': False, 'discrasia_sanguinea': False,
+                                'cardiopatias': False, 'hipertension': False,
+                                'reumatologicas': False, 'diabetes': False,
+                                'neurologicas': False, 'enfermedad_mental': False,
+                                'no_refiere': True
+                            },
+                            'antecedentes': json.loads(plan['antecedentes']) if plan['antecedentes'] else {
+                                'farmacologicos': plan['farmacologicos'] or '',
+                                'traumaticos': plan['traumaticos'] or '',
+                                'quirurgicos': plan['quirurgicos'] or '',
+                                'alergicos': plan['alergicos'] or '',
+                                'toxicos': plan['toxicos'] or '',
+                                'habitos': plan['habitos'] or '',
+                                'ginecologicos': '',
+                                'fuma': 'no',
+                                'planificacion': ''
+                            },
+                            'enfermedades_piel': False,
+                            'tratamientos_esteticos': '',
+                            'antecedentes_familiares': '',
+                            'peso': float(plan['peso']) if plan['peso'] else 0,
+                            'altura': float(plan['altura']) if plan['altura'] else 0,
+                            'imc': float(imc) if imc else 0,
+                            'contextura': '',
+                            'notas_corporales': json.loads(plan['notas_corporales']) if plan['notas_corporales'] else {
+                                'cabeza': plan['cabeza'] or '',
+                                'mamas': plan['mamas'] or '',
+                                'tcs': plan['tcs'] or '',
+                                'abdomen': plan['abdomen'] or '',
+                                'gluteos': plan['gluteos'] or '',
+                                'extremidades': plan['extremidades'] or '',
+                                'pies_faneras': plan['pies_faneras'] or ''
+                            },
+                            'diagnostico': plan['procedimiento_desc'] or '',
+                            'plan_conducta': plan['descripcion_procedimiento'] or ''
+                        },
+                        'conducta_quirurgica': {
+                            'duracion_estimada': plan['duracion_estimada'] or plan['tiempo_cirugia_minutos'] or 0,
+                            'tipo_anestesia': plan['tipo_anestesia'] or 'general',
+                            'requiere_hospitalizacion': bool(plan['requiere_hospitalizacion']),
+                            'tiempo_hospitalizacion': plan['tiempo_hospitalizacion'] or '',
+                            'reseccion_estimada': plan['reseccion_estimada'] or '',
+                            'firma_cirujano': plan['firma_cirujano'] or '',
+                            'firma_paciente': plan['firma_paciente'] or ''
+                        },
+                        'dibujos_esquema': [],
+                        'notas_doctor': plan['notas_del_doctor'] or plan['notas_preoperatorias'] or '',
+                        'imagenes_adjuntas': json.loads(plan['imagen_procedimiento']) if plan['imagen_procedimiento'] and plan['imagen_procedimiento'].startswith('[') else [plan['imagen_procedimiento']] if plan['imagen_procedimiento'] else [],
+                        'estado': {
+                            1: 'borrador',
+                            2: 'aprobado',
+                            3: 'completado'
+                        }.get(plan['estado_id'], 'borrador'),
+                        'esquema_mejorado': {
+                            'zoneMarkings': {},
+                            'selectionHistory': [],
+                            'currentStrokeWidth': 3,
+                            'currentTextSize': 16,
+                            'selectedProcedure': 'liposuction'
+                        }
+                    })
                 
-                try:
-                    cursor.execute("SELECT COUNT(*) as count FROM estado_sala_espera")
-                    estados_sala_count = cursor.fetchone()['count']
-                    cursor.execute("SELECT COUNT(*) as count FROM sala_espera WHERE DATE(fecha_hora_ingreso) = CURDATE()")
-                    sala_hoy_count = cursor.fetchone()['count']
-                    sala_espera_disponible = True
-                except:
-                    estados_sala_count = 0
-                    sala_hoy_count = 0
-                    sala_espera_disponible = False
-        
-        endpoints_disponibles = [
-            "/api/usuarios",
-            "/api/login",
-            "/api/pacientes",
-            "/api/pacientes/{id}",
-            "/api/citas",
-            "/api/citas/{id}",
-            "/api/estados/citas",
-            "/api/estados/quirurgicos",
-            "/api/procedimientos",
-            "/api/procedimientos/{id}",
-            "/api/adicionales",
-            "/api/adicionales/{id}",
-            "/api/otros-adicionales",
-            "/api/otros-adicionales/{id}",
-            "/api/historias-clinicas",
-            "/api/historias-clinicas/paciente/{id}",
-            "/api/historias-clinicas/{id}",
-            "/api/upload/historia/{id}",
-            "/api/debug/upload-dir",
-            "/api/debug/sala-espera",
-            "/api/test-frontend"
-        ]
-        
-        if sala_espera_disponible:
-            endpoints_disponibles.extend([
-                "/api/sala-espera",
-                "/api/sala-espera/{paciente_id}/estado",
-                "/api/sala-espera/bulk-estados",
-                "/api/sala-espera/estadisticas"
-            ])
-        
-        return {
-            "success": True,
-            "message": "✅ Backend funcionando correctamente",
-            "frontend_url": FRONTEND_URL,
-            "backend_url": BACKEND_URL,
-            "database": "MySQL - prueba_consultorio_db",
-            "timestamp": datetime.now().isoformat(),
-            "counts": {
-                "pacientes": pacientes_count,
-                "usuarios": usuarios_count,
-                "citas": citas_count,
-                "historias_clinicas": historias_count,
-                "estados_sala_espera": estados_sala_count,
-                "sala_espera_hoy": sala_hoy_count
-            },
-            "modulos_activos": {
-                "historias_clinicas": historias_disponible,
-                "sala_espera": sala_espera_disponible
-            },
-            "endpoints_disponibles": endpoints_disponibles
-        }
+                return {
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset,
+                    "planes": planes_formateados
+                }
+                
     except Exception as e:
-        return {
-            "success": False,
-            "message": f"❌ Error en el backend: {str(e)}",
-            "timestamp": datetime.now().isoformat()
-        }
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error obteniendo planes quirúrgicos",
+            "message": str(e)
+        })
+
+@app.get("/api/planes-quirurgicos/{plan_id}", response_model=dict)
+def get_plan_quirurgico(plan_id: str):
+    """
+    Obtiene un plan quirúrgico específico por ID
+    """
+    try:
+        # Extraer ID numérico del string "plan_001"
+        plan_id_num = plan_id.replace('plan_', '')
+        
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        pq.*,
+                        p.nombre as paciente_nombre,
+                        p.apellido as paciente_apellido,
+                        p.numero_documento as paciente_documento,
+                        p.fecha_nacimiento as paciente_fecha_nacimiento,
+                        p.telefono as paciente_telefono,
+                        p.email as paciente_email,
+                        p.direccion as paciente_direccion,
+                        p.ciudad as paciente_ciudad,
+                        u.nombre as usuario_nombre,
+                        eq.nombre as estado_nombre,
+                        eq.color as estado_color
+                    FROM plan_quirurgico pq
+                    JOIN paciente p ON pq.paciente_id = p.id
+                    JOIN usuario u ON pq.usuario_id = u.id
+                    JOIN estado_quirurgico eq ON pq.estado_id = eq.id
+                    WHERE pq.id = %s
+                """, (plan_id_num,))
+                
+                plan = cursor.fetchone()
+                
+                if not plan:
+                    raise HTTPException(status_code=404, detail="Plan quirúrgico no encontrado")
+                
+                # Calcular edad
+                edad = plan['edad_calculada']
+                if not edad and plan['paciente_fecha_nacimiento']:
+                    from datetime import datetime
+                    fecha_nacimiento = plan['paciente_fecha_nacimiento']
+                    if isinstance(fecha_nacimiento, str):
+                        fecha_nacimiento = datetime.strptime(fecha_nacimiento, '%Y-%m-%d')
+                    edad = (datetime.now() - fecha_nacimiento).days // 365
+                
+                # Calcular IMC si no existe
+                imc = plan['imc']
+                if not imc and plan['peso'] and plan['altura'] and plan['altura'] > 0:
+                    imc = plan['peso'] / (plan['altura'] * plan['altura'])
+                
+                # Determinar categoría IMC
+                categoria_imc = plan['categoriaIMC']
+                if not categoria_imc and imc:
+                    if imc < 18.5:
+                        categoria_imc = "Bajo peso"
+                    elif imc < 25:
+                        categoria_imc = "Saludable"
+                    elif imc < 30:
+                        categoria_imc = "Sobrepeso"
+                    else:
+                        categoria_imc = "Obesidad"
+                
+                # Formatear la respuesta como espera el frontend
+                return {
+                    'id': f"plan_{plan['id']}",
+                    'id_paciente': str(plan['paciente_id']),
+                    'id_usuario': str(plan['usuario_id']),
+                    'fecha_creacion': plan['fecha_creacion'].isoformat() if plan['fecha_creacion'] else None,
+                    'fecha_modificacion': plan['fecha_creacion'].isoformat() if plan['fecha_creacion'] else None,
+                    'datos_paciente': {
+                        'id': str(plan['paciente_id']),
+                        'identificacion': plan['paciente_documento'],
+                        'edad': edad or 0,
+                        'nombre_completo': plan['nombre_completo'] or f"{plan['paciente_nombre']} {plan['paciente_apellido']}",
+                        'peso': float(plan['peso']) if plan['peso'] else 0,
+                        'altura': float(plan['altura']) if plan['altura'] else 0,
+                        'imc': float(imc) if imc else 0,
+                        'categoriaIMC': categoria_imc or '',
+                        'fecha_consulta': str(plan['fecha_consulta']) if plan['fecha_consulta'] else '',
+                        'hora_consulta': str(plan['hora_consulta']) if plan['hora_consulta'] else '',
+                    },
+                    'historia_clinica': {
+                        'nombre_completo': plan['nombre_completo'] or f"{plan['paciente_nombre']} {plan['paciente_apellido']}",
+                        'identificacion': plan['paciente_documento'],
+                        'ocupacion': plan['ocupacion'] or '',
+                        'fecha_nacimiento': str(plan['paciente_fecha_nacimiento']) if plan['paciente_fecha_nacimiento'] else '',
+                        'edad_calculada': edad or 0,
+                        'entidad': plan['entidad'] or '',
+                        'telefono': plan['paciente_telefono'] or plan['telefono_fijo'] or '',
+                        'celular': plan['celular'] or '',
+                        'direccion': plan['paciente_direccion'] or plan['direccion'] or '',
+                        'email': plan['paciente_email'] or plan['email'] or '',
+                        'motivo_consulta': plan['motivo_consulta'] or '',
+                        'motivo_consulta_detalle': plan['procedimiento_desc'] or '',
+                        'enfermedad_actual': json.loads(plan['enfermedad_actual']) if plan['enfermedad_actual'] else {
+                            'hepatitis': False, 'discrasia_sanguinea': False,
+                            'cardiopatias': False, 'hipertension': False,
+                            'reumatologicas': False, 'diabetes': False,
+                            'neurologicas': False, 'enfermedad_mental': False,
+                            'no_refiere': True
+                        },
+                        'antecedentes': json.loads(plan['antecedentes']) if plan['antecedentes'] else {
+                            'farmacologicos': plan['farmacologicos'] or '',
+                            'traumaticos': plan['traumaticos'] or '',
+                            'quirurgicos': plan['quirurgicos'] or '',
+                            'alergicos': plan['alergicos'] or '',
+                            'toxicos': plan['toxicos'] or '',
+                            'habitos': plan['habitos'] or '',
+                            'ginecologicos': '',
+                            'fuma': 'no',
+                            'planificacion': ''
+                        },
+                        'enfermedades_piel': False,
+                        'tratamientos_esteticos': '',
+                        'antecedentes_familiares': '',
+                        'peso': float(plan['peso']) if plan['peso'] else 0,
+                        'altura': float(plan['altura']) if plan['altura'] else 0,
+                        'imc': float(imc) if imc else 0,
+                        'contextura': '',
+                        'notas_corporales': json.loads(plan['notas_corporales']) if plan['notas_corporales'] else {
+                            'cabeza': plan['cabeza'] or '',
+                            'mamas': plan['mamas'] or '',
+                            'tcs': plan['tcs'] or '',
+                            'abdomen': plan['abdomen'] or '',
+                            'gluteos': plan['gluteos'] or '',
+                            'extremidades': plan['extremidades'] or '',
+                            'pies_faneras': plan['pies_faneras'] or ''
+                        },
+                        'diagnostico': plan['procedimiento_desc'] or '',
+                        'plan_conducta': plan['descripcion_procedimiento'] or ''
+                    },
+                    'conducta_quirurgica': {
+                        'duracion_estimada': plan['duracion_estimada'] or plan['tiempo_cirugia_minutos'] or 0,
+                        'tipo_anestesia': plan['tipo_anestesia'] or 'general',
+                        'requiere_hospitalizacion': bool(plan['requiere_hospitalizacion']),
+                        'tiempo_hospitalizacion': plan['tiempo_hospitalizacion'] or '',
+                        'reseccion_estimada': plan['reseccion_estimada'] or '',
+                        'firma_cirujano': plan['firma_cirujano'] or '',
+                        'firma_paciente': plan['firma_paciente'] or ''
+                    },
+                    'dibujos_esquema': [],
+                    'notas_doctor': plan['notas_del_doctor'] or plan['notas_preoperatorias'] or '',
+                    'imagenes_adjuntas': json.loads(plan['imagen_procedimiento']) if plan['imagen_procedimiento'] and plan['imagen_procedimiento'].startswith('[') else [plan['imagen_procedimiento']] if plan['imagen_procedimiento'] else [],
+                    'estado': {
+                        1: 'borrador',
+                        2: 'aprobado',
+                        3: 'completado'
+                    }.get(plan['estado_id'], 'borrador'),
+                    'esquema_mejorado': {
+                        'zoneMarkings': {},
+                        'selectionHistory': [],
+                        'currentStrokeWidth': 3,
+                        'currentTextSize': 16,
+                        'selectedProcedure': 'liposuction'
+                    }
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error obteniendo plan quirúrgico",
+            "message": str(e)
+        })
+
+@app.post("/api/planes-quirurgicos", response_model=dict)
+def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
+    """
+    Crea un nuevo plan quirúrgico
+    """
+    try:
+        from datetime import datetime
+        
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el paciente existe y obtener sus datos
+                cursor.execute("""
+                    SELECT 
+                        id, nombre, apellido, numero_documento,
+                        fecha_nacimiento, telefono, email, direccion, ciudad
+                    FROM paciente 
+                    WHERE id = %s
+                """, (plan.paciente_id,))
+                
+                paciente = cursor.fetchone()
+                if not paciente:
+                    raise HTTPException(status_code=404, detail=f"Paciente con ID {plan.paciente_id} no encontrado")
+                
+                # Verificar que el usuario existe
+                cursor.execute("SELECT id, nombre FROM usuario WHERE id = %s", (plan.usuario_id,))
+                usuario = cursor.fetchone()
+                if not usuario:
+                    raise HTTPException(status_code=404, detail=f"Usuario con ID {plan.usuario_id} no encontrado")
+                
+                # Calcular edad automáticamente
+                edad_calculada = plan.edad_calculada
+                if not edad_calculada and paciente['fecha_nacimiento']:
+                    fecha_nacimiento = paciente['fecha_nacimiento']
+                    if isinstance(fecha_nacimiento, str):
+                        fecha_nacimiento = datetime.strptime(fecha_nacimiento, '%Y-%m-%d')
+                    edad_calculada = (datetime.now() - fecha_nacimiento).days // 365
+                
+                # Calcular IMC automáticamente
+                imc = plan.imc
+                categoria_imc = plan.categoriaIMC
+                if plan.peso and plan.altura and plan.altura > 0:
+                    if not imc:
+                        imc = plan.peso / (plan.altura * plan.altura)
+                    
+                    if not categoria_imc:
+                        if imc < 18.5:
+                            categoria_imc = "Bajo peso"
+                        elif imc < 25:
+                            categoria_imc = "Saludable"
+                        elif imc < 30:
+                            categoria_imc = "Sobrepeso"
+                        else:
+                            categoria_imc = "Obesidad"
+                
+                # Insertar plan quirúrgico
+                cursor.execute("""
+                    INSERT INTO plan_quirurgico (
+                        paciente_id, usuario_id, estado_id,
+                        procedimiento_desc, anestesiologo, materiales_requeridos,
+                        notas_preoperatorias, riesgos, hora, fecha_programada,
+                        nombre_completo, peso, altura, fecha_nacimiento, imc,
+                        identificacion, fecha_consulta, hora_consulta, categoriaIMC,
+                        edad_calculada, ocupacion, telefono_fijo, celular, direccion,
+                        email, motivo_consulta, entidad,
+                        farmacologicos, traumaticos, quirurgicos, alergicos, toxicos, habitos,
+                        cabeza, mamas, tcs, abdomen, gluteos, extremidades, pies_faneras,
+                        duracion_estimada, tipo_anestesia, requiere_hospitalizacion,
+                        tiempo_hospitalizacion, reseccion_estimada, firma_cirujano, firma_paciente,
+                        enfermedad_actual, antecedentes, notas_corporales,
+                        esquema_corporal, esquema_facial, imagen_procedimiento,
+                        fecha_ultimo_procedimiento, descripcion_procedimiento, detalles,
+                        notas_del_doctor, tiempo_cirugia_minutos
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s
+                    )
+                """, (
+                    plan.paciente_id, plan.usuario_id, plan.estado_id,
+                    plan.procedimiento_desc, plan.anestesiologo, plan.materiales_requeridos,
+                    plan.notas_preoperatorias, plan.riesgos, plan.hora, plan.fecha_programada,
+                    plan.nombre_completo or f"{paciente['nombre']} {paciente['apellido']}",
+                    plan.peso, plan.altura, plan.fecha_nacimiento or paciente['fecha_nacimiento'],
+                    imc, plan.identificacion or paciente['numero_documento'],
+                    plan.fecha_consulta or datetime.now().date().isoformat(),
+                    plan.hora_consulta or datetime.now().time().strftime('%H:%M'),
+                    categoria_imc, edad_calculada,
+                    plan.ocupacion, plan.telefono_fijo or paciente['telefono'],
+                    plan.celular, plan.direccion or paciente['direccion'],
+                    plan.email or paciente['email'], plan.motivo_consulta,
+                    plan.entidad,
+                    plan.farmacologicos, plan.traumaticos, plan.quirurgicos,
+                    plan.alergicos, plan.toxicos, plan.habitos,
+                    plan.cabeza, plan.mamas, plan.tcs, plan.abdomen,
+                    plan.gluteos, plan.extremidades, plan.pies_faneras,
+                    plan.duracion_estimada, plan.tipo_anestesia, plan.requiere_hospitalizacion,
+                    plan.tiempo_hospitalizacion, plan.reseccion_estimada,
+                    plan.firma_cirujano, plan.firma_paciente,
+                    json.dumps(plan.enfermedad_actual) if plan.enfermedad_actual else None,
+                    json.dumps(plan.antecedentes) if plan.antecedentes else None,
+                    json.dumps(plan.notas_corporales) if plan.notas_corporales else None,
+                    plan.esquema_corporal, plan.esquema_facial,
+                    plan.imagen_procedimiento, plan.fecha_ultimo_procedimiento,
+                    plan.descripcion_procedimiento, plan.detalles,
+                    plan.notas_del_doctor, plan.tiempo_cirugia_minutos
+                ))
+                
+                plan_id = cursor.lastrowid
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Plan quirúrgico creado exitosamente",
+                    "plan_id": f"plan_{plan_id}",
+                    "id": f"plan_{plan_id}",
+                    "paciente_nombre": f"{paciente['nombre']} {paciente['apellido']}",
+                    "usuario_nombre": usuario['nombre']
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error creando plan quirúrgico",
+            "message": str(e)
+        })
+
+@app.put("/api/planes-quirurgicos/{plan_id}", response_model=dict)
+def update_plan_quirurgico(plan_id: str, plan_update: PlanQuirurgicoUpdate):
+    """
+    Actualiza un plan quirúrgico existente
+    """
+    try:
+        # Extraer ID numérico
+        plan_id_num = plan_id.replace('plan_', '')
+        
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el plan existe
+                cursor.execute("SELECT id FROM plan_quirurgico WHERE id = %s", (plan_id_num,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Plan quirúrgico no encontrado")
+                
+                # Construir query dinámica
+                update_fields = []
+                values = []
+                
+                # Mapear campos a actualizar
+                field_mapping = {
+                    'estado_id': plan_update.estado_id,
+                    'procedimiento_desc': plan_update.procedimiento_desc,
+                    'anestesiologo': plan_update.anestesiologo,
+                    'materiales_requeridos': plan_update.materiales_requeridos,
+                    'notas_preoperatorias': plan_update.notas_preoperatorias,
+                    'riesgos': plan_update.riesgos,
+                    'hora': plan_update.hora,
+                    'fecha_programada': plan_update.fecha_programada,
+                    'peso': plan_update.peso,
+                    'altura': plan_update.altura,
+                    'imc': plan_update.imc,
+                    'farmacologicos': plan_update.farmacologicos,
+                    'traumaticos': plan_update.traumaticos,
+                    'quirurgicos': plan_update.quirurgicos,
+                    'alergicos': plan_update.alergicos,
+                    'toxicos': plan_update.toxicos,
+                    'habitos': plan_update.habitos,
+                    'cabeza': plan_update.cabeza,
+                    'mamas': plan_update.mamas,
+                    'tcs': plan_update.tcs,
+                    'abdomen': plan_update.abdomen,
+                    'gluteos': plan_update.gluteos,
+                    'extremidades': plan_update.extremidades,
+                    'pies_faneras': plan_update.pies_faneras,
+                    'duracion_estimada': plan_update.duracion_estimada,
+                    'tipo_anestesia': plan_update.tipo_anestesia,
+                    'requiere_hospitalizacion': plan_update.requiere_hospitalizacion,
+                    'tiempo_hospitalizacion': plan_update.tiempo_hospitalizacion,
+                    'reseccion_estimada': plan_update.reseccion_estimada,
+                    'firma_cirujano': plan_update.firma_cirujano,
+                    'firma_paciente': plan_update.firma_paciente,
+                    'imagen_procedimiento': plan_update.imagen_procedimiento,
+                    'descripcion_procedimiento': plan_update.descripcion_procedimiento,
+                    'detalles': plan_update.detalles,
+                    'notas_del_doctor': plan_update.notas_del_doctor,
+                    'tiempo_cirugia_minutos': plan_update.tiempo_cirugia_minutos
+                }
+                
+                # Agregar campos JSON
+                if plan_update.enfermedad_actual is not None:
+                    update_fields.append("enfermedad_actual = %s")
+                    values.append(json.dumps(plan_update.enfermedad_actual))
+                
+                if plan_update.antecedentes is not None:
+                    update_fields.append("antecedentes = %s")
+                    values.append(json.dumps(plan_update.antecedentes))
+                
+                if plan_update.notas_corporales is not None:
+                    update_fields.append("notas_corporales = %s")
+                    values.append(json.dumps(plan_update.notas_corporales))
+                
+                if plan_update.esquema_corporal is not None:
+                    update_fields.append("esquema_corporal = %s")
+                    values.append(plan_update.esquema_corporal)
+                
+                if plan_update.esquema_facial is not None:
+                    update_fields.append("esquema_facial = %s")
+                    values.append(plan_update.esquema_facial)
+                
+                # Agregar campos normales
+                for field, value in field_mapping.items():
+                    if value is not None:
+                        update_fields.append(f"{field} = %s")
+                        values.append(value)
+                
+                # Actualizar fecha de modificación
+                update_fields.append("fecha_creacion = NOW()")
+                
+                if not update_fields:
+                    raise HTTPException(status_code=400, detail="No se proporcionaron datos para actualizar")
+                
+                values.append(plan_id_num)
+                
+                query = f"UPDATE plan_quirurgico SET {', '.join(update_fields)} WHERE id = %s"
+                cursor.execute(query, values)
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Plan quirúrgico actualizado exitosamente",
+                    "plan_id": plan_id
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error actualizando plan quirúrgico",
+            "message": str(e)
+        })
+
+@app.delete("/api/planes-quirurgicos/{plan_id}", response_model=dict)
+def delete_plan_quirurgico(plan_id: str):
+    """
+    Elimina un plan quirúrgico
+    """
+    try:
+        # Extraer ID numérico
+        plan_id_num = plan_id.replace('plan_', '')
+        
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el plan existe
+                cursor.execute("SELECT id, nombre_completo FROM plan_quirurgico WHERE id = %s", (plan_id_num,))
+                plan = cursor.fetchone()
+                if not plan:
+                    raise HTTPException(status_code=404, detail="Plan quirúrgico no encontrado")
+                
+                # Eliminar el plan
+                cursor.execute("DELETE FROM plan_quirurgico WHERE id = %s", (plan_id_num,))
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Plan quirúrgico eliminado exitosamente",
+                    "plan_id": plan_id,
+                    "plan_nombre": plan['nombre_completo']
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={
+            "error": "Error eliminando plan quirúrgico",
+            "message": str(e)
+        })
+
+@app.get("/api/pacientes/buscar", response_model=dict)
+def buscar_pacientes(
+    q: str = Query("", description="Texto para buscar por nombre, apellido o documento"),
+    limit: int = Query(10, description="Límite de resultados")
+):
+    """
+    Busca pacientes para autocompletar en formularios
+    """
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                query = """
+                    SELECT 
+                        id,
+                        CONCAT(nombre, ' ', apellido) as nombre_completo,
+                        numero_documento as documento,
+                        telefono,
+                        email,
+                        fecha_nacimiento,
+                        TIMESTAMPDIFF(YEAR, fecha_nacimiento, CURDATE()) as edad
+                    FROM paciente
+                    WHERE 
+                        nombre LIKE %s OR 
+                        apellido LIKE %s OR 
+                        numero_documento LIKE %s
+                    ORDER BY nombre, apellido
+                    LIMIT %s
+                """
+                search_term = f"%{q}%"
+                
+                cursor.execute(query, (search_term, search_term, search_term, limit))
+                pacientes = cursor.fetchall()
+                
+                return {
+                    "pacientes": pacientes,
+                    "total": len(pacientes)
+                }
+                
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={
+            "error": "Error buscando pacientes",
+            "message": str(e)
+        })
