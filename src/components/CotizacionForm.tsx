@@ -3,13 +3,14 @@
 import type React from "react"
 import { useState, useEffect, useMemo, useRef } from "react"
 import { X, Plus, Trash2 } from "lucide-react"
-import { transformBackendToFrontend, cotizacionHelpers } from "../lib/api"
+import { cotizacionHelpers } from "../lib/api"
 import type { Cotizacion, CotizacionItemBase, CotizacionServicioIncluido } from "../types"
 
 interface CotizacionFormProps {
   cotizacion?: Cotizacion
   onSave: (data: any) => void
   onClose: () => void
+  onSuccess?: () => void
 }
 
 interface ProcedimientoCatalogo {
@@ -41,13 +42,23 @@ const serviciosIncluidosFijos = [
   { servicio_nombre: "IMPLANTES", requiere: false },
 ]
 
-export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormProps) {
+export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: CotizacionFormProps) {
+  // DEBUG: Ver datos recibidos
+  console.log("🏁 CotizacionForm inicializado:", {
+    cotizacion_recibida: cotizacion,
+    paciente_id_en_cotizacion: cotizacion?.paciente_id,
+    id_paciente_en_cotizacion: cotizacion?.id_paciente,
+    es_edicion: !!cotizacion?.id
+  });
+
+  // Cambiar el estado por defecto a "pendiente" siempre
   const [formData, setFormData] = useState({
-    paciente_id: cotizacion?.paciente_id?.toString() || "",
+    paciente_id: cotizacion?.paciente_id?.toString() || cotizacion?.id_paciente?.toString() || "",
     usuario_id: "1",
+    // Mantener el estado existente si es edición, sino usar "pendiente"
     estado: cotizacion?.estado || "pendiente",
     items: cotizacion?.items || [],
-    servicios_incluidos: cotizacion?.servicios_incluidos || serviciosIncluidosFijos,
+    servicios_incluidos: cotizacion?.servicios_incluidos || cotizacion?.serviciosIncluidos || serviciosIncluidosFijos,
     observaciones: cotizacion?.observaciones || "",
   })
 
@@ -65,6 +76,16 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
 
   const isSubmittingRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
+
+  // Debug del estado
+  useEffect(() => {
+    console.log("📝 Estado actual en formData:", {
+      estado: formData.estado,
+      paciente_id: formData.paciente_id,
+      tiene_items: formData.items.length,
+      es_edicion: !!cotizacion?.id
+    });
+  }, [formData.estado, formData.paciente_id, formData.items, cotizacion?.id]);
 
   const calculateTotals = () => {
     let subtotalProcedimientos = 0;
@@ -101,13 +122,42 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
     loadInitialData()
   }, [])
 
+  // Mejorar la inicialización del paciente en modo edición
   useEffect(() => {
-    if (cotizacion?.paciente_id && pacientes.length > 0) {
-      const pacienteId = cotizacion.paciente_id.toString();
-      const paciente = pacientes.find(p => p.id.toString() === pacienteId);
+    console.log("🔍 Buscando paciente para edición:", {
+      cotizacionId: cotizacion?.id,
+      pacienteIdEnCotizacion: cotizacion?.paciente_id,
+      idPacienteEnCotizacion: cotizacion?.id_paciente,
+      pacientesCargados: pacientes.length
+    });
+
+    if (pacientes.length === 0) return;
+
+    // Intentar encontrar el paciente de varias maneras
+    let pacienteIdToSearch = null;
+    
+    if (cotizacion?.paciente_id) {
+      pacienteIdToSearch = cotizacion.paciente_id.toString();
+    } else if (cotizacion?.id_paciente) {
+      pacienteIdToSearch = cotizacion.id_paciente.toString();
+    }
+    
+    if (pacienteIdToSearch) {
+      const paciente = pacientes.find(p => p.id.toString() === pacienteIdToSearch);
       
       if (paciente) {
         setPacienteSeleccionado(paciente);
+        // IMPORTANTE: Actualizar el formData con el paciente_id correcto
+        setFormData(prev => ({
+          ...prev,
+          paciente_id: pacienteIdToSearch
+        }));
+        console.log("✅ Paciente cargado para edición:", paciente);
+      } else {
+        console.warn("⚠️ Paciente no encontrado en la lista:", {
+          pacienteIdBuscado: pacienteIdToSearch,
+          pacientesDisponibles: pacientes.map(p => ({ id: p.id, nombre: p.nombre }))
+        });
       }
     }
   }, [cotizacion, pacientes]);
@@ -234,17 +284,46 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
     if (pacienteId) {
       const paciente = pacientes.find(p => p.id.toString() === pacienteId);
       setPacienteSeleccionado(paciente || null);
+      // Limpiar error al seleccionar paciente
+      if (errors.paciente_id) {
+        setErrors(prev => ({ ...prev, paciente_id: "" }));
+      }
     } else {
       setPacienteSeleccionado(null);
     }
   }
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {}
+  const handleCambiarPaciente = () => {
+    setFormData(prev => ({ ...prev, paciente_id: "" }));
+    setPacienteSeleccionado(null);
+    console.log("🔄 Paciente reseteado para selección nueva");
+  };
 
-    if (!formData.paciente_id) newErrors.paciente_id = "Selecciona un paciente"
+  // CORRECCIÓN: Validación mejorada para edición
+  const validateForm = () => {
+    console.log("🔍 Validando formulario:", {
+      formData_paciente_id: formData.paciente_id,
+      pacienteSeleccionado: pacienteSeleccionado,
+      es_edicion: !!cotizacion?.id
+    });
+    
+    const newErrors: Record<string, string> = {};
+
+    // Validar paciente (requerido siempre)
+    if (!formData.paciente_id || formData.paciente_id === "") {
+      newErrors.paciente_id = "Selecciona un paciente";
+    }
+
+    // Validar items
+    if (formData.items.length === 0) {
+      newErrors.items = "Debe agregar al menos un procedimiento o adicional";
+    }
 
     setErrors(newErrors)
+    console.log("✅ Resultado validación:", {
+      errores: Object.keys(newErrors).length,
+      errores_detalle: newErrors
+    });
     return Object.keys(newErrors).length === 0
   }
 
@@ -256,7 +335,16 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
       return;
     }
     
+    console.log("🔍 Validando formulario antes de enviar:", {
+      formData_paciente_id: formData.paciente_id,
+      cotizacion_id: cotizacion?.id,
+      pacienteSeleccionado,
+      es_edicion: !!cotizacion?.id
+    });
+    
     if (!validateForm()) {
+      console.error("❌ Validación fallida. Errores:", errors);
+      alert("Por favor, corrige los errores antes de enviar");
       return;
     }
     
@@ -264,23 +352,85 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
     isSubmittingRef.current = true;
     
     try {
-      const backendData = transformBackendToFrontend.cotizacionToBackend({
-        ...formData,
-        subtotalProcedimientos: totals.subtotalProcedimientos,
-        subtotalAdicionales: totals.subtotalAdicionales,
-        subtotalOtrosAdicionales: totals.subtotalOtrosAdicionales,
-        fecha_vencimiento: cotizacionHelpers.calcularFechaVencimiento(7),
+      const estadoMap: Record<string, number> = {
+        'pendiente': 1,
+        'aceptada': 2,
+        'rechazada': 3,
+        'facturada': 4
+      };
+      
+      // Siempre usar "pendiente" para nuevas cotizaciones
+      // Si es edición, mantener el estado existente
+      const estadoSeleccionado = cotizacion?.estado || "pendiente";
+      let estado_id = estadoMap[estadoSeleccionado];
+      
+      // Verificación adicional
+      console.log("🔄 Estado en handleSubmit:", {
+        estado_frontend: formData.estado,
+        estado_seleccionado: estadoSeleccionado,
+        estado_id_resultante: estado_id,
+        es_valido: estado_id !== undefined
+      });
+
+      // Si por alguna razón estado_id es undefined, mostrar error
+      if (estado_id === undefined) {
+        console.error("❌ Estado no válido:", formData.estado);
+        alert(`Error: Estado "${formData.estado}" no es válido. Usando "pendiente" por defecto.`);
+        estado_id = 1;
+      }
+
+      const items = formData.items.map(item => ({
+        tipo: item.tipo,
+        item_id: item.item_id,
+        nombre: item.nombre,
+        descripcion: item.descripcion || "",
+        cantidad: item.cantidad,
+        precio_unitario: item.precio_unitario,
+        subtotal: item.subtotal
+      }));
+
+      const servicios_incluidos = formData.servicios_incluidos.map(servicio => ({
+        servicio_nombre: servicio.servicio_nombre,
+        requiere: servicio.requiere || false
+      }));
+
+      let fecha_vencimiento = cotizacionHelpers.calcularFechaVencimiento(7);
+      if (cotizacion?.fecha_vencimiento) {
+        fecha_vencimiento = cotizacion.fecha_vencimiento;
+      }
+
+      // **CORRECCIÓN CRÍTICA: Asegurar que estado_id se incluya**
+      const backendData = {
+        paciente_id: parseInt(formData.paciente_id || "0"),
+        usuario_id: parseInt(formData.usuario_id) || 1,
+        estado_id: estado_id,  // Usar estado_id que siempre tendrá valor
+        items: items,
+        servicios_incluidos: servicios_incluidos,
+        subtotal_procedimientos: totals.subtotalProcedimientos,
+        subtotal_adicionales: totals.subtotalAdicionales,
+        subtotal_otros_adicionales: totals.subtotalOtrosAdicionales,
+        observaciones: formData.observaciones || "",
+        fecha_vencimiento: fecha_vencimiento,
         validez_dias: 7
+      };
+
+      console.log("📤 Enviando al backend:", {
+        ...backendData,
+        estado_id_en_backend: backendData.estado_id,
+        estado_seleccionado: formData.estado,
+        es_creacion: !cotizacion?.id
       });
 
       const pacienteInfo = pacienteSeleccionado || pacientes.find(p => p.id.toString() === formData.paciente_id);
 
+      // **CORRECCIÓN: Asegurar que el estado se pasa en formData también**
       const responseData = {
         ...formData,
+        estado: formData.estado, // **IMPORTANTE: Esto debe estar presente**
         ...totals,
         id: cotizacion?.id || '',
         fecha_creacion: cotizacion?.fecha_creacion || new Date().toISOString().split('T')[0],
-        fecha_vencimiento: cotizacionHelpers.calcularFechaVencimiento(7),
+        fecha_vencimiento: fecha_vencimiento,
         validez_dias: 7,
         paciente_nombre: pacienteInfo ? `${pacienteInfo.nombre} ${pacienteInfo.apellido}` : '',
         paciente_apellido: pacienteInfo?.apellido || '',
@@ -288,35 +438,43 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
         paciente_documento: pacienteInfo?.numero_documento || '',
         
         _isEditing: !!cotizacion?.id,
-        _originalId: cotizacion?.id || '',
+        _cotizacionId: cotizacion?.id ? parseInt(cotizacion.id) : undefined,
         _backendData: backendData
-      }
+      };
+
+      // **VERIFICACIÓN FINAL**
+      console.log("✅ Datos finales preparados:", {
+        tiene_estado: !!responseData.estado,
+        estado_valor: responseData.estado,
+        backendData_tiene_estado_id: !!backendData.estado_id,
+        backendData_estado_id: backendData.estado_id,
+        backendData_estado_nombre: Object.keys(estadoMap).find(key => estadoMap[key] === backendData.estado_id)
+      });
 
       onSave(responseData);
+      
+      if (onSuccess) {
+        onSuccess();
+      }
+      
       onClose();
 
     } catch (error: any) {
       console.error('Error preparando datos:', error);
-      
-      if (error.message.includes('tuple indices must be integers or slices')) {
-        alert("Error en la transformación de datos. Contacta al administrador.");
-      } else if (error.message.includes("generated column 'total'")) {
-        alert("Error: No se puede preparar el total calculado. La base de datos lo calcula automáticamente.");
-      } else {
-        alert(error.message || 'Error al preparar los datos de la cotización');
-      }
+      alert(error.message || 'Error al preparar los datos de la cotización');
     } finally {
       setIsSubmitting(false);
       isSubmittingRef.current = false;
     }
   }
-
+  
   const itemsProcedimientos = formData.items.filter(item => item.tipo === "procedimiento")
   const itemsAdicionales = formData.items.filter(item => item.tipo === "adicional")
   const itemsOtrosAdicionales = formData.items.filter(item => item.tipo === "otroAdicional")
 
   const mostrarInfoPaciente = pacienteSeleccionado || 
-    (cotizacion?.paciente_id && pacientes.find(p => p.id.toString() === cotizacion.paciente_id.toString()));
+    (cotizacion?.paciente_id && pacientes.find(p => p.id.toString() === cotizacion.paciente_id.toString())) ||
+    (cotizacion?.id_paciente && pacientes.find(p => p.id.toString() === cotizacion.id_paciente.toString()));
 
   if (loading && !cotizacion) {
     return (
@@ -357,43 +515,57 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Paciente *</label>
             
-            {cotizacion && mostrarInfoPaciente && (
-              <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="font-medium text-blue-800">
-                  {mostrarInfoPaciente.nombre} {mostrarInfoPaciente.apellido}
-                </p>
-                <p className="text-sm text-blue-600">
-                  Documento: {mostrarInfoPaciente.numero_documento}
-                </p>
-                <p className="text-xs text-blue-500 mt-1">
-                  (Paciente cargado automáticamente de la cotización)
-                </p>
-                <input type="hidden" value={formData.paciente_id} name="paciente_id" />
-              </div>
-            )}
-            
-            <select
-              value={formData.paciente_id}
-              onChange={(e) => handlePacienteChange(e.target.value)}
-              disabled={loading || isSubmitting || (!!cotizacion && !!mostrarInfoPaciente)}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${
-                errors.paciente_id ? "border-red-500" : "border-gray-300"
-              } ${(loading || isSubmitting || (!!cotizacion && !!mostrarInfoPaciente)) ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              {!cotizacion && <option value="">-- Selecciona un paciente --</option>}
-              {pacientes.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre} {p.apellido} ({p.numero_documento})
-                </option>
-              ))}
-            </select>
-            {errors.paciente_id && <p className="text-xs text-red-600 mt-1">{errors.paciente_id}</p>}
-            
-            {cotizacion && mostrarInfoPaciente && (
-              <p className="text-xs text-gray-500 mt-1">
-                Para cambiar el paciente, elimina la selección actual primero
-              </p>
-            )}
+            {/* Siempre mostrar selector, pero en modo edición mostrar info adicional */}
+            <div className="space-y-2">
+              <select
+                value={formData.paciente_id}
+                onChange={(e) => handlePacienteChange(e.target.value)}
+                disabled={loading || isSubmitting}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${
+                  errors.paciente_id ? "border-red-500" : "border-gray-300"
+                } ${(loading || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                <option value="">-- Selecciona un paciente --</option>
+                {pacientes.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre} {p.apellido} ({p.numero_documento})
+                  </option>
+                ))}
+              </select>
+              
+              {/* Mostrar info del paciente seleccionado o del paciente en edición */}
+              {pacienteSeleccionado && (
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium text-blue-800">
+                        {pacienteSeleccionado.nombre} {pacienteSeleccionado.apellido}
+                      </p>
+                      <p className="text-sm text-blue-600">
+                        Documento: {pacienteSeleccionado.numero_documento}
+                      </p>
+                      {cotizacion?.id && (
+                        <p className="text-xs text-blue-500 mt-1">
+                          <span className="font-medium">Modo edición:</span> Puedes cambiar el paciente si es necesario
+                        </p>
+                      )}
+                    </div>
+                    {cotizacion?.id && (
+                      <button
+                        type="button"
+                        onClick={handleCambiarPaciente}
+                        className="text-sm text-red-600 hover:text-red-800"
+                        title="Cambiar paciente"
+                      >
+                        Cambiar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {errors.paciente_id && <p className="text-xs text-red-600 mt-1">{errors.paciente_id}</p>}
+            </div>
           </div>
 
           <div>
@@ -402,7 +574,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
               <p className="text-gray-800">Dr Hernan Ignacio Cordoba</p>
               <input type="hidden" value="1" name="usuario_id" />
             </div>
-            <p className="text-xs text-gray-500 mt-1">Doctor asignado automáticamente</p>
           </div>
 
           <div className="bg-blue-50 p-4 rounded-lg">
@@ -689,21 +860,7 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Estado</label>
-            <select
-              value={formData.estado}
-              onChange={(e) => setFormData(prev => ({ ...prev, estado: e.target.value as any }))}
-              disabled={loading || isSubmitting}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] disabled:opacity-50"
-            >
-              <option value="pendiente">Pendiente</option>
-              <option value="aceptada">Aceptada</option>
-              <option value="rechazada">Rechazada</option>
-              <option value="facturada">Facturada</option>
-            </select>
-          </div>
-
+          {/* Sección de observaciones */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Observaciones</label>
             <textarea
@@ -722,7 +879,7 @@ export function CotizacionForm({ cotizacion, onSave, onClose }: CotizacionFormPr
               disabled={loading || isSubmitting}
               className="flex-1 bg-[#1a6b32] hover:bg-[#155529] text-white font-medium py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? "Preparando..." : cotizacion ? "Actualizar" : "Crear"} Cotización
+              {isSubmitting ? "Procesando..." : cotizacion ? "Actualizar Cotización" : "Crear Cotización"}
             </button>
             
             <button

@@ -1,106 +1,50 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, Edit2, Eye, Trash2 } from "lucide-react"
 import type { PlanQuirurgico } from "../types/planQuirurgico"
 import { PlanQuirurgicoForm } from "../components/PlanQuirurgicoForm"
+import { api } from "../lib/api"
 
 export const PlanQuirurgicoPage: React.FC = () => {
-  const [planesQuirurgicos, setPlanesQuirurgicos] = useState<PlanQuirurgico[]>([
-    {
-      id: "plan_001",
-      id_paciente: "pac_001",
-      id_usuario: "doctor_001",
-      fecha_creacion: new Date().toISOString(),
-      fecha_modificacion: new Date().toISOString(),
-      datos_paciente: {
-        id: "pac_001",
-        identificacion: "1234567890",
-        edad: 35,
-        nombre_completo: "Juan Pérez García",
-        peso: 75,
-        altura: 1.75,
-        imc: 24.5,
-        categoriaIMC: "Peso normal",
-        fecha_consulta: "2025-11-20",
-        hora_consulta: "10:30",
-      },
-      historia_clinica: {
-        nombre_completo: "Juan Pérez García",
-        identificacion: "1234567890",
-        ocupacion: "Ingeniero",
-        fecha_nacimiento: "1989-05-15",
-        edad_calculada: 35,
-        referido_por: "Dr. López",
-        entidad: "Clínica Central",
-        telefono: "3101234567",
-        celular: "3105678901",
-        direccion: "Calle 50 #20-30",
-        email: "juan@example.com",
-        motivo_consulta: "Valoración",
-        motivo_consulta_detalle: "Evaluación para liposucción de abdomen",
-        enfermedad_actual: {
-          hepatitis: false,
-          discrasia_sanguinea: false,
-          cardiopatias: false,
-          hipertension: false,
-          reumatologicas: false,
-          diabetes: false,
-          neurologicas: false,
-          enfermedad_mental: false,
-          no_refiere: true,
-        },
-        antecedentes: {
-          farmacologicos: "Ninguno",
-          traumaticos: "Ninguno",
-          quirurgicos: "Apendicitis 2015",
-          alergicos: "Penicilina",
-          toxicos: "Ninguno",
-          habitos: "Sedentario",
-          ginecologicos: "N/A",
-          fuma: "no",
-          planificacion: "Preservativo",
-        },
-        enfermedades_piel: false,
-        tratamientos_esteticos: "Ninguno",
-        antecedentes_familiares: "Diabetes en madre",
-        peso: 75,
-        altura: 1.75,
-        imc: 24.5,
-        contextura: "Normal",
-        notas_corporales: {
-          cabeza: "Normal",
-          mamas: "N/A",
-          tcs: "Adecuado",
-          abdomen: "Acúmulo de grasa localizada",
-          gluteos: "Normal",
-          extremidades: "Normal",
-          pies_faneras: "Normal",
-        },
-        diagnostico: "Lipodistrofia abdominal",
-        plan_conducta: "Liposucción de abdomen",
-      },
-      conducta_quirurgica: {
-        duracion_estimada: 120,
-        tipo_anestesia: "general",
-        requiere_hospitalizacion: true,
-        tiempo_hospitalizacion: "1 día",
-        reseccion_estimada: "Aproximadamente 2-3 litros",
-        firma_cirujano: "",
-        firma_paciente: "",
-      },
-      dibujos_esquema: [],
-      notas_doctor: "Paciente en excelentes condiciones generales",
-      cirugias_previas: [],
-      imagenes_adjuntas: [],
-      estado: "completado",
-    },
-  ])
-
+  const [planesQuirurgicos, setPlanesQuirurgicos] = useState<PlanQuirurgico[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [planSeleccionado, setPlanSeleccionado] = useState<PlanQuirurgico | undefined>()
   const [vistaActual, setVistaActual] = useState<"lista" | "formulario">("lista")
+
+  // Cargar planes quirúrgicos al inicio
+  useEffect(() => {
+    cargarPlanes()
+  }, [])
+
+  const cargarPlanes = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await api.getPlanesQuirurgicos(50, 0)
+      
+      if (response.error) {
+        throw new Error(response.message || "Error cargando planes")
+      }
+      
+      if (response.planes && Array.isArray(response.planes)) {
+        setPlanesQuirurgicos(response.planes)
+      } else {
+        setPlanesQuirurgicos([])
+      }
+    } catch (error: any) {
+      console.error("Error cargando planes quirúrgicos:", error)
+      setError(error.message || "Error al cargar los planes quirúrgicos")
+      setPlanesQuirurgicos([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleCrearNuevo = () => {
     setPlanSeleccionado(undefined)
@@ -112,18 +56,55 @@ export const PlanQuirurgicoPage: React.FC = () => {
     setVistaActual("formulario")
   }
 
-  const handleGuardar = (plan: PlanQuirurgico) => {
-    if (planSeleccionado) {
-      setPlanesQuirurgicos(planesQuirurgicos.map((p) => (p.id === plan.id ? plan : p)))
-    } else {
-      setPlanesQuirurgicos([...planesQuirurgicos, plan])
+  const handleGuardar = async (plan: PlanQuirurgico) => {
+    try {
+      let result
+      
+      if (planSeleccionado) {
+        // Actualizar plan existente
+        result = await api.updatePlanQuirurgico(plan.id, plan)
+      } else {
+        // Crear nuevo plan
+        result = await api.createPlanQuirurgico(plan)
+      }
+      
+      if (result.error) {
+        throw new Error(result.message || "Error guardando plan")
+      }
+      
+      if (result.success) {
+        // Recargar la lista después de guardar
+        await cargarPlanes()
+        setVistaActual("lista")
+      } else {
+        throw new Error("Error inesperado al guardar")
+      }
+    } catch (error: any) {
+      console.error("Error guardando plan:", error)
+      alert(`Error al guardar: ${error.message}`)
     }
-    setVistaActual("lista")
   }
 
-  const handleEliminar = (id: string) => {
-    if (window.confirm("¿Está seguro de que desea eliminar este plan?")) {
-      setPlanesQuirurgicos(planesQuirurgicos.filter((p) => p.id !== id))
+  const handleEliminar = async (id: string) => {
+    if (!window.confirm("¿Está seguro de que desea eliminar este plan?")) {
+      return
+    }
+    
+    try {
+      const result = await api.deletePlanQuirurgico(id)
+      
+      if (result.error) {
+        throw new Error(result.message || "Error eliminando plan")
+      }
+      
+      if (result.success) {
+        // Recargar la lista después de eliminar
+        await cargarPlanes()
+        alert("Plan eliminado exitosamente")
+      }
+    } catch (error: any) {
+      console.error("Error eliminando plan:", error)
+      alert(`Error al eliminar: ${error.message}`)
     }
   }
 
@@ -142,11 +123,12 @@ export const PlanQuirurgicoPage: React.FC = () => {
           </h1>
         </div>
         {vistaActual === "formulario" && (
-        <PlanQuirurgicoForm 
+          <PlanQuirurgicoForm 
             plan={planSeleccionado}
             onGuardar={handleGuardar}
-        />
-      )}
+            onCancel={() => setVistaActual("lista")}
+          />
+        )}
       </div>
     )
   }
@@ -164,7 +146,23 @@ export const PlanQuirurgicoPage: React.FC = () => {
         </button>
       </div>
 
-      {planesQuirurgicos.length === 0 ? (
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#1a6b32]"></div>
+          <p className="text-gray-500 mt-4">Cargando planes quirúrgicos...</p>
+        </div>
+      ) : error ? (
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded mb-4">
+          <p className="font-bold">Error</p>
+          <p>{error}</p>
+          <button
+            onClick={cargarPlanes}
+            className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Reintentar
+          </button>
+        </div>
+      ) : planesQuirurgicos.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-500 mb-4">No hay planes quirúrgicos registrados</p>
           <button

@@ -1,9 +1,8 @@
 "use client"
 
-import { X, Calendar, Download, Printer, Loader2 } from "lucide-react"
+import { X, Calendar, Printer, Loader2 } from "lucide-react"
 import { useState } from "react"
 import type { Cotizacion, Paciente } from "../pages/CotizacionesPage"
-import { cotizacionHelpers } from "../lib/api"
 
 interface CotizacionModalProps {
   cotizacion: Cotizacion
@@ -13,55 +12,27 @@ interface CotizacionModalProps {
 }
 
 export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: CotizacionModalProps) {
-  const [descargando, setDescargando] = useState(false)
   const [imprimiendo, setImprimiendo] = useState(false)
 
-  const estadoColors: Record<string, string> = {
-    pendiente: "bg-yellow-100 text-yellow-800",
-    aceptada: "bg-green-100 text-green-800",
-    rechazada: "bg-red-100 text-red-800",
-    facturada: "bg-blue-100 text-blue-800",
-  }
+  // ⬇️ COMENTAR O ELIMINAR ESTA LÍNEA ⬇️
+  // const estadoColors: Record<string, string> = {
+  //   pendiente: "bg-yellow-100 text-yellow-800",
+  //   aceptada: "bg-green-100 text-green-800",
+  //   rechazada: "bg-red-100 text-red-800",
+  //   facturada: "bg-blue-100 text-blue-800",
+  // }
 
-  // Función para agrupar items por tipo
   const itemsPorTipo = {
     procedimientos: cotizacion.items.filter(item => item.tipo === 'procedimiento'),
     adicionales: cotizacion.items.filter(item => item.tipo === 'adicional'),
     otrosAdicionales: cotizacion.items.filter(item => item.tipo === 'otroAdicional'),
   }
 
-  const handleDescargarPDF = async () => {
-    if (!paciente) {
-      alert("No se encontró información del paciente")
-      return
-    }
-
-    setDescargando(true)
-    try {
-      await generarPDFCotizacion({
-        cotizacion: {
-          ...cotizacion,
-          subtotalProcedimientos: cotizacion.subtotalProcedimientos || 0,
-          subtotalAdicionales: cotizacion.subtotalAdicionales || 0,
-          subtotalOtrosAdicionales: cotizacion.subtotalOtrosAdicionales || 0,
-          total: cotizacion.total
-        },
-        paciente,
-        items: cotizacion.items,
-        serviciosIncluidos: cotizacion.serviciosIncluidos || []
-      })
-    } catch (error) {
-      console.error("Error descargando PDF:", error)
-      alert("Error al descargar el PDF. Por favor, intente nuevamente.")
-    } finally {
-      setDescargando(false)
-    }
-  }
+  const serviciosIncluidos = cotizacion.servicios_incluidos || cotizacion.serviciosIncluidos || []
 
   const handleImprimir = () => {
     setImprimiendo(true)
     try {
-      // Crear una ventana de impresión con el contenido de la cotización
       const printWindow = window.open('', '_blank')
       if (!printWindow) {
         alert("No se pudo abrir la ventana de impresión. Por favor, permite las ventanas emergentes.")
@@ -91,11 +62,6 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               .grand-total { font-size: 18px; font-weight: bold; color: #1a6b32; border-top: 1px solid #cbd5e1; padding-top: 10px; }
               .observaciones { background: #eff6ff; padding: 15px; border-radius: 8px; margin: 20px 0; }
               .validez { text-align: center; font-style: italic; color: #666; margin-top: 20px; }
-              .estado { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-              .estado-pendiente { background: #fef3c7; color: #92400e; }
-              .estado-aceptada { background: #d1fae5; color: #065f46; }
-              .estado-rechazada { background: #fee2e2; color: #991b1b; }
-              .estado-facturada { background: #dbeafe; color: #1e40af; }
               .servicios-incluidos { margin-top: 20px; }
               .servicio-item { display: flex; align-items: center; margin-bottom: 5px; }
               .servicio-check { color: #10b981; margin-right: 8px; font-size: 14px; }
@@ -136,20 +102,23 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                   <div class="info-label">DOCUMENTO</div>
                   <div class="info-value">${paciente?.documento || 'No especificado'}</div>
                 </div>
+                <!-- ⬇️ ELIMINAR LA SECCIÓN DE ESTADO DEL HTML ⬇️ -->
+                <!-- 
                 <div class="info-item">
                   <div class="info-label">ESTADO</div>
                   <div class="estado estado-${cotizacion.estado}">${cotizacion.estado.toUpperCase()}</div>
                 </div>
+                -->
               </div>
             </div>
 
             <div class="section">
               <div class="section-title">SERVICIOS INCLUIDOS</div>
               <div class="servicios-incluidos">
-                ${(cotizacion.serviciosIncluidos || []).map(servicio => `
+                ${serviciosIncluidos.map((servicio: any) => `
                   <div class="servicio-item">
                     <span class="servicio-check">${servicio.requiere ? '✓' : '○'}</span>
-                    <span class="servicio-text">${servicio.nombre}</span>
+                    <span class="servicio-text">${servicio.servicio_nombre || servicio.nombre || 'Servicio'}</span>
                   </div>
                 `).join('')}
               </div>
@@ -288,27 +257,9 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
     }
   }
 
-  // Función para generar PDF (puedes reemplazar con tu implementación real)
-  const generarPDFCotizacion = async (data: any) => {
-    try {
-      // Implementación básica - reemplaza con tu lógica real de generación de PDF
-      console.log("📄 Generando PDF para:", data)
-      
-      // Aquí deberías integrar tu biblioteca de generación de PDF
-      // Por ahora, usaremos la función de impresión como alternativa
-      alert("La generación de PDF está en desarrollo. Se mostrará la vista para imprimir.")
-      handleImprimir()
-      
-    } catch (error) {
-      console.error("Error generando PDF:", error)
-      throw error
-    }
-  }
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
           <div>
             <h2 className="text-xl font-bold text-gray-800">Cotización CZ-{cotizacion.id}</h2>
@@ -325,9 +276,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
           </button>
         </div>
 
-        {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Info */}
           <div className="grid grid-cols-2 gap-6">
             <div className="flex items-center space-x-3">
               <Calendar className="text-[#1a6b32]" size={20} />
@@ -336,6 +285,8 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 <p className="font-medium text-gray-800">{cotizacion.fecha_creacion}</p>
               </div>
             </div>
+            {/* ⬇️ ELIMINAR LA SECCIÓN DE ESTADO COMPLETA ⬇️ */}
+            {/* 
             <div>
               <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Estado</p>
               <span
@@ -344,6 +295,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 {cotizacion.estado}
               </span>
             </div>
+            */}
             <div className="flex items-center space-x-3">
               <Calendar className="text-[#f59e0b]" size={20} />
               <div>
@@ -357,29 +309,33 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
             </div>
           </div>
 
-          {/* Servicios Incluidos */}
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
               <span>Servicios Incluidos</span>
               <span className="text-sm font-normal text-gray-500">
-                ({cotizacion.serviciosIncluidos?.filter(s => s.requiere).length || 0} de {cotizacion.serviciosIncluidos?.length || 0} seleccionados)
+                (${serviciosIncluidos.filter((s: any) => s.requiere).length} de ${serviciosIncluidos.length} seleccionados)
               </span>
             </h3>
             <div className="bg-blue-50 rounded-lg p-4 space-y-2">
-              {(cotizacion.serviciosIncluidos || []).map((servicio) => (
-                <div key={servicio.id} className="flex items-center">
-                  <div className={`w-5 h-5 flex items-center justify-center rounded-full mr-3 ${servicio.requiere ? 'bg-[#1a6b32] text-white' : 'bg-gray-200'}`}>
-                    {servicio.requiere ? '✓' : '○'}
+              {serviciosIncluidos.length > 0 ? (
+                serviciosIncluidos.map((servicio: any, index: number) => (
+                  <div key={servicio.id || index} className="flex items-center">
+                    <div className={`w-5 h-5 flex items-center justify-center rounded-full mr-3 ${servicio.requiere ? 'bg-[#1a6b32] text-white' : 'bg-gray-200'}`}>
+                      {servicio.requiere ? '✓' : '○'}
+                    </div>
+                    <span className={`text-sm ${servicio.requiere ? 'text-gray-800 font-medium' : 'text-gray-600'}`}>
+                      {servicio.servicio_nombre || servicio.nombre || 'Servicio'}
+                    </span>
                   </div>
-                  <span className={`text-sm ${servicio.requiere ? 'text-gray-800 font-medium' : 'text-gray-600'}`}>
-                    {servicio.nombre}
-                  </span>
+                ))
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-gray-500 italic">No hay servicios incluidos registrados</p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
-          {/* Items por Tipo */}
           {itemsPorTipo.procedimientos.length > 0 && (
             <div>
               <h3 className="text-lg font-semibold text-gray-800 mb-3">Procedimientos</h3>
@@ -470,7 +426,6 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
             </div>
           )}
 
-          {/* Totales */}
           <div className="bg-gradient-to-r from-[#1a6b32]/10 to-[#99d6e8]/10 rounded-lg p-6 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-gray-700">Subtotal Procedimientos:</span>
@@ -502,7 +457,6 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
             </div>
           </div>
 
-          {/* Observaciones */}
           {cotizacion.observaciones && (
             <div className="bg-blue-50 rounded-lg p-4">
               <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Observaciones</p>
@@ -510,14 +464,12 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
             </div>
           )}
 
-          {/* Validez */}
           <div className="text-center text-sm text-gray-600 bg-gray-50 rounded-lg p-4">
             <p className="font-medium">Esta cotización es válida por <span className="font-semibold text-gray-800">{cotizacion.validez_dias} días</span></p>
             <p className="mt-1">Vence el: <span className="font-semibold text-gray-800">{cotizacion.fecha_vencimiento}</span></p>
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex items-center space-x-3 p-6 border-t border-gray-200">
           <button
             onClick={handleImprimir}
@@ -530,19 +482,6 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               <Printer size={18} />
             )}
             <span>{imprimiendo ? "Imprimiendo..." : "Imprimir"}</span>
-          </button>
-          
-          <button
-            onClick={handleDescargarPDF}
-            disabled={descargando}
-            className="flex items-center space-x-2 bg-[#1a6b32] hover:bg-[#155529] disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-lg transition"
-          >
-            {descargando ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <Download size={18} />
-            )}
-            <span>{descargando ? "Generando..." : "Descargar PDF"}</span>
           </button>
           
           <button

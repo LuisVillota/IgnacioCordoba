@@ -56,7 +56,6 @@ export function ProcedimientoForm({ procedimiento, onSave, onClose }: Procedimie
       [name]: name === "precio" ? Number(value) : value,
     }))
     
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
