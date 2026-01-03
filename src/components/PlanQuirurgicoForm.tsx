@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react"
 import { PlanQuirurgico } from "../types/planQuirurgico"
+import { EsquemaViewer } from "../components/EsquemaViewer" 
 
 type ProcedureType = 'lipo' | 'lipotras' | 'musculo' | 'incision';
 
@@ -26,6 +27,8 @@ interface Props {
 }
 
 export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
+
+   const [showEsquemaViewer, setShowEsquemaViewer] = useState(false)
   // ---------------------------
   // Datos paciente
   // ---------------------------
@@ -944,259 +947,43 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar }) => {
       {/* =========================== */}
       {/* ESQUEMA MEJORADO */}
       {/* =========================== */}
+
+            {/* =========================== */}
+      {/* ESQUEMA MEJORADO */}
+      {/* =========================== */}      {/* =========================== */}
+      {/* ESQUEMA MEJORADO */}
+      {/* =========================== */}
+      
+          <div className="space-y-8">
+      {/* BOTÓN PARA ABRIR EDITOR DE ESQUEMAS */}
       <section className="p-4 border rounded bg-white">
-        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Esquema Corporal Interactivo</h3>
-        
-        {/* Controles del esquema */}
-        <div className="controls-panel bg-white rounded-xl p-6 mb-4 shadow-md">
-          {/* PRIMERA FILA: 5 BOTONES PRINCIPALES */}
-          <div className="control-group flex flex-wrap gap-3 items-center mb-4">
-            <button 
-              className={`btn-draw px-4 py-2 rounded-lg transition-all ${isDrawingMode ? 'bg-purple-600 text-white shadow-inner' : 'bg-purple-500 text-white hover:bg-purple-600'}`}
-              onClick={toggleDrawingMode}
-            >
-              {isDrawingMode ? '✏️ TRAZO LIBRE (Activado)' : '✏️ TRAZO LIBRE'}
-            </button>
-            
-            <button 
-              className={`btn-text px-4 py-2 rounded-lg transition-all ${isTextMode ? 'bg-green-600 text-white shadow-inner' : 'bg-green-500 text-white hover:bg-green-600'}`}
-              onClick={toggleTextMode}
-            >
-              {isTextMode ? '📝 AGREGAR TEXTO (Activado)' : '📝 AGREGAR TEXTO'}
-            </button>
-            
-            <button 
-              className="btn-undo px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-all"
-              onClick={undoLastSelection}
-            >
-              DESHACER
-            </button>
-            
-            <button 
-              className="btn-reset px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all"
-              onClick={resetAllSelections}
-            >
-              BORRAR TODO
-            </button>
-            
-            <button 
-              className={`btn-zone-select px-4 py-2 rounded-lg transition-all ${isZoneSelectionMode ? 'bg-blue-600 text-white shadow-inner' : 'bg-blue-500 text-white hover:bg-blue-600'}`}
-              onClick={toggleZoneSelectionMode}
-            >
-              {isZoneSelectionMode ? '📍 SELECCIONAR ZONAS (Activado)' : '📍 SELECCIONAR ZONAS'}
-            </button>
-          </div>
-
-          {/* SEGUNDA FILA: CONTROLES ADICIONALES (SOLO VISIBLES EN MODO SELECCIÓN DE ZONAS) */}
-          {showAdditionalButtons && (
-            <div className="additional-buttons mb-6 p-4 bg-gray-50 rounded-lg border">
-              <h4 className="text-gray-700 font-medium mb-3">Procedimientos y zonas adicionales:</h4>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {/* Botones de procedimientos principales */}
-                <div 
-                  className={`procedure-btn p-3 rounded-lg border-2 cursor-pointer transition-all flex flex-col items-center justify-center ${selectedProcedure === 'liposuction' ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-gray-400'}`}
-                  onClick={() => selectProcedure('liposuction')}
-                >
-                  <div className="text-lg font-bold text-red-600">LIPOSUCCIÓN</div>
-                  <div className="text-xs text-gray-600 mt-1">Click para seleccionar</div>
-                </div>
-                
-                <div 
-                  className={`procedure-btn p-3 rounded-lg border-2 cursor-pointer transition-all flex flex-col items-center justify-center ${selectedProcedure === 'lipotransfer' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
-                  onClick={() => selectProcedure('lipotransfer')}
-                >
-                  <div className="text-lg font-bold text-blue-600">LIPOTRANSFERENCIA</div>
-                  <div className="text-xs text-gray-600 mt-1">Click para seleccionar</div>
-                </div>
-                
-                {/* Botones adicionales numerados (1-7) */}
-                {[1, 2, 3, 4, 5, 6, 7].map((num) => (
-                  <button
-                    key={num}
-                    className="additional-btn p-4 rounded-lg border-2 border-gray-300 hover:border-gray-400 cursor-pointer transition-all flex items-center justify-center bg-white"
-                    onClick={() => handleAdditionalButtonClick(num)}
-                  >
-                    <span className="text-2xl font-bold text-gray-700">{num}</span>
-                  </button>
-                ))}
-              </div>
-              
-              <div className="mt-3 text-sm text-gray-600">
-                <p>• Selecciona LIPOSUCCIÓN o LIPOTRANSFERENCIA y luego haz click en las zonas del cuerpo</p>
-                <p>• Los botones 1-7 son para funcionalidades adicionales (por implementar)</p>
-              </div>
-            </div>
-          )}
-
-          {/* TERCERA FILA: SLIDERS Y CONTROLES GENERALES */}
-          <div className="control-group flex flex-wrap gap-6 mt-4">
-            <div className="slider-control flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
-              <label className="text-gray-700 font-medium">Grosor trazo:</label>
-              <input 
-                type="range" 
-                min="1" 
-                max="10" 
-                value={currentStrokeWidth}
-                onChange={(e) => updateStrokeWidth(parseInt(e.target.value))}
-                className="w-32 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="value-display font-semibold text-blue-600 min-w-8 text-right">
-                {currentStrokeWidth}
-              </span>
-            </div>
-
-            <div className="slider-control flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
-              <label className="text-gray-700 font-medium">Tamaño texto:</label>
-              <input 
-                type="range" 
-                min="2" 
-                max="18" 
-                value={currentTextSize}
-                onChange={(e) => updateTextSize(parseInt(e.target.value))}
-                className="w-32 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="value-display font-semibold text-blue-600 min-w-8 text-right">
-                {currentTextSize}
-              </span>
-            </div>
-
-            <div className="relative" ref={saveDropdownRef}>
-              <button 
-                className="btn-save px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all"
-                onClick={() => setShowSaveDropdown(!showSaveDropdown)}
-              >
-                💾 GUARDAR ESQUEMA
-              </button>
-              
-              {showSaveDropdown && (
-                <div className="save-dropdown absolute right-0 mt-2 bg-white rounded-lg shadow-xl z-50 border min-w-48">
-                  <div 
-                    className="save-option px-4 py-3 hover:bg-gray-100 cursor-pointer border-b"
-                    onClick={() => handleSaveSchema('png')}
-                  >
-                    💾 Guardar como PNG
-                  </div>
-                  <div 
-                    className="save-option px-4 py-3 hover:bg-gray-100 cursor-pointer"
-                    onClick={() => handleSaveSchema('pdf')}
-                  >
-                    📄 Guardar como PDF
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* CUARTA FILA: LEYENDA */}
-          <div className="flex flex-wrap gap-4 mt-6">
-            <div className="legend-item flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
-              <svg className="legend-pattern w-10 h-8 border border-gray-300 rounded">
-                <defs>
-                  {/* Liposucción - líneas diagonales rojas */}
-                  <pattern id="legend-lipo" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-                    <line x1="0" y1="0" x2="0" y2="8" stroke="#FF0000" strokeWidth="1.5"/>
-                  </pattern>
-                </defs>
-                <rect width="40" height="30" fill="url(#legend-lipo)"/>
-              </svg>
-              <span className="text-gray-700 font-medium">LIPOSUCCIÓN</span>
-            </div>
-
-            <div className="legend-item flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
-              <svg className="legend-pattern w-10 h-8 border border-gray-300 rounded">
-                <defs>
-                  {/* Lipotransferencia - cuadrícula azul */}
-                  <pattern id="legend-transfer" patternUnits="userSpaceOnUse" width="10" height="10">
-                    <line x1="0" y1="0" x2="10" y2="0" stroke="#0000FF" strokeWidth="1"/>
-                    <line x1="0" y1="0" x2="0" y2="10" stroke="#0000FF" strokeWidth="1"/>
-                  </pattern>
-                </defs>
-                <rect width="40" height="30" fill="url(#legend-transfer)"/>
-              </svg>
-              <span className="text-gray-700 font-medium">LIPOTRANSFERENCIA</span>
-            </div>
-            
-            <div className="legend-item flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
-              <div className="w-10 h-8 border border-gray-300 rounded flex items-center justify-center">
-                <div className="w-8 h-0.5 bg-black"></div>
-              </div>
-              <span className="text-gray-700 font-medium">TRAZO LIBRE</span>
-            </div>
-            
-            <div className="legend-item flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
-              <div className="w-10 h-8 border border-gray-300 rounded flex items-center justify-center">
-                <span className="text-lg font-bold">T</span>
-              </div>
-              <span className="text-gray-700 font-medium">AGREGAR TEXTO</span>
-            </div>
-          </div>
+        <div className="flex justify-between items-center">
+          <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Editor de Esquemas</h3>
+          <button
+            onClick={() => setShowEsquemaViewer(true)}
+            className="px-6 py-2 bg-[#1a6b32] text-white rounded-lg hover:bg-[#155427] flex items-center gap-2"
+          >
+            🎨 Abrir Editor de Esquemas
+          </button>
         </div>
-
-        {/* Contenedor de ambos esquemas - UNO ABAJO DEL OTRO */}
-        <div className="schemas-wrapper space-y-8">
-          {/* Esquema Corporal */}
-          <div className="schema-section bg-white rounded-xl p-6 shadow-md">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Esquema Corporal Femenino</h2>
-            <div className="svg-container flex justify-center items-center min-h-[400px]">
-              <object
-                ref={bodySvgRef}
-                id="body-schema"
-                data="/images/schema.svg"
-                type="image/svg+xml"
-                width="800"
-                height="1000"
-                className="max-w-full h-auto"
-              >
-                Tu navegador no soporta SVG
-              </object>
-            </div>
-          </div>
-
-          {/* Esquema Facial */}
-          <div className="schema-section bg-white rounded-xl p-6 shadow-md">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Esquema Facial</h2>
-            <div className="svg-container flex justify-center items-center min-h-[400px]">
-              <object
-                ref={facialSvgRef}
-                id="facial-schema"
-                data="/images/schema-facial.svg"
-                type="image/svg+xml"
-                width="800"
-                height="600"
-                className="max-w-full h-auto"
-              >
-                Tu navegador no soporta SVG
-              </object>
-            </div>
-          </div>
-        </div>
-
-        {/* Indicadores de estado */}
-        <div className="text-sm text-gray-600 mt-4 p-3 bg-gray-50 rounded-lg">
-          <div className="flex flex-wrap gap-4">
-            <span className="font-medium">Modo actual: 
-              <span className="ml-2 px-2 py-1 rounded bg-blue-100 text-blue-700">
-                {isDrawingMode ? 'TRAZO LIBRE' : isTextMode ? 'AGREGAR TEXTO' : isZoneSelectionMode ? 'SELECCIÓN DE ZONAS' : 'NINGUNO'}
-              </span>
-            </span>
-            <span>Procedimiento seleccionado: 
-              <span className={`ml-2 px-2 py-1 rounded ${selectedProcedure === 'liposuction' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                {selectedProcedure === 'liposuction' ? 'LIPOSUCCIÓN' : 'LIPOTRANSFERENCIA'}
-              </span>
-            </span>
-            <span>Zonas marcadas: 
-              <span className="ml-2 px-2 py-1 rounded bg-green-100 text-green-700">
-                {Object.keys(zoneMarkings).length}
-              </span>
-            </span>
-            <span>Acciones en historial: 
-              <span className="ml-2 px-2 py-1 rounded bg-purple-100 text-purple-700">
-                {selectionHistory.length}
-              </span>
-            </span>
-          </div>
-        </div>
+        <p className="text-sm text-gray-600">
+          Abre el editor interactivo para marcar zonas de liposucción, lipotransferencia, agregar texto y dibujos libres.
+        </p>
       </section>
+
+
+
+      {/* ... resto de tu formulario ... */}
+
+      {/* VISOR DE ESQUEMAS - MODAL */}
+      {showEsquemaViewer && (
+        <EsquemaViewer 
+          onClose={() => setShowEsquemaViewer(false)} 
+          planId={plan?.id}
+        />
+      )}
+    </div>
+
 
       {/* Modal para texto */}
       {showTextModal && (

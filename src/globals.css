@@ -44,6 +44,69 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+
+/* Estilos para el esquema mejorado */
+.controls-panel {
+  background: white;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.svg-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.svg-container object {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Estilos para elementos SVG */
+.zone {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.zone:hover {
+  opacity: 0.8;
+}
+
+.drawing-mode {
+  cursor: crosshair;
+}
+
+.text-mode {
+  cursor: text;
+}
+
+/* Asegurar que los textos sean visibles */
+.user-added-text {
+  font-family: Arial, sans-serif;
+  font-weight: bold;
+  pointer-events: none;
+}
+
+/* Patrones para los procedimientos */
+#liposuction-pattern line {
+  stroke: #FF0000;
+  stroke-width: 1.5;
+}
+
+#lipotransfer-pattern line {
+  stroke: #0000FF;
+  stroke-width: 1;
+}
+
+
 /* Estilos para los diferentes modos */
 .drawing-mode {
   cursor: crosshair !important;

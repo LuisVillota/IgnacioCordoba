@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Redireccionar al Formulario</title>
+  <script>
+    // Redireccionar automáticamente al cerrar el iframe
+    if (window.parent !== window) {
+      // Si estamos en un iframe, comunicarse con el padre
+      window.parent.postMessage({ type: 'CLOSE_ESQUEMA_VIEWER' }, '*')
+    } else {
+      // Si se abre directamente, redirigir a la página principal
+      window.location.href = '/plan-quirurgico'
+    }
+  </script>
+</head>
+<body>
+  <div style="text-align: center; padding: 50px;">
+    <h1>Redireccionando al formulario...</h1>
+    <p>Si no eres redirigido automáticamente, <a href="/plan-quirurgico">haz clic aquí</a>.</p>
+  </div>
+</body>
+</html>
