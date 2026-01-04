@@ -1,0 +1,118 @@
+.modal {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 9999;
+}
+
+.modal-content {
+  width: 860px;         /* ⬅ AUMENTÉ EL TAMAÑO DEL MODAL */
+  max-width: 95%;
+  background: white;
+  padding: 25px;
+  border-radius: 14px;
+  margin: 40px auto;
+  position: relative;
+}
+
+.close {
+  position: absolute;
+  right: 20px;
+  top: 10px;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.payment-container {
+  display: flex;
+  gap: 25px;
+}
+
+.credit-card {
+  width: 420px;
+}
+
+.card {
+  width: 100%;
+  height: 260px;
+  border-radius: 20px;
+  background: var(--card-color, #cecece);
+  color: white;
+  padding: 20px;
+  position: relative;
+  transition: 0.6s;
+  transform-style: preserve-3d;
+}
+
+.front, .back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+
+.back {
+  transform: rotateY(180deg);
+}
+
+.chip {
+  width: 55px;
+  height: 40px;
+  background: #eaeaea;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.card_number {
+  font-size: 22px;
+  margin-top: 10px;
+  letter-spacing: 2px;
+}
+
+.fullname, .date_value {
+  margin-top: 18px;
+  font-size: 16px;
+}
+
+.blackbar {
+  width: 100%;
+  height: 45px;
+  background: #000;
+  margin-top: 20px;
+}
+
+.ccv_box {
+  margin-top: 40px;
+  text-align: right;
+  padding-right: 20px;
+  font-size: 22px;
+}
+
+.form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form input {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.pay-btn {
+  margin-top: 10px;
+  padding: 12px;
+  background: #2BC1F8;
+  color: white;
+  font-size: 18px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.bankid {
+  width: 80px;
+  display: none;
+}
