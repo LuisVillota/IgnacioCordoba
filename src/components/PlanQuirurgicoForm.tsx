@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react"
 import { PlanQuirurgico } from "../types/planQuirurgico"
 import { Search } from "lucide-react"
 import { api } from "../lib/api"
+import { EsquemaViewer } from "../components/EsquemaViewer"
 
 type ProcedureType = 'lipo' | 'lipotras' | 'musculo' | 'incision';
 
@@ -32,6 +33,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any>(null)
   const [showSelectorPacientes, setShowSelectorPacientes] = useState(false)
   const [searchTerm, setSearchTerm] = useState("") 
+  
+  // ---------------------------
+  // Estado para el visor de esquemas
+  // ---------------------------
+  const [showEsquemaViewer, setShowEsquemaViewer] = useState(false)
 
   // ---------------------------
   // Datos paciente
@@ -50,9 +56,43 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   })
 
   // ---------------------------
-  // Historia clínica
+  // Historia clínica - CON VALORES POR DEFECTO SEGUROS
   // ---------------------------
-  const [historiaClinica, setHistoriaClinica] = useState(plan?.historia_clinica ?? {
+  const defaultEnfermedadActual = {
+    hepatitis: false,
+    discrasia_sanguinea: false,
+    cardiopatias: false,
+    hipertension: false,
+    reumatologicas: false,
+    diabetes: false,
+    neurologicas: false,
+    enfermedad_mental: false,
+    no_refiere: true,
+  }
+
+  const defaultAntecedentes = {
+    farmacologicos: "",
+    traumaticos: "",
+    quirurgicos: "",
+    alergicos: "",
+    toxicos: "",
+    habitos: "",
+    ginecologicos: "",
+    fuma: "no",
+    planificacion: "",
+  }
+
+  const defaultNotasCorporales = {
+    cabeza: "",
+    mamas: "",
+    tcs: "",
+    abdomen: "",
+    gluteos: "",
+    extremidades: "",
+    pies_faneras: "",
+  }
+
+  const defaultHistoriaClinica = {
     nombre_completo: datosPaciente.nombre_completo,
     identificacion: datosPaciente.identificacion,
     ocupacion: "",
@@ -65,28 +105,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     email: "",
     motivo_consulta: "",
     motivo_consulta_detalle: "",
-    enfermedad_actual: {
-      hepatitis: false,
-      discrasia_sanguinea: false,
-      cardiopatias: false,
-      hipertension: false,
-      reumatologicas: false,
-      diabetes: false,
-      neurologicas: false,
-      enfermedad_mental: false,
-      no_refiere: true,
-    },
-    antecedentes: {
-      farmacologicos: "",
-      traumaticos: "",
-      quirurgicos: "",
-      alergicos: "",
-      toxicos: "",
-      habitos: "",
-      ginecologicos: "",
-      fuma: "no",
-      planificacion: "",
-    },
+    enfermedad_actual: defaultEnfermedadActual,
+    antecedentes: defaultAntecedentes,
     enfermedades_piel: false,
     tratamientos_esteticos: "",
     antecedentes_familiares: "",
@@ -94,23 +114,31 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     altura: datosPaciente.altura,
     imc: datosPaciente.imc,
     contextura: "",
-    notas_corporales: {
-      cabeza: "",
-      mamas: "",
-      tcs: "",
-      abdomen: "",
-      gluteos: "",
-      extremidades: "",
-      pies_faneras: "",
-    },
+    notas_corporales: defaultNotasCorporales,
     diagnostico: "",
     plan_conducta: "",
-  })
+  }
+  const getSafeHistoriaClinica = () => {
+    if (!plan?.historia_clinica) {
+      return defaultHistoriaClinica;
+    }    
+    return {
+      ...defaultHistoriaClinica,
+      ...plan.historia_clinica,
+      enfermedad_actual: plan.historia_clinica.enfermedad_actual 
+        ? { ...defaultEnfermedadActual, ...plan.historia_clinica.enfermedad_actual }
+        : defaultEnfermedadActual,
+      antecedentes: plan.historia_clinica.antecedentes
+        ? { ...defaultAntecedentes, ...plan.historia_clinica.antecedentes }
+        : defaultAntecedentes,
+      notas_corporales: plan.historia_clinica.notas_corporales
+        ? { ...defaultNotasCorporales, ...plan.historia_clinica.notas_corporales }
+        : defaultNotasCorporales,
+    };
+  };
 
-  // ---------------------------
-  // Cirugías previas, conducta quirúrgica, notas, imágenes
-  // ---------------------------
-  const [conductaQuirurgica, setConductaQuirurgica] = useState(plan?.conducta_quirurgica ?? {
+  const [historiaClinica, setHistoriaClinica] = useState(getSafeHistoriaClinica())
+  const defaultConductaQuirurgica = {
     duracion_estimada: "",
     tipo_anestesia: "ninguna",
     requiere_hospitalizacion: false,
@@ -118,16 +146,22 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     reseccion_estimada: "",
     firma_cirujano: "",
     firma_paciente: "",
-  })
+  }
+
+  const getSafeConductaQuirurgica = () => {
+    if (!plan?.conducta_quirurgica) {
+      return defaultConductaQuirurgica;
+    }
+    return { ...defaultConductaQuirurgica, ...plan.conducta_quirurgica };
+  }
+
+  const [conductaQuirurgica, setConductaQuirurgica] = useState(getSafeConductaQuirurgica())
   const [notasDoctor, setNotasDoctor] = useState(plan?.notas_doctor ?? "")
   const [imagenesAdjuntas, setImagenesAdjuntas] = useState<string[]>(plan?.imagenes_adjuntas ?? [])
-
-  // ===========================
-  // NUEVO ESQUEMA MEJORADO
-  // ===========================
   const [selectionHistory, setSelectionHistory] = useState<Array<any>>([]);
   const [svgDocuments, setSvgDocuments] = useState<Array<Document>>([]);
   const [selectedProcedure, setSelectedProcedure] = useState<'liposuction' | 'lipotransfer'>('liposuction');
+  const selectedProcedureRef = useRef<'liposuction' | 'lipotransfer'>('liposuction');
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState<SVGPathElement | null>(null);
@@ -140,12 +174,43 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
   const [showTextModal, setShowTextModal] = useState(false);
   
+  // NUEVO: Estado para controlar el modo de selección de zonas
+  const [isZoneSelectionMode, setIsZoneSelectionMode] = useState(false);
+  // NUEVO: Estado para controlar la visibilidad de los botones de procedimientos adicionales
+  const [showAdditionalButtons, setShowAdditionalButtons] = useState(false);
+  
   // Para zonas marcadas
-  const [zoneMarkings, setZoneMarkings] = useState<ZoneMarkingsSVG>({});
+  const [zoneMarkings, setZoneMarkings] = useState<ZoneMarkingsSVG>(() => {
+    if (plan?.esquema_mejorado?.zoneMarkings) {
+      return plan.esquema_mejorado.zoneMarkings;
+    }
+    return {};
+  });
+
+  // Inicializar el historial de selección si hay datos en el plan
+  useEffect(() => {
+    if (plan?.esquema_mejorado?.selectedProcedure) {
+      setSelectedProcedure(plan.esquema_mejorado.selectedProcedure);
+      selectedProcedureRef.current = plan.esquema_mejorado.selectedProcedure;
+    }
+    if (plan?.esquema_mejorado?.currentStrokeWidth) {
+      setCurrentStrokeWidth(plan.esquema_mejorado.currentStrokeWidth);
+    }
+    if (plan?.esquema_mejorado?.currentTextSize) {
+      setCurrentTextSize(plan.esquema_mejorado.currentTextSize);
+    }
+  }, [plan]);
 
   const bodySvgRef = useRef<HTMLObjectElement>(null);
   const facialSvgRef = useRef<HTMLObjectElement>(null);
   const saveDropdownRef = useRef<HTMLDivElement>(null);
+
+  // ---------------------------
+  // Efecto para sincronizar el ref con el estado
+  // ---------------------------
+  useEffect(() => {
+    selectedProcedureRef.current = selectedProcedure;
+  }, [selectedProcedure]);
 
   // ---------------------------
   // Efecto para inicializar fecha y hora automáticamente si no hay plan
@@ -187,12 +252,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   const cargarPacientes = async () => {
     setCargandoPacientes(true);
     try {
-      console.log("📥 Cargando todos los pacientes para plan quirúrgico...");
-      
-      // Opción 1: Usar la función de la API (preferida)
       const pacientesData = await api.getTodosPacientes();
-      
-      console.log("✅ Datos recibidos de getTodosPacientes:", pacientesData);
       
       // Si la función devuelve un array directamente
       let pacientesArray = [];
@@ -204,12 +264,9 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       } else if (pacientesData && pacientesData.data && Array.isArray(pacientesData.data)) {
         pacientesArray = pacientesData.data;
       } else {
-        console.error("❌ Formato de respuesta inesperado:", pacientesData);
         setPacientes([]);
         return;
       }
-      
-      console.log(`📊 ${pacientesArray.length} pacientes obtenidos`);
       
       // Mapear los campos
       const pacientesMapeados = pacientesArray.map((paciente: any) => {
@@ -219,7 +276,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           'Nombre no disponible';
         
         // Usar numero_documento como documento
-        const documento = paciente.numero_documento || paciente.documento || 'Sin documento';
+        const documento = paciente.numero_documento || paciente.documento || '';
         
         // Calcular edad
         let edad = paciente.edad || 0;
@@ -238,7 +295,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               edad--;
             }
           } catch (error) {
-            console.warn("⚠️ Error calculando edad:", error);
+            console.warn("Error calculando edad:", error);
           }
         }
         
@@ -262,7 +319,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         };
       });
       
-      console.log("✅ Pacientes mapeados:", pacientesMapeados);
       setPacientes(pacientesMapeados);
       
       // Si ya hay un paciente seleccionado, mantenerlo
@@ -272,18 +328,16 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         );
         if (pacienteExistente) {
           setPacienteSeleccionado(pacienteExistente);
-          console.log("✅ Paciente existente encontrado:", pacienteExistente);
         }
       }
       
       // Si no hay plan y no hay paciente seleccionado, mostrar selector
       if (!plan && !pacienteSeleccionado && pacientesMapeados.length > 0) {
-        console.log("👥 Mostrando selector automáticamente");
         setShowSelectorPacientes(true);
       }
       
     } catch (error) {
-      console.error("❌ Error cargando pacientes:", error);
+      console.error("Error cargando pacientes:", error);
       
       // Mostrar mensaje de error
       let errorMessage = "Error al cargar los pacientes";
@@ -300,7 +354,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       
       // Datos de ejemplo para desarrollo
       if (process.env.NODE_ENV === 'development') {
-        console.log("🛠️ Usando datos de ejemplo para desarrollo");
+        console.log("Usando datos de ejemplo para desarrollo");
         const pacientesEjemplo = [
           {
             id: "1",
@@ -359,12 +413,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       email.toLowerCase().includes(term)
     );
   });
+  
   // ---------------------------
   // Función para seleccionar un paciente
   // ---------------------------
   const seleccionarPaciente = async (paciente: any) => {
     try {
-      console.log("Seleccionando paciente:", paciente);
       setPacienteSeleccionado(paciente);
       
       // Calcular edad si no está en los datos
@@ -410,8 +464,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       // Cerrar el selector
       setShowSelectorPacientes(false);
       
-      console.log("✅ Paciente seleccionado y datos actualizados");
-      
     } catch (error) {
       console.error("Error seleccionando paciente:", error);
       alert("Error al seleccionar el paciente");
@@ -444,8 +496,36 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   }, [datosPaciente.peso, datosPaciente.altura])
 
   // ===========================
-  // FUNCIONES DEL ESQUEMA
+  // FUNCIONES DEL ESQUEMA - CON NUEVAS FUNCIONALIDADES
   // ===========================
+
+  // NUEVO: Función para alternar el modo de selección de zonas
+  const toggleZoneSelectionMode = () => {
+    const newZoneMode = !isZoneSelectionMode;
+    setIsZoneSelectionMode(newZoneMode);
+    setShowAdditionalButtons(newZoneMode);
+    
+    // Desactivar otros modos cuando se activa selección de zonas
+    if (newZoneMode) {
+      if (isDrawingMode) {
+        setIsDrawingMode(false);
+        svgDocuments.forEach(doc => {
+          doc.documentElement.classList.remove('drawing-mode');
+        });
+      }
+      if (isTextMode) {
+        setIsTextMode(false);
+        svgDocuments.forEach(doc => {
+          doc.documentElement.classList.remove('text-mode');
+        });
+      }
+    }
+  };
+
+  // NUEVO: Función para manejar los botones adicionales (1-7)
+  const handleAdditionalButtonClick = (buttonNumber: number) => {
+    alert(`Funcionalidad del botón ${buttonNumber} - Por implementar`);
+  };
 
   const updateStrokeWidth = (value: number) => {
     setCurrentStrokeWidth(value);
@@ -457,14 +537,19 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
 
   const selectProcedure = (procedure: 'liposuction' | 'lipotransfer') => {
     setSelectedProcedure(procedure);
+    selectedProcedureRef.current = procedure;
   };
 
   const toggleDrawingMode = () => {
     const newDrawingMode = !isDrawingMode;
     setIsDrawingMode(newDrawingMode);
     
-    if (newDrawingMode && isTextMode) {
+    if (newDrawingMode) {
       setIsTextMode(false);
+      if (isZoneSelectionMode) {
+        setIsZoneSelectionMode(false);
+        setShowAdditionalButtons(false);
+      }
     }
     
     svgDocuments.forEach(doc => {
@@ -481,8 +566,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     const newTextMode = !isTextMode;
     setIsTextMode(newTextMode);
     
-    if (newTextMode && isDrawingMode) {
+    if (newTextMode) {
       setIsDrawingMode(false);
+      if (isZoneSelectionMode) {
+        setIsZoneSelectionMode(false);
+        setShowAdditionalButtons(false);
+      }
     }
     
     svgDocuments.forEach(doc => {
@@ -668,103 +757,128 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     }
 
     // Limpiar patrones existentes
-    const existingPatterns = defs.querySelectorAll('pattern');
-    existingPatterns.forEach(pattern => pattern.remove());
+    const existingPatterns = defs.querySelectorAll('pattern[id*="liposuction"], pattern[id*="lipotransfer"]');
+    existingPatterns.forEach(pattern => {
+      pattern.remove();
+    });
 
-    // Patrón de liposucción
+    // Patrón de liposucción - LÍNEAS DIAGONALES ROJAS
     const lipoPattern = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'pattern');
     lipoPattern.setAttribute('id', 'liposuction-pattern');
     lipoPattern.setAttribute('patternUnits', 'userSpaceOnUse');
-    lipoPattern.setAttribute('width', '3');
-    lipoPattern.setAttribute('height', '3');
+    lipoPattern.setAttribute('width', '8');
+    lipoPattern.setAttribute('height', '8');
     lipoPattern.setAttribute('patternTransform', 'rotate(45)');
     
     const lipoLine = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
     lipoLine.setAttribute('x1', '0');
     lipoLine.setAttribute('y1', '0');
     lipoLine.setAttribute('x2', '0');
-    lipoLine.setAttribute('y2', '3');
+    lipoLine.setAttribute('y2', '8');
     lipoLine.setAttribute('stroke', '#FF0000');
-    lipoLine.setAttribute('stroke-width', '2');
+    lipoLine.setAttribute('stroke-width', '1.5');
     
     lipoPattern.appendChild(lipoLine);
     defs.appendChild(lipoPattern);
 
-    // Patrón de lipotransferencia
+    // Patrón de lipotransferencia - CUADRÍCULA AZUL
     const transferPattern = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'pattern');
     transferPattern.setAttribute('id', 'lipotransfer-pattern');
     transferPattern.setAttribute('patternUnits', 'userSpaceOnUse');
-    transferPattern.setAttribute('width', '2.5');
-    transferPattern.setAttribute('height', '2.5');
+    transferPattern.setAttribute('width', '10');
+    transferPattern.setAttribute('height', '10');
     
+    // Línea horizontal azul
     const transferLineH = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
     transferLineH.setAttribute('x1', '0');
     transferLineH.setAttribute('y1', '0');
-    transferLineH.setAttribute('x2', '2.5');
+    transferLineH.setAttribute('x2', '10');
     transferLineH.setAttribute('y2', '0');
     transferLineH.setAttribute('stroke', '#0000FF');
-    transferLineH.setAttribute('stroke-width', '1.5');
+    transferLineH.setAttribute('stroke-width', '1');
     
+    // Línea vertical azul
     const transferLineV = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
     transferLineV.setAttribute('x1', '0');
     transferLineV.setAttribute('y1', '0');
     transferLineV.setAttribute('x2', '0');
-    transferLineV.setAttribute('y2', '2.5');
+    transferLineV.setAttribute('y2', '10');
     transferLineV.setAttribute('stroke', '#0000FF');
-    transferLineV.setAttribute('stroke-width', '1.5');
+    transferLineV.setAttribute('stroke-width', '1');
     
     transferPattern.appendChild(transferLineH);
     transferPattern.appendChild(transferLineV);
     defs.appendChild(transferPattern);
+    
+    return defs;
   };
 
-  const applyProcedurePattern = (element: SVGElement, procedure: 'liposuction' | 'lipotransfer') => {
-    const originalFill = element.getAttribute('data-original-fill') || 
-                        element.style.fill || 
-                        element.getAttribute('fill') || '';
+  const applyProcedurePattern = useCallback((element: SVGElement, procedure: 'liposuction' | 'lipotransfer') => {
+    // Verificar que los patrones existan
+    const svgDoc = element.ownerDocument;
     
-    element.style.fillOpacity = '1';
-    
-    // Limpiar fill actual
-    element.style.fill = '';
-    element.removeAttribute('fill');
-    
-    if (procedure === 'liposuction') {
-      element.setAttribute('fill', 'url(#liposuction-pattern)');
-    } else if (procedure === 'lipotransfer') {
-      element.setAttribute('fill', 'url(#lipotransfer-pattern)');
+    // Guardar el fill original si no está ya guardado
+    const currentFill = element.getAttribute('fill');
+    if (!element.hasAttribute('data-original-fill')) {
+      element.setAttribute('data-original-fill', currentFill || 'none');
     }
     
-    element.setAttribute('data-procedure', procedure);
+    // Guardar la opacidad original
+    const currentOpacity = element.style.fillOpacity || element.getAttribute('fill-opacity') || '0.09';
+    if (!element.hasAttribute('data-original-opacity')) {
+      element.setAttribute('data-original-opacity', currentOpacity);
+    }
+    
+    // Limpiar y aplicar nuevo patrón
+    element.style.fill = '';
+    
+    // Crear ID único para la zona si no existe
+    if (!element.hasAttribute('data-zone-id')) {
+      const zoneId = `zone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      element.setAttribute('data-zone-id', zoneId);
+    }
+    
+    // Aplicar el patrón correcto
+    if (procedure === 'liposuction') {
+      element.setAttribute('fill', 'url(#liposuction-pattern)');
+      element.setAttribute('data-procedure', 'liposuction');
+      element.style.fillOpacity = '1';
+    } else if (procedure === 'lipotransfer') {
+      element.setAttribute('fill', 'url(#lipotransfer-pattern)');
+      element.setAttribute('data-procedure', 'lipotransfer');
+      element.style.fillOpacity = '1';
+    }
     
     // Actualizar estado de zonas marcadas
-    const zoneId = element.id || element.getAttribute('inkscape:label') || '';
+    const zoneId = element.getAttribute('data-zone-id');
     if (zoneId) {
       setZoneMarkings(prev => ({
         ...prev,
         [zoneId]: procedure
       }));
     }
-  };
+  }, []);
 
   const removeProcedurePattern = (element: SVGElement) => {
-    const originalFill = element.getAttribute('data-original-fill') || '';
+    const originalFill = element.getAttribute('data-original-fill');
+    const originalOpacity = element.getAttribute('data-original-opacity');
     
-    if (originalFill) {
+    if (originalFill && originalFill !== 'none') {
       element.setAttribute('fill', originalFill);
     } else {
       element.removeAttribute('fill');
     }
     
-    const originalOpacity = element.getAttribute('data-original-opacity') || '';
     if (originalOpacity) {
       element.style.fillOpacity = originalOpacity;
+    } else {
+      element.style.fillOpacity = '';
     }
     
     element.removeAttribute('data-procedure');
     
     // Actualizar estado de zonas marcadas
-    const zoneId = element.id || element.getAttribute('inkscape:label') || '';
+    const zoneId = element.getAttribute('data-zone-id');
     if (zoneId) {
       setZoneMarkings(prev => {
         const newMarkings = { ...prev };
@@ -774,7 +888,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     }
   };
 
-  const initializeSchema = (objectElement: HTMLObjectElement) => {
+  const initializeSchema = useCallback((objectElement: HTMLObjectElement) => {
     if (!objectElement) return;
     
     const handleLoad = () => {
@@ -804,37 +918,48 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       svgElement.addEventListener('mouseup', (e) => stopDrawing(e as MouseEvent, svgDoc));
       svgElement.addEventListener('mouseleave', (e) => stopDrawing(e as MouseEvent, svgDoc));
 
-      // Configurar zonas clicables
-      const allElements = svgDoc.querySelectorAll('*');
-      allElements.forEach((element: Element) => {
+      // Encontrar zonas de forma más agresiva
+      const possibleZoneElements = svgDoc.querySelectorAll('path, rect, circle, ellipse, polygon, g');
+      
+      possibleZoneElements.forEach((element: Element) => {
         const svgElement = element as SVGElement;
-        const label = svgElement.getAttribute('inkscape:label');
-        if (label && (svgElement.tagName === 'path' || svgElement.tagName === 'rect' || svgElement.tagName === 'circle' || svgElement.tagName === 'ellipse')) {
-          const originalFill = svgElement.getAttribute('fill') || '';
-          svgElement.setAttribute('data-original-fill', originalFill);
+        
+        // Marcar todos los elementos posibles como zonas
+        if (!svgElement.classList.contains('zone')) {
+          svgElement.classList.add('zone');
+          svgElement.style.cursor = 'pointer';
+          svgElement.style.pointerEvents = 'auto';
           
-          const originalOpacity = svgElement.getAttribute('fill-opacity') || '';
-          if (originalOpacity) {
+          // Asegurar que tenga algún fill para ser visible
+          if (!svgElement.getAttribute('fill') && !svgElement.hasAttribute('data-original-fill')) {
+            svgElement.setAttribute('data-original-fill', 'none');
+          }
+          
+          // Guardar la opacidad original
+          const originalOpacity = svgElement.style.fillOpacity || svgElement.getAttribute('fill-opacity') || '0.09';
+          if (!svgElement.hasAttribute('data-original-opacity')) {
             svgElement.setAttribute('data-original-opacity', originalOpacity);
           }
           
-          svgElement.classList.add('zone');
-          svgElement.style.cursor = 'pointer';
+          // Crear ID único para la zona
+          if (!svgElement.hasAttribute('data-zone-id')) {
+            const zoneId = `zone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            svgElement.setAttribute('data-zone-id', zoneId);
+          }
           
           svgElement.addEventListener('click', function(e) {
-            if (isDrawingMode) {
-              e.stopPropagation();
+            e.stopPropagation();
+            e.preventDefault();
+            
+            if (isDrawingMode || isTextMode) {
               return;
             }
             
-            if (isTextMode) {
-              e.stopPropagation();
-              return;
-            }
-            
+            const currentProcedureFromRef = selectedProcedureRef.current;
             const currentProcedure = svgElement.getAttribute('data-procedure');
             
             if (currentProcedure) {
+              // Si ya tiene un procedimiento, removerlo
               removeProcedurePattern(svgElement);
               
               // Remover del historial
@@ -842,11 +967,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                 !(item.type === 'zone' && item.element === svgElement)
               ));
             } else {
-              applyProcedurePattern(svgElement, selectedProcedure);
+              // Usar el valor actual del ref
+              applyProcedurePattern(svgElement, currentProcedureFromRef);
               
               setSelectionHistory(prev => [...prev, {
                 element: svgElement,
-                procedure: selectedProcedure,
+                procedure: currentProcedureFromRef,
                 type: 'zone'
               }]);
             }
@@ -881,7 +1007,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     return () => {
       objectElement.removeEventListener('load', handleLoad);
     };
-  };
+  }, [isDrawingMode, isTextMode, applyProcedurePattern]);
 
   // Inicializar los SVG cuando los refs estén listos
   useEffect(() => {
@@ -891,7 +1017,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     if (facialSvgRef.current) {
       initializeSchema(facialSvgRef.current);
     }
-  }, [bodySvgRef.current, facialSvgRef.current]);
+  }, [initializeSchema]);
 
   // Actualizar clases cuando cambian los modos
   useEffect(() => {
@@ -936,10 +1062,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   }, []);
 
   // ---------------------------
-  // Funciones del formulario
-  // ---------------------------
-
   // Manejar archivos
+  // ---------------------------
   const handleFiles = (files: FileList | null) => {
     if (!files) return
     const arr = Array.from(files).map(f => f.name)
@@ -1021,11 +1145,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       fecha_modificacion: new Date().toISOString(),
       datos_paciente: datosPacienteLimpios,
       historia_clinica: historiaClinicaLimpia,
+      cirugias_previas: [],
       conducta_quirurgica: conductaQuirurgicaLimpia,
       dibujos_esquema: [],
       notas_doctor: notasDoctor,
       imagenes_adjuntas: imagenesAdjuntas,
-      estado: plan?.estado ?? "borrador",
       esquema_mejorado: {
         zoneMarkings,
         selectionHistory,
@@ -1353,240 +1477,56 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       </section>
 
       {/* =========================== */}
-      {/* ESQUEMA MEJORADO */}
+      {/* ESQUEMA MEJORADO - VERSIÓN CON EDITOR SEPARADO */}
       {/* =========================== */}
       <section className="p-4 border rounded bg-white">
-        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Esquema Corporal Interactivo</h3>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-lg text-[#1a6b32]">Editor de Esquemas</h3>
+          <button
+            onClick={() => setShowEsquemaViewer(true)}
+            className="px-6 py-2 bg-[#1a6b32] text-white rounded-lg hover:bg-[#155427] flex items-center gap-2"
+          >
+            🎨 Abrir Editor de Esquemas
+          </button>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          Abre el editor interactivo para marcar zonas de liposucción, lipotransferencia, agregar texto y dibujos libres.
+        </p>
         
-        {/* Controles del esquema */}
-        <div className="controls-panel bg-white rounded-xl p-6 mb-4 shadow-md">
-          <div className="control-group flex flex-wrap gap-3 items-center">
-            <button 
-              className="btn-undo px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-all"
-              onClick={undoLastSelection}
-            >
-              Deshacer
-            </button>
-            
-            <button 
-              className="btn-reset px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all"
-              onClick={resetAllSelections}
-            >
-              Reestablecer Todo
-            </button>
-            
-            <button 
-              className={`btn-draw px-4 py-2 rounded-lg transition-all ${isDrawingMode ? 'bg-purple-600 text-white shadow-inner' : 'bg-purple-500 text-white hover:bg-purple-600'}`}
-              onClick={toggleDrawingMode}
-            >
-              {isDrawingMode ? '✏️ Trazo Libre (Activado)' : '✏️ Trazo Libre'}
-            </button>
-            
-            <button 
-              className={`btn-text px-4 py-2 rounded-lg transition-all ${isTextMode ? 'bg-green-600 text-white shadow-inner' : 'bg-green-500 text-white hover:bg-green-600'}`}
-              onClick={toggleTextMode}
-            >
-              {isTextMode ? '📝 Agregar Texto (Activado)' : '📝 Agregar Texto'}
-            </button>
-            
-            <div className="relative" ref={saveDropdownRef}>
-              <button 
-                className="btn-save px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all"
-                onClick={() => setShowSaveDropdown(!showSaveDropdown)}
-              >
-                💾 Guardar
-              </button>
-              
-              {showSaveDropdown && (
-                <div className="save-dropdown absolute right-0 mt-2 bg-white rounded-lg shadow-xl z-50 border">
-                  <div 
-                    className="save-option px-4 py-3 hover:bg-gray-100 cursor-pointer"
-                    onClick={() => handleSaveSchema('png')}
-                  >
-                    Guardar como PNG
-                  </div>
-                  <div 
-                    className="save-option px-4 py-3 hover:bg-gray-100 cursor-pointer"
-                    onClick={() => handleSaveSchema('pdf')}
-                  >
-                    Guardar como PDF
-                  </div>
+        {/* Información sobre el esquema guardado */}
+        {(plan?.esquema_mejorado?.zoneMarkings && Object.keys(plan.esquema_mejorado.zoneMarkings).length > 0) ? (
+          <div className="p-3 bg-green-50 border border-green-200 rounded">
+            <div className="flex items-center gap-3">
+              <span className="text-green-600">✓</span>
+              <div>
+                <div className="font-medium text-green-800">Esquema guardado</div>
+                <div className="text-sm text-green-700">
+                  {Object.keys(plan.esquema_mejorado.zoneMarkings).length} zonas marcadas | 
+                  Procedimiento actual: {plan.esquema_mejorado.selectedProcedure === 'liposuction' ? 'Liposucción' : 'Lipotransferencia'}
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Sliders */}
-          <div className="control-group flex flex-wrap gap-6 mt-4">
-            <div className="slider-control flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
-              <label className="text-gray-700 font-medium">Grosor trazo:</label>
-              <input 
-                type="range" 
-                min="1" 
-                max="10" 
-                value={currentStrokeWidth}
-                onChange={(e) => updateStrokeWidth(parseInt(e.target.value))}
-                className="w-32 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="value-display font-semibold text-blue-600 min-w-8 text-right">
-                {currentStrokeWidth}
-              </span>
-            </div>
-
-            <div className="slider-control flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
-              <label className="text-gray-700 font-medium">Tamaño texto:</label>
-              <input 
-                type="range" 
-                min="8" 
-                max="48" 
-                value={currentTextSize}
-                onChange={(e) => updateTextSize(parseInt(e.target.value))}
-                className="w-32 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="value-display font-semibold text-blue-600 min-w-8 text-right">
-                {currentTextSize}
-              </span>
-            </div>
-          </div>
-
-          {/* Selector de procedimiento */}
-          <div className="control-group flex flex-wrap items-center gap-3 mt-4">
-            <label className="text-gray-700 font-medium">Procedimiento:</label>
-            <div className="procedure-selector flex gap-2">
-              <div 
-                className={`procedure-option px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${selectedProcedure === 'liposuction' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-300 hover:border-gray-400'}`}
-                onClick={() => selectProcedure('liposuction')}
-                data-procedure="liposuction"
-              >
-                Liposucción
-              </div>
-              <div 
-                className={`procedure-option px-4 py-3 rounded-lg border-2 cursor-pointer transition-all ${selectedProcedure === 'lipotransfer' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-300 hover:border-gray-400'}`}
-                onClick={() => selectProcedure('lipotransfer')}
-                data-procedure="lipotransfer"
-              >
-                Lipotransferencia
               </div>
             </div>
           </div>
-
-          {/* Leyenda */}
-          <div className="flex flex-wrap gap-4 mt-4">
-            <div className="legend-item flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
-              <svg className="legend-pattern w-10 h-8 border border-gray-300 rounded">
-                <defs>
-                  <pattern id="legend-lipo" patternUnits="userSpaceOnUse" width="3" height="3" patternTransform="rotate(45)">
-                    <line x1="0" y1="0" x2="0" y2="3" stroke="#FF0000" strokeWidth="2"/>
-                  </pattern>
-                </defs>
-                <rect width="40" height="30" fill="url(#legend-lipo)"/>
-              </svg>
-              <span className="text-gray-700">Liposucción</span>
-            </div>
-
-            <div className="legend-item flex items-center gap-3 bg-gray-50 px-4 py-3 rounded-lg">
-              <svg className="legend-pattern w-10 h-8 border border-gray-300 rounded">
-                <defs>
-                  <pattern id="legend-transfer" patternUnits="userSpaceOnUse" width="2.5" height="2.5">
-                    <line x1="0" y1="0" x2="0" y2="2.5" stroke="#0000FF" strokeWidth="1.5"/>
-                    <line x1="0" y1="0" x2="2.5" y2="0" stroke="#0000FF" strokeWidth="1.5"/>
-                  </pattern>
-                </defs>
-                <rect width="40" height="30" fill="url(#legend-transfer)"/>
-              </svg>
-              <span className="text-gray-700">Lipotransferencia</span>
+        ) : (
+          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+            <div className="flex items-center gap-3">
+              <span className="text-yellow-600">⚠</span>
+              <div>
+                <div className="font-medium text-yellow-800">Esquema no configurado</div>
+                <div className="text-sm text-yellow-700">
+                  Haga clic en "Abrir Editor de Esquemas" para marcar zonas de procedimientos
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Contenedor de ambos esquemas */}
-        <div className="schemas-wrapper space-y-8">
-          {/* Esquema Corporal */}
-          <div className="schema-section bg-white rounded-xl p-6 shadow-md">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Esquema Corporal Femenino</h2>
-            <div className="svg-container flex justify-center items-center min-h-[400px]">
-              <object
-                ref={bodySvgRef}
-                id="body-schema"
-                data="/images/schema.svg"
-                type="image/svg+xml"
-                width="800"
-                height="1000"
-                className="max-w-full h-auto"
-              >
-                Tu navegador no soporta SVG
-              </object>
-            </div>
-          </div>
-
-          {/* Esquema Facial */}
-          <div className="schema-section bg-white rounded-xl p-6 shadow-md">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Esquema Facial</h2>
-            <div className="svg-container flex justify-center items-center min-h-[400px]">
-              <object
-                ref={facialSvgRef}
-                id="facial-schema"
-                data="/images/schema-facial.svg"
-                type="image/svg+xml"
-                width="800"
-                height="600"
-                className="max-w-full h-auto"
-              >
-                Tu navegador no soporta SVG
-              </object>
-            </div>
-          </div>
-        </div>
-
-        {/* Indicadores de estado */}
-        <div className="text-sm text-gray-600 mt-4">
-          Modo: {isDrawingMode ? 'Trazo Libre' : isTextMode ? 'Texto' : 'Selección'} | 
-          Procedimiento: {selectedProcedure === 'liposuction' ? 'Liposucción' : 'Lipotransferencia'} | 
-          Zonas marcadas: {Object.keys(zoneMarkings).length} | 
-          Historial: {selectionHistory.length} acciones
-        </div>
+        )}
       </section>
 
-      {/* Modal para texto */}
-      {showTextModal && (
-        <>
-          <div className="modal-overlay fixed inset-0 bg-black bg-opacity-50 z-50" onClick={closeTextModal}></div>
-          <div className="text-input-modal fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white p-8 rounded-xl shadow-2xl z-50">
-            <h3 className="text-xl font-bold mb-4">Agregar Texto</h3>
-            <input
-              type="text"
-              id="textInput"
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              placeholder="Escribe el texto aquí..."
-              className="w-full border-2 border-gray-300 p-3 rounded-lg mb-4 focus:border-blue-500 focus:outline-none"
-              maxLength={50}
-              autoFocus
-            />
-            <div className="modal-buttons flex justify-end gap-3">
-              <button 
-                onClick={closeTextModal}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={addTextToSVG}
-                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
-              >
-                Agregar
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* CIRUGÍAS PREVIAS Y NOTAS - VERSIÓN SIMPLIFICADA */}
+      {/* NOTAS Y ARCHIVOS ADJUNTOS */}
       <section className="p-4 border rounded bg-white">
         <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Notas y Archivos Adjuntos</h3>
 
-        {/* Notas del doctor */}
-        <div className="mb-6">
+        <div className="mt-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Notas del doctor</label>
           <textarea 
             className="w-full border p-2 rounded" 
@@ -1597,8 +1537,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           />
         </div>
 
-        {/* Archivos adjuntos */}
-        <div>
+        <div className="mt-3">
           <label className="block text-sm font-medium text-gray-700 mb-1">Archivos adjuntos</label>
           <div className="flex flex-col space-y-4">
             {/* Input para cargar archivos */}
@@ -1657,7 +1596,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Conducta Quirúrgica</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo QX (min)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo QX (Horas)</label>
             <input 
               className="w-full border p-2 rounded" 
               type="number" 
@@ -1940,6 +1879,168 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </div>
       </div>
 
+      {/* VISOR DE ESQUEMAS MODAL */}
+      {showEsquemaViewer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+            <div className="p-4 border-b flex justify-between items-center bg-[#1a6b32] text-white">
+              <div>
+                <h3 className="text-lg font-semibold">Editor de Esquemas</h3>
+                <p className="text-sm opacity-90">Marque zonas de liposucción, lipotransferencia, agregue texto y dibujos</p>
+              </div>
+              <button
+                onClick={() => setShowEsquemaViewer(false)}
+                className="text-white hover:text-gray-200 text-xl"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-4 border-b bg-gray-50">
+              <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Procedimiento:</span>
+                  <button
+                    onClick={() => selectProcedure('liposuction')}
+                    className={`px-3 py-1 rounded ${selectedProcedure === 'liposuction' ? 'bg-red-600 text-white' : 'bg-gray-200'}`}
+                  >
+                    Liposucción
+                  </button>
+                  <button
+                    onClick={() => selectProcedure('lipotransfer')}
+                    className={`px-3 py-1 rounded ${selectedProcedure === 'lipotransfer' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+                  >
+                    Lipotransferencia
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Modos:</span>
+                  <button
+                    onClick={toggleDrawingMode}
+                    className={`px-3 py-1 rounded ${isDrawingMode ? 'bg-purple-600 text-white' : 'bg-gray-200'}`}
+                  >
+                    ✏️ Dibujo libre
+                  </button>
+                  <button
+                    onClick={toggleTextMode}
+                    className={`px-3 py-1 rounded ${isTextMode ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
+                  >
+                    📝 Texto
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={undoLastSelection}
+                    className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                  >
+                    ↩️ Deshacer
+                  </button>
+                  <button
+                    onClick={resetAllSelections}
+                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    🗑️ Limpiar todo
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-auto p-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="border rounded-lg p-2">
+                  <h4 className="font-medium mb-2 text-center">Cuerpo Completo</h4>
+                  <div className="border rounded overflow-auto max-h-[500px]">
+                    <object 
+                      ref={bodySvgRef}
+                      data="/esquemas/cuerpo_completo.svg" 
+                      type="image/svg+xml" 
+                      className="w-full h-auto"
+                    >
+                      Esquema de cuerpo completo no disponible
+                    </object>
+                  </div>
+                </div>
+                
+                <div className="border rounded-lg p-2">
+                  <h4 className="font-medium mb-2 text-center">Facial</h4>
+                  <div className="border rounded overflow-auto max-h-[500px]">
+                    <object 
+                      ref={facialSvgRef}
+                      data="/esquemas/facial.svg" 
+                      type="image/svg+xml" 
+                      className="w-full h-auto"
+                    >
+                      Esquema facial no disponible
+                    </object>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t flex justify-between items-center">
+              <div className="text-sm text-gray-600">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 bg-[url(#liposuction-pattern)] border"></div>
+                    <span>Liposucción</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 bg-[url(#lipotransfer-pattern)] border"></div>
+                    <span>Lipotransferencia</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowEsquemaViewer(false)}
+                  className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                >
+                  Cerrar
+                </button>
+                <button
+                  onClick={() => setShowEsquemaViewer(false)}
+                  className="px-4 py-2 bg-[#1a6b32] text-white rounded hover:bg-[#155228]"
+                >
+                  Guardar y Continuar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA TEXTO */}
+      {showTextModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-3">Agregar Texto</h3>
+            <input
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder="Escriba el texto aquí..."
+              className="w-full border p-2 rounded mb-3"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={closeTextModal}
+                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={addTextToSVG}
+                className="px-4 py-2 bg-[#1a6b32] text-white rounded hover:bg-[#155228]"
+              >
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

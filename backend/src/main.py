@@ -10,6 +10,7 @@ from typing import Optional, Dict, List
 from enum import Enum
 from typing import Union
 from pydantic import validator
+import json 
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -292,7 +293,6 @@ class AgendaProcedimientoResponse(AgendaProcedimientoBase):
 class PlanQuirurgicoBase(BaseModel):
     paciente_id: int
     usuario_id: int
-    estado_id: int = 1  # Por defecto: borrador
     procedimiento_desc: Optional[str] = None
     anestesiologo: Optional[str] = None
     materiales_requeridos: Optional[str] = None
@@ -301,7 +301,7 @@ class PlanQuirurgicoBase(BaseModel):
     hora: Optional[str] = None
     fecha_programada: Optional[str] = None
     
-    # Datos básicos del paciente (se llenan automáticamente)
+    # Datos básicos del paciente
     nombre_completo: Optional[str] = None
     peso: Optional[float] = None
     altura: Optional[float] = None
@@ -312,17 +312,18 @@ class PlanQuirurgicoBase(BaseModel):
     hora_consulta: Optional[str] = None
     categoriaIMC: Optional[str] = None
     edad_calculada: Optional[int] = None
+    edad: Optional[int] = None  # Nuevo campo - ya existe en la tabla
     
     # Datos adicionales
     ocupacion: Optional[str] = None
-    telefono_fijo: Optional[str] = None
+    telefono: Optional[str] = None  # Renombrado de telefono_fijo
     celular: Optional[str] = None
     direccion: Optional[str] = None
     email: Optional[str] = None
     motivo_consulta: Optional[str] = None
     entidad: Optional[str] = None
     
-    # Antecedentes (texto plano)
+    # Antecedentes (texto plano) - mantener por compatibilidad
     farmacologicos: Optional[str] = None
     traumaticos: Optional[str] = None
     quirurgicos: Optional[str] = None
@@ -330,7 +331,7 @@ class PlanQuirurgicoBase(BaseModel):
     toxicos: Optional[str] = None
     habitos: Optional[str] = None
     
-    # Examen físico (texto plano)
+    # Examen físico (texto plano) - mantener por compatibilidad
     cabeza: Optional[str] = None
     mamas: Optional[str] = None
     tcs: Optional[str] = None
@@ -350,26 +351,26 @@ class PlanQuirurgicoBase(BaseModel):
     
     # JSON fields (para estructuras complejas)
     enfermedad_actual: Optional[Dict] = None
-    antecedentes: Optional[Dict] = None
-    notas_corporales: Optional[Dict] = None
+    antecedentes: Optional[Dict] = None  # JSON con estructura completa
+    notas_corporales: Optional[Dict] = None  # JSON con estructura completa
     
-    # Esquemas interactivos
-    esquema_corporal: Optional[str] = None
-    esquema_facial: Optional[str] = None
+    # Nuevos campos
+    fecha_modificacion: Optional[str] = None
+    esquema_mejorado: Optional[Dict] = None
+    plan_conducta: Optional[str] = None
     
-    # Otros
+    # Otros campos
     imagen_procedimiento: Optional[str] = None
     fecha_ultimo_procedimiento: Optional[str] = None
     descripcion_procedimiento: Optional[str] = None
     detalles: Optional[str] = None
-    notas_del_doctor: Optional[str] = None
+    notas_doctor: Optional[str] = None  # Renombrado de notas_del_doctor
     tiempo_cirugia_minutos: Optional[int] = None
 
 class PlanQuirurgicoCreate(PlanQuirurgicoBase):
     pass
 
 class PlanQuirurgicoUpdate(BaseModel):
-    # Actualizar campos opcionales
     estado_id: Optional[int] = None
     procedimiento_desc: Optional[str] = None
     anestesiologo: Optional[str] = None
@@ -384,7 +385,7 @@ class PlanQuirurgicoUpdate(BaseModel):
     altura: Optional[float] = None
     imc: Optional[float] = None
     
-    # Antecedentes
+    # Antecedentes (mantener por compatibilidad)
     farmacologicos: Optional[str] = None
     traumaticos: Optional[str] = None
     quirurgicos: Optional[str] = None
@@ -392,7 +393,7 @@ class PlanQuirurgicoUpdate(BaseModel):
     toxicos: Optional[str] = None
     habitos: Optional[str] = None
     
-    # Examen físico
+    # Examen físico (mantener por compatibilidad)
     cabeza: Optional[str] = None
     mamas: Optional[str] = None
     tcs: Optional[str] = None
@@ -415,15 +416,15 @@ class PlanQuirurgicoUpdate(BaseModel):
     antecedentes: Optional[Dict] = None
     notas_corporales: Optional[Dict] = None
     
-    # Esquemas
-    esquema_corporal: Optional[str] = None
-    esquema_facial: Optional[str] = None
+    # Nuevos campos
+    esquema_mejorado: Optional[Dict] = None
+    plan_conducta: Optional[str] = None
     
     # Otros
     imagen_procedimiento: Optional[str] = None
     descripcion_procedimiento: Optional[str] = None
     detalles: Optional[str] = None
-    notas_del_doctor: Optional[str] = None
+    notas_doctor: Optional[str] = None  # Renombrado
     tiempo_cirugia_minutos: Optional[int] = None
 
 # ====================== ENDPOINTS DE SISTEMA ======================
@@ -4115,170 +4116,101 @@ def debug_sala_espera():
 
 @app.get("/api/planes-quirurgicos", response_model=dict)
 def get_planes_quirurgicos(limit: int = 50, offset: int = 0):
-    """
-    Obtiene todos los planes quirúrgicos con información del paciente
-    """
     try:
         conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
+            host="localhost",
+            user="root",
+            password="root",
+            database="prueba_consultorio_db",
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
+
         with conn:
             with conn.cursor() as cursor:
-                # Obtener total
-                cursor.execute("SELECT COUNT(*) as total FROM plan_quirurgico")
-                total = cursor.fetchone()['total']
-                
-                # Obtener planes con información del paciente
+                cursor.execute("SELECT COUNT(*) AS total FROM plan_quirurgico")
+                total = cursor.fetchone()["total"]
+
+                # 🔴 MODIFICACIÓN: Agregar JOIN con paciente para traer nombre y documento
                 cursor.execute("""
                     SELECT 
                         pq.*,
-                        p.nombre as paciente_nombre,
-                        p.apellido as paciente_apellido,
-                        p.numero_documento as paciente_documento,
-                        u.nombre as usuario_nombre,
-                        eq.nombre as estado_nombre,
-                        eq.color as estado_color
+                        p.nombre AS paciente_nombre,
+                        p.apellido AS paciente_apellido,
+                        p.numero_documento AS paciente_documento,
+                        CONCAT(p.nombre, ' ', p.apellido) AS nombre_completo_paciente,
+                        u.nombre AS usuario_nombre
                     FROM plan_quirurgico pq
                     JOIN paciente p ON pq.paciente_id = p.id
                     JOIN usuario u ON pq.usuario_id = u.id
-                    JOIN estado_quirurgico eq ON pq.estado_id = eq.id
                     ORDER BY pq.fecha_creacion DESC
                     LIMIT %s OFFSET %s
                 """, (limit, offset))
-                
+
                 planes = cursor.fetchall()
-                
-                # Formatear datos para el frontend
-                planes_formateados = []
-                for plan in planes:
-                    # Calcular IMC si no existe
-                    imc = plan['imc']
-                    if not imc and plan['peso'] and plan['altura'] and plan['altura'] > 0:
-                        imc = plan['peso'] / (plan['altura'] * plan['altura'])
-                    
-                    planes_formateados.append({
-                        'id': f"plan_{plan['id']}",
-                        'id_paciente': str(plan['paciente_id']),
-                        'id_usuario': str(plan['usuario_id']),
-                        'fecha_creacion': plan['fecha_creacion'].isoformat() if plan['fecha_creacion'] else None,
-                        'fecha_modificacion': plan['fecha_creacion'].isoformat() if plan['fecha_creacion'] else None,  # Usar misma fecha por ahora
-                        'datos_paciente': {
-                            'id': str(plan['paciente_id']),
-                            'identificacion': plan['paciente_documento'],
-                            'edad': plan['edad_calculada'] or 0,
-                            'nombre_completo': plan['nombre_completo'] or f"{plan['paciente_nombre']} {plan['paciente_apellido']}",
-                            'peso': float(plan['peso']) if plan['peso'] else 0,
-                            'altura': float(plan['altura']) if plan['altura'] else 0,
-                            'imc': float(imc) if imc else 0,
-                            'categoriaIMC': plan['categoriaIMC'] or '',
-                            'fecha_consulta': str(plan['fecha_consulta']) if plan['fecha_consulta'] else '',
-                            'hora_consulta': str(plan['hora_consulta']) if plan['hora_consulta'] else '',
-                        },
-                        'historia_clinica': {
-                            'nombre_completo': plan['nombre_completo'] or f"{plan['paciente_nombre']} {plan['paciente_apellido']}",
-                            'identificacion': plan['paciente_documento'],
-                            'ocupacion': plan['ocupacion'] or '',
-                            'fecha_nacimiento': str(plan['fecha_nacimiento']) if plan['fecha_nacimiento'] else '',
-                            'edad_calculada': plan['edad_calculada'] or 0,
-                            'entidad': plan['entidad'] or '',
-                            'telefono': plan['telefono_fijo'] or '',
-                            'celular': plan['celular'] or '',
-                            'direccion': plan['direccion'] or '',
-                            'email': plan['email'] or '',
-                            'motivo_consulta': plan['motivo_consulta'] or '',
-                            'motivo_consulta_detalle': plan['procedimiento_desc'] or '',
-                            'enfermedad_actual': json.loads(plan['enfermedad_actual']) if plan['enfermedad_actual'] else {
-                                'hepatitis': False, 'discrasia_sanguinea': False,
-                                'cardiopatias': False, 'hipertension': False,
-                                'reumatologicas': False, 'diabetes': False,
-                                'neurologicas': False, 'enfermedad_mental': False,
-                                'no_refiere': True
-                            },
-                            'antecedentes': json.loads(plan['antecedentes']) if plan['antecedentes'] else {
-                                'farmacologicos': plan['farmacologicos'] or '',
-                                'traumaticos': plan['traumaticos'] or '',
-                                'quirurgicos': plan['quirurgicos'] or '',
-                                'alergicos': plan['alergicos'] or '',
-                                'toxicos': plan['toxicos'] or '',
-                                'habitos': plan['habitos'] or '',
-                                'ginecologicos': '',
-                                'fuma': 'no',
-                                'planificacion': ''
-                            },
-                            'enfermedades_piel': False,
-                            'tratamientos_esteticos': '',
-                            'antecedentes_familiares': '',
-                            'peso': float(plan['peso']) if plan['peso'] else 0,
-                            'altura': float(plan['altura']) if plan['altura'] else 0,
-                            'imc': float(imc) if imc else 0,
-                            'contextura': '',
-                            'notas_corporales': json.loads(plan['notas_corporales']) if plan['notas_corporales'] else {
-                                'cabeza': plan['cabeza'] or '',
-                                'mamas': plan['mamas'] or '',
-                                'tcs': plan['tcs'] or '',
-                                'abdomen': plan['abdomen'] or '',
-                                'gluteos': plan['gluteos'] or '',
-                                'extremidades': plan['extremidades'] or '',
-                                'pies_faneras': plan['pies_faneras'] or ''
-                            },
-                            'diagnostico': plan['procedimiento_desc'] or '',
-                            'plan_conducta': plan['descripcion_procedimiento'] or ''
-                        },
-                        'conducta_quirurgica': {
-                            'duracion_estimada': plan['duracion_estimada'] or plan['tiempo_cirugia_minutos'] or 0,
-                            'tipo_anestesia': plan['tipo_anestesia'] or 'general',
-                            'requiere_hospitalizacion': bool(plan['requiere_hospitalizacion']),
-                            'tiempo_hospitalizacion': plan['tiempo_hospitalizacion'] or '',
-                            'reseccion_estimada': plan['reseccion_estimada'] or '',
-                            'firma_cirujano': plan['firma_cirujano'] or '',
-                            'firma_paciente': plan['firma_paciente'] or ''
-                        },
-                        'dibujos_esquema': [],
-                        'notas_doctor': plan['notas_del_doctor'] or plan['notas_preoperatorias'] or '',
-                        'imagenes_adjuntas': json.loads(plan['imagen_procedimiento']) if plan['imagen_procedimiento'] and plan['imagen_procedimiento'].startswith('[') else [plan['imagen_procedimiento']] if plan['imagen_procedimiento'] else [],
-                        'estado': {
-                            1: 'borrador',
-                            2: 'aprobado',
-                            3: 'completado'
-                        }.get(plan['estado_id'], 'borrador'),
-                        'esquema_mejorado': {
-                            'zoneMarkings': {},
-                            'selectionHistory': [],
-                            'currentStrokeWidth': 3,
-                            'currentTextSize': 16,
-                            'selectedProcedure': 'liposuction'
-                        }
-                    })
-                
+
                 return {
+                    "success": True,
                     "total": total,
                     "limit": limit,
                     "offset": offset,
-                    "planes": planes_formateados
+                    "planes": planes
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/planes-quirurgicos/{plan_id}", response_model=dict)
+def get_plan_quirurgico(plan_id: str):
+    print(f"🔍 GET Plan quirúrgico ID: {plan_id}")
+    try:
+        # Limpiar ID si viene con prefijo 'plan_'
+        plan_id_num = plan_id.replace('plan_', '')
+        print(f"🔍 ID numérico: {plan_id_num}")
+        
+        conn = pymysql.connect(
+            host="localhost",
+            user="root",
+            password="root",
+            database="prueba_consultorio_db",
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT * 
+                    FROM plan_quirurgico 
+                    WHERE id = %s
+                """, (plan_id_num,))
+                
+                plan = cursor.fetchone()
+                print(f"🔍 Plan encontrado en BD: {plan}")
+                
+                if not plan:
+                    raise HTTPException(status_code=404, detail="Plan no encontrado")
+                
+                # Log de todos los campos
+                print("📊 CAMPOS DEL PLAN:")
+                for key, value in plan.items():
+                    print(f"   {key}: {value}")
+                
+                return {
+                    "success": True,
+                    "plan": plan
                 }
                 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail={
-            "error": "Error obteniendo planes quirúrgicos",
-            "message": str(e)
-        })
+        print(f"❌ ERROR obteniendo plan: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/planes-quirurgicos/{plan_id}", response_model=dict)
-def get_plan_quirurgico(plan_id: str):
+@app.get("/api/pacientes/todos", response_model=dict)
+def get_todos_pacientes():
     """
-    Obtiene un plan quirúrgico específico por ID
+    Obtiene todos los pacientes para selección en formularios
     """
     try:
-        # Extraer ID numérico del string "plan_001"
-        plan_id_num = plan_id.replace('plan_', '')
-        
         conn = pymysql.connect(
             host='localhost',
             user='root',
@@ -4291,306 +4223,163 @@ def get_plan_quirurgico(plan_id: str):
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT 
-                        pq.*,
-                        p.nombre as paciente_nombre,
-                        p.apellido as paciente_apellido,
-                        p.numero_documento as paciente_documento,
-                        p.fecha_nacimiento as paciente_fecha_nacimiento,
-                        p.telefono as paciente_telefono,
-                        p.email as paciente_email,
-                        p.direccion as paciente_direccion,
-                        p.ciudad as paciente_ciudad,
-                        u.nombre as usuario_nombre,
-                        eq.nombre as estado_nombre,
-                        eq.color as estado_color
-                    FROM plan_quirurgico pq
-                    JOIN paciente p ON pq.paciente_id = p.id
-                    JOIN usuario u ON pq.usuario_id = u.id
-                    JOIN estado_quirurgico eq ON pq.estado_id = eq.id
-                    WHERE pq.id = %s
-                """, (plan_id_num,))
+                        id,
+                        nombre,
+                        apellido,
+                        CONCAT(nombre, ' ', apellido) as nombre_completo,
+                        numero_documento,
+                        tipo_documento,
+                        fecha_nacimiento,
+                        genero,
+                        telefono,
+                        email,
+                        direccion,
+                        ciudad,
+                        TIMESTAMPDIFF(YEAR, fecha_nacimiento, CURDATE()) as edad,
+                        fecha_registro
+                    FROM paciente
+                    ORDER BY apellido, nombre
+                """)
+                pacientes = cursor.fetchall()
                 
-                plan = cursor.fetchone()
-                
-                if not plan:
-                    raise HTTPException(status_code=404, detail="Plan quirúrgico no encontrado")
-                
-                # Calcular edad
-                edad = plan['edad_calculada']
-                if not edad and plan['paciente_fecha_nacimiento']:
-                    from datetime import datetime
-                    fecha_nacimiento = plan['paciente_fecha_nacimiento']
-                    if isinstance(fecha_nacimiento, str):
-                        fecha_nacimiento = datetime.strptime(fecha_nacimiento, '%Y-%m-%d')
-                    edad = (datetime.now() - fecha_nacimiento).days // 365
-                
-                # Calcular IMC si no existe
-                imc = plan['imc']
-                if not imc and plan['peso'] and plan['altura'] and plan['altura'] > 0:
-                    imc = plan['peso'] / (plan['altura'] * plan['altura'])
-                
-                # Determinar categoría IMC
-                categoria_imc = plan['categoriaIMC']
-                if not categoria_imc and imc:
-                    if imc < 18.5:
-                        categoria_imc = "Bajo peso"
-                    elif imc < 25:
-                        categoria_imc = "Saludable"
-                    elif imc < 30:
-                        categoria_imc = "Sobrepeso"
-                    else:
-                        categoria_imc = "Obesidad"
-                
-                # Formatear la respuesta como espera el frontend
                 return {
-                    'id': f"plan_{plan['id']}",
-                    'id_paciente': str(plan['paciente_id']),
-                    'id_usuario': str(plan['usuario_id']),
-                    'fecha_creacion': plan['fecha_creacion'].isoformat() if plan['fecha_creacion'] else None,
-                    'fecha_modificacion': plan['fecha_creacion'].isoformat() if plan['fecha_creacion'] else None,
-                    'datos_paciente': {
-                        'id': str(plan['paciente_id']),
-                        'identificacion': plan['paciente_documento'],
-                        'edad': edad or 0,
-                        'nombre_completo': plan['nombre_completo'] or f"{plan['paciente_nombre']} {plan['paciente_apellido']}",
-                        'peso': float(plan['peso']) if plan['peso'] else 0,
-                        'altura': float(plan['altura']) if plan['altura'] else 0,
-                        'imc': float(imc) if imc else 0,
-                        'categoriaIMC': categoria_imc or '',
-                        'fecha_consulta': str(plan['fecha_consulta']) if plan['fecha_consulta'] else '',
-                        'hora_consulta': str(plan['hora_consulta']) if plan['hora_consulta'] else '',
-                    },
-                    'historia_clinica': {
-                        'nombre_completo': plan['nombre_completo'] or f"{plan['paciente_nombre']} {plan['paciente_apellido']}",
-                        'identificacion': plan['paciente_documento'],
-                        'ocupacion': plan['ocupacion'] or '',
-                        'fecha_nacimiento': str(plan['paciente_fecha_nacimiento']) if plan['paciente_fecha_nacimiento'] else '',
-                        'edad_calculada': edad or 0,
-                        'entidad': plan['entidad'] or '',
-                        'telefono': plan['paciente_telefono'] or plan['telefono_fijo'] or '',
-                        'celular': plan['celular'] or '',
-                        'direccion': plan['paciente_direccion'] or plan['direccion'] or '',
-                        'email': plan['paciente_email'] or plan['email'] or '',
-                        'motivo_consulta': plan['motivo_consulta'] or '',
-                        'motivo_consulta_detalle': plan['procedimiento_desc'] or '',
-                        'enfermedad_actual': json.loads(plan['enfermedad_actual']) if plan['enfermedad_actual'] else {
-                            'hepatitis': False, 'discrasia_sanguinea': False,
-                            'cardiopatias': False, 'hipertension': False,
-                            'reumatologicas': False, 'diabetes': False,
-                            'neurologicas': False, 'enfermedad_mental': False,
-                            'no_refiere': True
-                        },
-                        'antecedentes': json.loads(plan['antecedentes']) if plan['antecedentes'] else {
-                            'farmacologicos': plan['farmacologicos'] or '',
-                            'traumaticos': plan['traumaticos'] or '',
-                            'quirurgicos': plan['quirurgicos'] or '',
-                            'alergicos': plan['alergicos'] or '',
-                            'toxicos': plan['toxicos'] or '',
-                            'habitos': plan['habitos'] or '',
-                            'ginecologicos': '',
-                            'fuma': 'no',
-                            'planificacion': ''
-                        },
-                        'enfermedades_piel': False,
-                        'tratamientos_esteticos': '',
-                        'antecedentes_familiares': '',
-                        'peso': float(plan['peso']) if plan['peso'] else 0,
-                        'altura': float(plan['altura']) if plan['altura'] else 0,
-                        'imc': float(imc) if imc else 0,
-                        'contextura': '',
-                        'notas_corporales': json.loads(plan['notas_corporales']) if plan['notas_corporales'] else {
-                            'cabeza': plan['cabeza'] or '',
-                            'mamas': plan['mamas'] or '',
-                            'tcs': plan['tcs'] or '',
-                            'abdomen': plan['abdomen'] or '',
-                            'gluteos': plan['gluteos'] or '',
-                            'extremidades': plan['extremidades'] or '',
-                            'pies_faneras': plan['pies_faneras'] or ''
-                        },
-                        'diagnostico': plan['procedimiento_desc'] or '',
-                        'plan_conducta': plan['descripcion_procedimiento'] or ''
-                    },
-                    'conducta_quirurgica': {
-                        'duracion_estimada': plan['duracion_estimada'] or plan['tiempo_cirugia_minutos'] or 0,
-                        'tipo_anestesia': plan['tipo_anestesia'] or 'general',
-                        'requiere_hospitalizacion': bool(plan['requiere_hospitalizacion']),
-                        'tiempo_hospitalizacion': plan['tiempo_hospitalizacion'] or '',
-                        'reseccion_estimada': plan['reseccion_estimada'] or '',
-                        'firma_cirujano': plan['firma_cirujano'] or '',
-                        'firma_paciente': plan['firma_paciente'] or ''
-                    },
-                    'dibujos_esquema': [],
-                    'notas_doctor': plan['notas_del_doctor'] or plan['notas_preoperatorias'] or '',
-                    'imagenes_adjuntas': json.loads(plan['imagen_procedimiento']) if plan['imagen_procedimiento'] and plan['imagen_procedimiento'].startswith('[') else [plan['imagen_procedimiento']] if plan['imagen_procedimiento'] else [],
-                    'estado': {
-                        1: 'borrador',
-                        2: 'aprobado',
-                        3: 'completado'
-                    }.get(plan['estado_id'], 'borrador'),
-                    'esquema_mejorado': {
-                        'zoneMarkings': {},
-                        'selectionHistory': [],
-                        'currentStrokeWidth': 3,
-                        'currentTextSize': 16,
-                        'selectedProcedure': 'liposuction'
-                    }
+                    "success": True,
+                    "total": len(pacientes),
+                    "pacientes": pacientes
                 }
                 
-    except HTTPException:
-        raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail={
-            "error": "Error obteniendo plan quirúrgico",
+            "error": "Error obteniendo pacientes",
             "message": str(e)
         })
 
 @app.post("/api/planes-quirurgicos", response_model=dict)
 def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
-    """
-    Crea un nuevo plan quirúrgico
-    """
     try:
-        from datetime import datetime
-        
+        def norm_datetime(v):
+            if not v:
+                return None
+            if isinstance(v, str):
+                return v.replace("T", " ").replace("Z", "")
+            return v
+
+        def norm_time(v):
+            if not v:
+                return None
+            if isinstance(v, str):
+                return v[:8]
+            return v
+
         conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
+            host="localhost",
+            user="root",
+            password="root",
+            database="prueba_consultorio_db",
             port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=False
         )
-        with conn:
-            with conn.cursor() as cursor:
-                # Verificar que el paciente existe y obtener sus datos
-                cursor.execute("""
-                    SELECT 
-                        id, nombre, apellido, numero_documento,
-                        fecha_nacimiento, telefono, email, direccion, ciudad
-                    FROM paciente 
-                    WHERE id = %s
-                """, (plan.paciente_id,))
-                
-                paciente = cursor.fetchone()
-                if not paciente:
-                    raise HTTPException(status_code=404, detail=f"Paciente con ID {plan.paciente_id} no encontrado")
-                
-                # Verificar que el usuario existe
-                cursor.execute("SELECT id, nombre FROM usuario WHERE id = %s", (plan.usuario_id,))
-                usuario = cursor.fetchone()
-                if not usuario:
-                    raise HTTPException(status_code=404, detail=f"Usuario con ID {plan.usuario_id} no encontrado")
-                
-                # Calcular edad automáticamente
-                edad_calculada = plan.edad_calculada
-                if not edad_calculada and paciente['fecha_nacimiento']:
-                    fecha_nacimiento = paciente['fecha_nacimiento']
-                    if isinstance(fecha_nacimiento, str):
-                        fecha_nacimiento = datetime.strptime(fecha_nacimiento, '%Y-%m-%d')
-                    edad_calculada = (datetime.now() - fecha_nacimiento).days // 365
-                
-                # Calcular IMC automáticamente
-                imc = plan.imc
-                categoria_imc = plan.categoriaIMC
-                if plan.peso and plan.altura and plan.altura > 0:
-                    if not imc:
-                        imc = plan.peso / (plan.altura * plan.altura)
-                    
-                    if not categoria_imc:
-                        if imc < 18.5:
-                            categoria_imc = "Bajo peso"
-                        elif imc < 25:
-                            categoria_imc = "Saludable"
-                        elif imc < 30:
-                            categoria_imc = "Sobrepeso"
-                        else:
-                            categoria_imc = "Obesidad"
-                
-                # Insertar plan quirúrgico
-                cursor.execute("""
-                    INSERT INTO plan_quirurgico (
-                        paciente_id, usuario_id, estado_id,
-                        procedimiento_desc, anestesiologo, materiales_requeridos,
-                        notas_preoperatorias, riesgos, hora, fecha_programada,
-                        nombre_completo, peso, altura, fecha_nacimiento, imc,
-                        identificacion, fecha_consulta, hora_consulta, categoriaIMC,
-                        edad_calculada, ocupacion, telefono_fijo, celular, direccion,
-                        email, motivo_consulta, entidad,
-                        farmacologicos, traumaticos, quirurgicos, alergicos, toxicos, habitos,
-                        cabeza, mamas, tcs, abdomen, gluteos, extremidades, pies_faneras,
-                        duracion_estimada, tipo_anestesia, requiere_hospitalizacion,
-                        tiempo_hospitalizacion, reseccion_estimada, firma_cirujano, firma_paciente,
-                        enfermedad_actual, antecedentes, notas_corporales,
-                        esquema_corporal, esquema_facial, imagen_procedimiento,
-                        fecha_ultimo_procedimiento, descripcion_procedimiento, detalles,
-                        notas_del_doctor, tiempo_cirugia_minutos
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s
-                    )
-                """, (
-                    plan.paciente_id, plan.usuario_id, plan.estado_id,
-                    plan.procedimiento_desc, plan.anestesiologo, plan.materiales_requeridos,
-                    plan.notas_preoperatorias, plan.riesgos, plan.hora, plan.fecha_programada,
-                    plan.nombre_completo or f"{paciente['nombre']} {paciente['apellido']}",
-                    plan.peso, plan.altura, plan.fecha_nacimiento or paciente['fecha_nacimiento'],
-                    imc, plan.identificacion or paciente['numero_documento'],
-                    plan.fecha_consulta or datetime.now().date().isoformat(),
-                    plan.hora_consulta or datetime.now().time().strftime('%H:%M'),
-                    categoria_imc, edad_calculada,
-                    plan.ocupacion, plan.telefono_fijo or paciente['telefono'],
-                    plan.celular, plan.direccion or paciente['direccion'],
-                    plan.email or paciente['email'], plan.motivo_consulta,
-                    plan.entidad,
-                    plan.farmacologicos, plan.traumaticos, plan.quirurgicos,
-                    plan.alergicos, plan.toxicos, plan.habitos,
-                    plan.cabeza, plan.mamas, plan.tcs, plan.abdomen,
-                    plan.gluteos, plan.extremidades, plan.pies_faneras,
-                    plan.duracion_estimada, plan.tipo_anestesia, plan.requiere_hospitalizacion,
-                    plan.tiempo_hospitalizacion, plan.reseccion_estimada,
-                    plan.firma_cirujano, plan.firma_paciente,
-                    json.dumps(plan.enfermedad_actual) if plan.enfermedad_actual else None,
-                    json.dumps(plan.antecedentes) if plan.antecedentes else None,
-                    json.dumps(plan.notas_corporales) if plan.notas_corporales else None,
-                    plan.esquema_corporal, plan.esquema_facial,
-                    plan.imagen_procedimiento, plan.fecha_ultimo_procedimiento,
-                    plan.descripcion_procedimiento, plan.detalles,
-                    plan.notas_del_doctor, plan.tiempo_cirugia_minutos
-                ))
-                
-                plan_id = cursor.lastrowid
-                conn.commit()
-                
-                return {
-                    "success": True,
-                    "message": "Plan quirúrgico creado exitosamente",
-                    "plan_id": f"plan_{plan_id}",
-                    "id": f"plan_{plan_id}",
-                    "paciente_nombre": f"{paciente['nombre']} {paciente['apellido']}",
-                    "usuario_nombre": usuario['nombre']
-                }
-                
-    except HTTPException:
-        raise
+
+        with conn.cursor() as cursor:
+
+            cursor.execute("SELECT * FROM paciente WHERE id=%s", (plan.paciente_id,))
+            paciente = cursor.fetchone()
+            if not paciente:
+                raise HTTPException(404, "Paciente no encontrado")
+
+            cursor.execute("SELECT * FROM usuario WHERE id=%s", (plan.usuario_id,))
+            usuario = cursor.fetchone()
+            if not usuario:
+                raise HTTPException(404, "Usuario no encontrado")
+
+            edad = plan.edad
+            if not edad and paciente.get("fecha_nacimiento"):
+                fn = paciente["fecha_nacimiento"]
+                edad = (datetime.now().date() - fn.date()).days // 365
+
+            imc = plan.imc
+            categoria_imc = plan.categoriaIMC
+
+            if plan.peso and plan.altura and plan.altura > 0:
+                imc = imc or float(plan.peso) / (float(plan.altura) ** 2)
+                categoria_imc = categoria_imc or (
+                    "Bajo peso" if imc < 18.5 else
+                    "Saludable" if imc < 25 else
+                    "Sobrepeso" if imc < 30 else
+                    "Obesidad"
+                )
+
+            sql = """
+            INSERT INTO plan_quirurgico (
+                paciente_id, usuario_id,
+                procedimiento_desc, anestesiologo, materiales_requeridos,
+                notas_preoperatorias, riesgos, hora, fecha_programada,
+                nombre_completo, peso, altura, fecha_nacimiento, imc,
+                imagen_procedimiento, fecha_ultimo_procedimiento,
+                descripcion_procedimiento, detalles, notas_doctor,
+                tiempo_cirugia_minutos, entidad, edad,
+                telefono, celular, direccion, email,
+                motivo_consulta, farmacologicos, traumaticos,
+                quirurgicos, alergicos, toxicos, habitos,
+                cabeza, mamas, tcs, abdomen, gluteos, extremidades, pies_faneras,
+                identificacion, fecha_consulta, hora_consulta,
+                categoriaIMC, edad_calculada, ocupacion,
+                enfermedad_actual, antecedentes, notas_corporales,
+                duracion_estimada, tipo_anestesia, requiere_hospitalizacion,
+                tiempo_hospitalizacion, reseccion_estimada,
+                firma_cirujano, firma_paciente,
+                esquema_mejorado, plan_conducta
+            ) VALUES (
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,%s
+            )
+            """
+
+            values = tuple([
+                plan.paciente_id, plan.usuario_id,
+                plan.procedimiento_desc, plan.anestesiologo, plan.materiales_requeridos,
+                plan.notas_preoperatorias, plan.riesgos, norm_time(plan.hora),
+                norm_datetime(plan.fecha_programada),
+                plan.nombre_completo or f"{paciente['nombre']} {paciente['apellido']}",
+                plan.peso, plan.altura, plan.fecha_nacimiento, imc,
+                plan.imagen_procedimiento, plan.fecha_ultimo_procedimiento,
+                plan.descripcion_procedimiento, plan.detalles, plan.notas_doctor,
+                plan.tiempo_cirugia_minutos, plan.entidad, edad,
+                plan.telefono, plan.celular, plan.direccion, plan.email,
+                plan.motivo_consulta, plan.farmacologicos, plan.traumaticos,
+                plan.quirurgicos, plan.alergicos, plan.toxicos, plan.habitos,
+                plan.cabeza, plan.mamas, plan.tcs, plan.abdomen,
+                plan.gluteos, plan.extremidades, plan.pies_faneras,
+                plan.identificacion, plan.fecha_consulta, norm_time(plan.hora_consulta),
+                categoria_imc, edad, plan.ocupacion,
+                json.dumps(plan.enfermedad_actual),
+                json.dumps(plan.antecedentes),
+                json.dumps(plan.notas_corporales),
+                plan.duracion_estimada, plan.tipo_anestesia,
+                int(bool(plan.requiere_hospitalizacion)),
+                plan.tiempo_hospitalizacion, plan.reseccion_estimada,
+                plan.firma_cirujano, plan.firma_paciente,
+                json.dumps(plan.esquema_mejorado),
+                plan.plan_conducta
+            ])
+
+            cursor.execute(sql, values)
+            conn.commit()
+
+            return {"success": True, "plan_id": cursor.lastrowid}
+
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail={
-            "error": "Error creando plan quirúrgico",
-            "message": str(e)
-        })
+        raise HTTPException(500, str(e))
 
 @app.put("/api/planes-quirurgicos/{plan_id}", response_model=dict)
 def update_plan_quirurgico(plan_id: str, plan_update: PlanQuirurgicoUpdate):
     """
-    Actualiza un plan quirúrgico existente
+    Actualiza un plan quirúrgico existente - VERSIÓN CORREGIDA
     """
     try:
         # Extraer ID numérico
@@ -4606,18 +4395,59 @@ def update_plan_quirurgico(plan_id: str, plan_update: PlanQuirurgicoUpdate):
         )
         with conn:
             with conn.cursor() as cursor:
-                # Verificar que el plan existe
-                cursor.execute("SELECT id FROM plan_quirurgico WHERE id = %s", (plan_id_num,))
-                if not cursor.fetchone():
+                # 1. Verificar que el plan existe y obtener datos actuales
+                cursor.execute("""
+                    SELECT * FROM plan_quirurgico WHERE id = %s
+                """, (plan_id_num,))
+                
+                plan_existente = cursor.fetchone()
+                if not plan_existente:
                     raise HTTPException(status_code=404, detail="Plan quirúrgico no encontrado")
                 
-                # Construir query dinámica
+                # 2. Construir query dinámica
                 update_fields = []
                 values = []
                 
-                # Mapear campos a actualizar
+                # 3. Calcular IMC si se actualizan peso o altura
+                # Usar valores existentes si no se proporcionan nuevos
+                peso = plan_update.peso if plan_update.peso is not None else plan_existente['peso']
+                altura = plan_update.altura if plan_update.altura is not None else plan_existente['altura']
+                
+                # Solo calcular IMC si tenemos ambos valores válidos
+                if peso is not None and altura is not None and altura > 0:
+                    try:
+                        peso_float = float(peso)
+                        altura_float = float(altura)
+                        imc_calculado = peso_float / (altura_float ** 2)
+                        
+                        update_fields.append("imc = %s")
+                        values.append(float(imc_calculado))
+                        
+                        # Calcular categoría IMC
+                        if imc_calculado < 18.5:
+                            categoria = "Bajo peso"
+                        elif imc_calculado < 25:
+                            categoria = "Saludable"
+                        elif imc_calculado < 30:
+                            categoria = "Sobrepeso"
+                        else:
+                            categoria = "Obesidad"
+                        
+                        update_fields.append("categoriaIMC = %s")
+                        values.append(categoria)
+                        
+                    except (ValueError, TypeError) as e:
+                        print(f"⚠️ Error calculando IMC: {e}")
+                        # Mantener valores existentes si hay error
+                        if plan_existente['imc']:
+                            update_fields.append("imc = %s")
+                            values.append(float(plan_existente['imc']))
+                        if plan_existente['categoriaIMC']:
+                            update_fields.append("categoriaIMC = %s")
+                            values.append(plan_existente['categoriaIMC'])
+                
+                # 4. Mapear campos normales con manejo de tipos
                 field_mapping = {
-                    'estado_id': plan_update.estado_id,
                     'procedimiento_desc': plan_update.procedimiento_desc,
                     'anestesiologo': plan_update.anestesiologo,
                     'materiales_requeridos': plan_update.materiales_requeridos,
@@ -4627,7 +4457,6 @@ def update_plan_quirurgico(plan_id: str, plan_update: PlanQuirurgicoUpdate):
                     'fecha_programada': plan_update.fecha_programada,
                     'peso': plan_update.peso,
                     'altura': plan_update.altura,
-                    'imc': plan_update.imc,
                     'farmacologicos': plan_update.farmacologicos,
                     'traumaticos': plan_update.traumaticos,
                     'quirurgicos': plan_update.quirurgicos,
@@ -4643,7 +4472,6 @@ def update_plan_quirurgico(plan_id: str, plan_update: PlanQuirurgicoUpdate):
                     'pies_faneras': plan_update.pies_faneras,
                     'duracion_estimada': plan_update.duracion_estimada,
                     'tipo_anestesia': plan_update.tipo_anestesia,
-                    'requiere_hospitalizacion': plan_update.requiere_hospitalizacion,
                     'tiempo_hospitalizacion': plan_update.tiempo_hospitalizacion,
                     'reseccion_estimada': plan_update.reseccion_estimada,
                     'firma_cirujano': plan_update.firma_cirujano,
@@ -4651,11 +4479,24 @@ def update_plan_quirurgico(plan_id: str, plan_update: PlanQuirurgicoUpdate):
                     'imagen_procedimiento': plan_update.imagen_procedimiento,
                     'descripcion_procedimiento': plan_update.descripcion_procedimiento,
                     'detalles': plan_update.detalles,
-                    'notas_del_doctor': plan_update.notas_del_doctor,
-                    'tiempo_cirugia_minutos': plan_update.tiempo_cirugia_minutos
+                    'notas_doctor': plan_update.notas_doctor,
+                    'tiempo_cirugia_minutos': plan_update.tiempo_cirugia_minutos,
+                    'plan_conducta': plan_update.plan_conducta
                 }
                 
-                # Agregar campos JSON
+                for field, value in field_mapping.items():
+                    if value is not None:
+                        update_fields.append(f"{field} = %s")
+                        values.append(value)
+                
+                # 5. Manejar campo booleano
+                if plan_update.requiere_hospitalizacion is not None:
+                    update_fields.append("requiere_hospitalizacion = %s")
+                    # Convertir a int (0 o 1) para MySQL
+                    requiere_int = 1 if plan_update.requiere_hospitalizacion else 0
+                    values.append(requiere_int)
+                
+                # 6. Manejar campos JSON - siempre serializar si se proporcionan
                 if plan_update.enfermedad_actual is not None:
                     update_fields.append("enfermedad_actual = %s")
                     values.append(json.dumps(plan_update.enfermedad_actual))
@@ -4668,48 +4509,70 @@ def update_plan_quirurgico(plan_id: str, plan_update: PlanQuirurgicoUpdate):
                     update_fields.append("notas_corporales = %s")
                     values.append(json.dumps(plan_update.notas_corporales))
                 
-                if plan_update.esquema_corporal is not None:
-                    update_fields.append("esquema_corporal = %s")
-                    values.append(plan_update.esquema_corporal)
+                if plan_update.esquema_mejorado is not None:
+                    update_fields.append("esquema_mejorado = %s")
+                    values.append(json.dumps(plan_update.esquema_mejorado))
                 
-                if plan_update.esquema_facial is not None:
-                    update_fields.append("esquema_facial = %s")
-                    values.append(plan_update.esquema_facial)
+                # 7. Actualizar fecha de modificación
+                update_fields.append("fecha_modificacion = NOW()")
                 
-                # Agregar campos normales
-                for field, value in field_mapping.items():
-                    if value is not None:
-                        update_fields.append(f"{field} = %s")
-                        values.append(value)
+                # 8. Verificar si hay algo para actualizar (más allá de fecha_modificacion)
+                if len(update_fields) <= 1:  # Solo fecha_modificacion
+                    return {
+                        "success": True,
+                        "message": "Sin cambios para actualizar",
+                        "plan_id": plan_id
+                    }
                 
-                # Actualizar fecha de modificación
-                update_fields.append("fecha_creacion = NOW()")
-                
-                if not update_fields:
-                    raise HTTPException(status_code=400, detail="No se proporcionaron datos para actualizar")
-                
+                # 9. Ejecutar actualización
                 values.append(plan_id_num)
-                
                 query = f"UPDATE plan_quirurgico SET {', '.join(update_fields)} WHERE id = %s"
+                
+                print(f"🔍 Query de actualización: {query}")
+                print(f"🔍 Valores: {values}")
+                
                 cursor.execute(query, values)
                 conn.commit()
+                
+                # 10. Obtener el plan actualizado para retornar
+                cursor.execute("""
+                    SELECT * FROM plan_quirurgico WHERE id = %s
+                """, (plan_id_num,))
+                
+                plan_actualizado = cursor.fetchone()
                 
                 return {
                     "success": True,
                     "message": "Plan quirúrgico actualizado exitosamente",
-                    "plan_id": plan_id
+                    "plan_id": plan_id,
+                    "data": plan_actualizado
                 }
                 
-    except HTTPException:
-        raise
+    except HTTPException as he:
+        print(f"❌ HTTPException: {he.detail}")
+        raise he
+    except pymysql.err.ProgrammingError as pe:
+        print(f"❌ Error SQL: {pe}")
+        raise HTTPException(status_code=500, detail={
+            "error": "Error de programación SQL",
+            "message": str(pe)
+        })
+    except pymysql.err.OperationalError as oe:
+        print(f"❌ Error operacional: {oe}")
+        raise HTTPException(status_code=500, detail={
+            "error": "Error operacional de base de datos",
+            "message": str(oe)
+        })
     except Exception as e:
         import traceback
-        traceback.print_exc()
+        error_details = traceback.format_exc()
+        print(f"❌ Error general: {error_details}")
         raise HTTPException(status_code=500, detail={
             "error": "Error actualizando plan quirúrgico",
-            "message": str(e)
+            "message": str(e),
+            "details": error_details
         })
-
+                
 @app.delete("/api/planes-quirurgicos/{plan_id}", response_model=dict)
 def delete_plan_quirurgico(plan_id: str):
     """

@@ -46,13 +46,11 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       // Intentar parsear como JSON
       responseData = responseText ? JSON.parse(responseText) : {};
       console.log(`📥 API Response Body (parsed):`, responseData);
-    } catch (jsonError) {
+    } catch (parseError) {
       console.log(`⚠️ Response is not JSON, treating as text`);
       responseData = responseText;
     }
     
-    // 🔴 **CORRECCIÓN IMPORTANTE: NO lanzar error inmediatamente**
-    // En lugar de lanzar error aquí, devolver un objeto con información del error
     if (!response.ok) {
       console.log(`⚠️ API Error ${response.status}:`, responseData);
       
@@ -89,8 +87,7 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
             errorMessage = responseData.error.message || JSON.stringify(responseData.error);
           }
         } else {
-          // Para validaciones como "procedimiento_id debe ser un número"
-          // Buscar cualquier propiedad que contenga información de error
+          // Para validaciones
           const errorKeys = Object.keys(responseData).filter(key => 
             key.toLowerCase().includes('error') || 
             key.toLowerCase().includes('detail') ||
@@ -107,7 +104,7 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       
       console.log('📝 Error message extracted:', errorMessage);
       
-      // **DEVOLVER OBJETO DE ERROR EN LUGAR DE LANZAR EXCEPCIÓN**
+      // **DEVOLVER OBJETO DE ERROR**
       return {
         success: false,
         error: true,
@@ -147,6 +144,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 // Helper para prevenir llamadas duplicadas
+// Helper para prevenir llamadas duplicadas - VERSIÓN SIMPLIFICADA
 const preventDuplicateCall = async (callType: string, callFn: () => Promise<any>): Promise<any> => {
   // Crear una clave única para esta llamada
   const callKey = `${callType}_${Date.now()}`;
@@ -220,18 +218,16 @@ export const api = {
   deletePaciente: (id: number) =>
     fetchAPI(`/api/pacientes/${id}`, { method: 'DELETE' }),
 
-  // AGREGAR ESTA FUNCIÓN NUEVA:
-  // En la sección de pacientes del objeto api en api.ts, agrega esto:
+  // AGREGAR ESTO en la sección de pacientes del objeto api:
+
   getTodosPacientes: async () => {
     try {
       console.log("📥 Llamando a /api/pacientes para obtener todos los pacientes...");
       
-      // Usamos fetchAPI para llamar al endpoint correcto
       const response = await fetchAPI('/api/pacientes?limit=1000&offset=0');
       
       console.log("✅ Respuesta cruda del backend:", response);
       
-      // Tu backend devuelve {total, limit, offset, pacientes: [...]}
       if (response && response.pacientes && Array.isArray(response.pacientes)) {
         console.log(`✅ Encontrados ${response.pacientes.length} pacientes`);
         return response.pacientes;
@@ -1344,14 +1340,141 @@ export const api = {
     }
   },
 
-  // ===== PLANES QUIRÚRGICOS =====
-  getPlanesQuirurgicos: (limit?: number, offset?: number) =>
-    fetchAPI(`/api/planes-quirurgicos?limit=${limit || 50}&offset=${offset || 0}`),
+  getPlanesQuirurgicos: (limit?: number, offset?: number) => {
+    // Crear una clave única basada en los parámetros
+    const callKey = `getPlanesQuirurgicos_${limit || 50}_${offset || 0}`;
+    
+    return preventDuplicateCall(callKey, async () => {
+      try {
+        console.log("📥 Obteniendo planes quirúrgicos...", { limit, offset });
+        
+        // Usar fetchAPI directamente sin preventDuplicateCall adicional
+        const response = await fetchAPI(`/api/planes-quirurgicos?limit=${limit || 50}&offset=${offset || 0}`);
+        
+        console.log("✅ Respuesta cruda de planes quirúrgicos:", response);
+        
+        // Si hay error, devolverlo directamente
+        if (response && response.error === true) {
+          return response;
+        }
+        
+        // Transformar los datos para el frontend
+        let planesTransformados = [];
+        let total = 0;
+        let limitRes = limit || 50;
+        let offsetRes = offset || 0;
+        
+        if (response && response.planes && Array.isArray(response.planes)) {
+          planesTransformados = response.planes.map((plan: any) => 
+            transformBackendToFrontend.planQuirurgico(plan)
+          );
+          total = response.total || 0;
+          limitRes = response.limit || limitRes;
+          offsetRes = response.offset || offsetRes;
+        } else if (Array.isArray(response)) {
+          // Si la respuesta es directamente un array
+          planesTransformados = response.map((plan: any) => 
+            transformBackendToFrontend.planQuirurgico(plan)
+          );
+          total = response.length;
+        }
+        
+        console.log(`✅ Transformados ${planesTransformados.length} planes quirúrgicos`);
+        
+        return {
+          success: true,
+          total: total,
+          limit: limitRes,
+          offset: offsetRes,
+          planes: planesTransformados
+        };
+        
+      } catch (error: any) {
+        console.error("❌ Error obteniendo planes quirúrgicos:", error);
+        return {
+          success: false,
+          error: true,
+          message: error.message || "Error obteniendo planes quirúrgicos",
+          total: 0,
+          limit: limit || 50,
+          offset: offset || 0,
+          planes: []
+        };
+      }
+    });
+  },
 
-  getPlanQuirurgico: (id: string) => fetchAPI(`/api/planes-quirurgicos/${id}`),
+  getPlanQuirurgico: (id: string) => {
+    const callKey = `getPlanQuirurgico_${id}_${Date.now()}`;
+    
+    return preventDuplicateCall(callKey, async () => {
+      try {
+        console.log(`📥 [GET] Obteniendo plan quirúrgico ID: ${id}`);
+        
+        // Limpiar el ID si viene con prefijo 'plan_'
+        const planIdClean = id.replace('plan_', '');
+        
+        // Obtener el plan específico
+        const response = await fetchAPI(`/api/planes-quirurgicos/${planIdClean}`);
+        
+        console.log(`📥 [GET] Respuesta para plan ID ${planIdClean}:`, response);
+        
+        // Si hay error, devolverlo directamente
+        if (response && response.error === true) {
+          console.error(`❌ [GET] Error en respuesta para plan ${id}:`, response.message);
+          return {
+            success: false,
+            error: true,
+            message: response.message || "Error obteniendo plan quirúrgico",
+            data: null
+          };
+        }
+        
+        // Si la respuesta viene directa (sin wrapper), transformarla
+        let planData = response;
+        
+        // Si viene con wrapper {success: true, plan: {...}}, extraer el plan
+        if (response && response.success && response.plan) {
+          planData = response.plan;
+        }
+        
+        // Transformar los datos para el frontend
+        let planTransformado = {};
+        
+        if (planData && typeof planData === 'object' && Object.keys(planData).length > 0) {
+          planTransformado = transformBackendToFrontend.planQuirurgico(planData);
+          console.log(`✅ [GET] Plan ${id} transformado exitosamente`, planTransformado);
+        } else {
+          console.warn(`⚠️ [GET] Plan ${id} tiene datos vacíos o inválidos`);
+          return {
+            success: false,
+            error: true,
+            message: "El plan no contiene datos válidos",
+            data: null
+          };
+        }
+        
+        return {
+          success: true,
+          ...planTransformado
+        };
+        
+      } catch (error: any) {
+        console.error(`❌ [GET] Error obteniendo plan quirúrgico ${id}:`, error);
+        return {
+          success: false,
+          error: true,
+          message: error.message || "Error obteniendo plan quirúrgico",
+          data: null
+        };
+      }
+    });
+  },
 
   createPlanQuirurgico: (data: any) => {
-    return preventDuplicateCall('createPlanQuirurgico', async () => {
+    const callKey = `createPlanQuirurgico_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    return preventDuplicateCall(callKey, async () => {
       console.log("📤 Creando plan quirúrgico con datos:", data);
       
       // Transformar datos para el backend
@@ -1365,21 +1488,30 @@ export const api = {
           body: JSON.stringify(backendData)
         });
         
-        // CORRECCIÓN: fetchAPI ya devuelve el objeto parseado
-        // NO necesitas hacer result.json()
-        
         console.log("✅ Resultado de fetchAPI:", result);
         
-        // fetchAPI ya devuelve un objeto con propiedad 'error' si hay error
-        if (result && result.error === true) {
-          // Aquí está bien usar result.message porque ya es un objeto
-          throw new Error(result.message || "Error creando plan");
+        // 🔴 VERIFICACIÓN SEGURA: Asegurar que result es válido
+        if (!result) {
+          return {
+            success: false,
+            error: true,
+            message: "No se recibió respuesta del servidor"
+          };
         }
         
-        return result;
+        // Si result ya tiene error, devolverlo
+        if (result.error === true) {
+          return result;
+        }
+        
+        // Si es éxito, devolver con success: true
+        return {
+          success: true,
+          ...result
+        };
+        
       } catch (error: any) {
         console.error("❌ Error creando plan quirúrgico:", error);
-        // Devuelve el objeto de error ya formateado
         return {
           success: false,
           error: true,
@@ -1390,7 +1522,9 @@ export const api = {
   },
 
   updatePlanQuirurgico: (id: string, data: any) => {
-    return preventDuplicateCall('updatePlanQuirurgico', async () => {
+    const callKey = `updatePlanQuirurgico_${id}_${Date.now()}`;
+    
+    return preventDuplicateCall(callKey, async () => {
       console.log("📤 Actualizando plan quirúrgico ID:", id, "datos:", data);
       
       // Transformar datos para el backend
@@ -1404,13 +1538,15 @@ export const api = {
           body: JSON.stringify(backendData)
         });
         
-        // 🛠️ **CORRECCIÓN AQUÍ:** fetchAPI ya devuelve los datos parseados
-        
+        // fetchAPI ya devuelve los datos parseados
         if (result && result.error === true) {
-          throw new Error(result.message || "Error actualizando plan");
+          return result; // 🔴 NO lanzar error, devolver objeto de error
         }
         
-        return result;
+        return {
+          success: true,
+          ...result
+        };
       } catch (error: any) {
         console.error("❌ Error actualizando plan quirúrgico:", error);
         return {
@@ -1423,7 +1559,9 @@ export const api = {
   },
 
   deletePlanQuirurgico: (id: string) => {
-    return preventDuplicateCall('deletePlanQuirurgico', async () => {
+    const callKey = `deletePlanQuirurgico_${id}_${Date.now()}`;
+    
+    return preventDuplicateCall(callKey, async () => {
       console.log("🗑️ Eliminando plan quirúrgico ID:", id);
       
       try {
@@ -1805,34 +1943,368 @@ export const transformBackendToFrontend = {
     sala_espera_id: backendPaciente.sala_espera_id?.toString()
   }),
   
-  // Transformar plan quirúrgico del backend al formato del frontend
+  // Función completa para transformBackendToFrontend.planQuirurgico
   planQuirurgico: (backendPlan: any) => {
-    console.log("🔄 Transformando plan quirúrgico del backend:", backendPlan);
+    console.log("🔄 TRANSFORMANDO PLAN desde backend:", backendPlan);
     
-    return {
-      id: backendPlan.id,
-      id_paciente: backendPlan.id_paciente,
-      id_usuario: backendPlan.id_usuario,
-      fecha_creacion: backendPlan.fecha_creacion,
-      fecha_modificacion: backendPlan.fecha_modificacion,
-      datos_paciente: backendPlan.datos_paciente,
-      historia_clinica: backendPlan.historia_clinica,
-      conducta_quirurgica: backendPlan.conducta_quirurgica,
-      dibujos_esquema: backendPlan.dibujos_esquema || [],
-      notas_doctor: backendPlan.notas_doctor,
-      cirugias_previas: backendPlan.cirugias_previas || [],
-      imagenes_adjuntas: backendPlan.imagenes_adjuntas || [],
-      estado: backendPlan.estado || 'borrador',
-      esquema_mejorado: backendPlan.esquema_mejorado || {
-        zoneMarkings: {},
-        selectionHistory: [],
-        currentStrokeWidth: 3,
-        currentTextSize: 16,
-        selectedProcedure: 'liposuction'
+    // Si el plan ya viene transformado del frontend, devolverlo tal cual
+    if (backendPlan && backendPlan.id_paciente && backendPlan.historia_clinica) {
+      console.log("✅ Plan ya está transformado, devolviendo tal cual");
+      return backendPlan;
+    }
+
+    // Si no hay datos, devolver vacío
+    if (!backendPlan || typeof backendPlan !== 'object' || Object.keys(backendPlan).length === 0) {
+      console.warn("❌ backendPlan vacío o inválido");
+      return transformBackendToFrontend.createEmptyPlan();
+    }
+
+    // FUNCIÓN PARA PARSEAR JSON
+    const parseJson = (field: any, defaultValue: any = {}) => {
+      if (!field) return defaultValue;
+      if (typeof field === 'object') return field;
+      if (typeof field !== 'string') return defaultValue;
+      
+      try {
+        const trimmed = field.trim();
+        if (!trimmed || trimmed === 'null' || trimmed === 'undefined' || trimmed === '{}' || trimmed === '[]') {
+          return defaultValue;
+        }
+        return JSON.parse(trimmed);
+      } catch (e) {
+        console.warn(`⚠️ Error parseando JSON: ${field}`, e);
+        return defaultValue;
       }
     };
+
+    // ==================== EXTRACCIÓN DE DATOS ====================
+    
+    // ID y relaciones
+    const id = backendPlan.id ? `plan_${backendPlan.id}` : '';
+    const paciente_id = backendPlan.paciente_id ? String(backendPlan.paciente_id) : '';
+    const usuario_id = backendPlan.usuario_id ? String(backendPlan.usuario_id) : '1';
+    
+    // 🔴 DATOS PERSONALES - PRIORIZAR JOIN CON PACIENTE
+    const nombre_completo = backendPlan.nombre_completo_paciente || 
+                          backendPlan.nombre_completo || 
+                          'Paciente no identificado';
+    
+    const identificacion = backendPlan.paciente_documento || 
+                          backendPlan.identificacion || 
+                          '';
+    
+    const ocupacion = backendPlan.ocupacion || '';
+    const entidad = backendPlan.entidad || '';
+    
+    // Datos médicos
+    const peso = backendPlan.peso ? parseFloat(backendPlan.peso) : 0;
+    const altura = backendPlan.altura ? parseFloat(backendPlan.altura) : 0;
+    const imc = backendPlan.imc ? parseFloat(backendPlan.imc) : 0;
+    const categoriaIMC = backendPlan.categoriaIMC || '';
+    
+    // Edad - priorizar edad_calculada, luego edad
+    let edad_calculada = 0;
+    if (backendPlan.edad_calculada) {
+      edad_calculada = parseInt(backendPlan.edad_calculada);
+    } else if (backendPlan.edad) {
+      edad_calculada = parseInt(backendPlan.edad);
+    }
+    
+    // Fechas
+    const fecha_consulta = backendPlan.fecha_consulta || '';
+    const hora_consulta = backendPlan.hora_consulta ? 
+      (typeof backendPlan.hora_consulta === 'string' ? 
+        backendPlan.hora_consulta.substring(0, 5) : 
+        String(backendPlan.hora_consulta).substring(0, 5)) : 
+      '';
+    
+    const fecha_nacimiento = backendPlan.fecha_nacimiento || '';
+    
+    // Datos de contacto
+    const telefono = backendPlan.telefono || '';
+    const celular = backendPlan.celular || '';
+    const direccion = backendPlan.direccion || '';
+    const email = backendPlan.email || '';
+    
+    // Motivo de consulta y procedimiento
+    const motivo_consulta = backendPlan.motivo_consulta || '';
+    const procedimiento_desc = backendPlan.procedimiento_desc || '';
+    const descripcion_procedimiento = backendPlan.descripcion_procedimiento || '';
+    const plan_conducta = backendPlan.plan_conducta || '';
+    const detalles = backendPlan.detalles || '';
+    
+    // Antecedentes (texto plano)
+    const farmacologicos_text = backendPlan.farmacologicos || '';
+    const traumaticos_text = backendPlan.traumaticos || '';
+    const quirurgicos_text = backendPlan.quirurgicos || '';
+    const alergicos_text = backendPlan.alergicos || '';
+    const toxicos_text = backendPlan.toxicos || '';
+    const habitos_text = backendPlan.habitos || '';
+    
+    // Examen físico (texto plano)
+    const cabeza_text = backendPlan.cabeza || '';
+    const mamas_text = backendPlan.mamas || '';
+    const tcs_text = backendPlan.tcs || '';
+    const abdomen_text = backendPlan.abdomen || '';
+    const gluteos_text = backendPlan.gluteos || '';
+    const extremidades_text = backendPlan.extremidades || '';
+    const pies_faneras_text = backendPlan.pies_faneras || '';
+    
+    // Conducta quirúrgica
+    const duracion_estimada = backendPlan.duracion_estimada ? parseInt(backendPlan.duracion_estimada) : 0;
+    const tipo_anestesia = backendPlan.tipo_anestesia || 'general';
+    const requiere_hospitalizacion = Boolean(backendPlan.requiere_hospitalizacion);
+    const tiempo_hospitalizacion = backendPlan.tiempo_hospitalizacion || '';
+    const reseccion_estimada = backendPlan.reseccion_estimada || '';
+    const firma_cirujano = backendPlan.firma_cirujano || '';
+    const firma_paciente = backendPlan.firma_paciente || '';
+    
+    // Notas
+    const notas_doctor = backendPlan.notas_doctor || backendPlan.notas_preoperatorias || '';
+    const materiales_requeridos = backendPlan.materiales_requeridos || '';
+    const riesgos = backendPlan.riesgos || '';
+    const anestesiologo = backendPlan.anestesiologo || '';
+    const tiempo_cirugia_minutos = backendPlan.tiempo_cirugia_minutos || duracion_estimada;
+    
+    // ==================== PARSEAR CAMPOS JSON ====================
+    
+    const enfermedad_actual_json = parseJson(backendPlan.enfermedad_actual, {});
+    const antecedentes_json = parseJson(backendPlan.antecedentes, {});
+    const notas_corporales_json = parseJson(backendPlan.notas_corporales, {});
+    const esquema_mejorado_json = parseJson(backendPlan.esquema_mejorado, {
+      zoneMarkings: {},
+      selectionHistory: [],
+      currentStrokeWidth: 3,
+      currentTextSize: 16,
+      selectedProcedure: 'liposuction'
+    });
+    
+    // Combinar datos de texto plano con JSON
+    const enfermedad_actual_combined = {
+      hepatitis: false,
+      discrasia_sanguinea: false,
+      cardiopatias: false,
+      hipertension: false,
+      reumatologicas: false,
+      diabetes: false,
+      neurologicas: false,
+      enfermedad_mental: false,
+      no_refiere: true,
+      ...enfermedad_actual_json
+    };
+    
+    const antecedentes_combined = {
+      farmacologicos: farmacologicos_text,
+      traumaticos: traumaticos_text,
+      quirurgicos: quirurgicos_text,
+      alergicos: alergicos_text,
+      toxicos: toxicos_text,
+      habitos: habitos_text,
+      ginecologicos: '',
+      fuma: 'no',
+      planificacion: '',
+      ...antecedentes_json
+    };
+    
+    const notas_corporales_combined = {
+      cabeza: cabeza_text,
+      mamas: mamas_text,
+      tcs: tcs_text,
+      abdomen: abdomen_text,
+      gluteos: gluteos_text,
+      extremidades: extremidades_text,
+      pies_faneras: pies_faneras_text,
+      ...notas_corporales_json
+    };
+    
+    // Imágenes adjuntas
+    const imagenes_adjuntas = parseJson(backendPlan.imagen_procedimiento, []);
+    
+    // ==================== CONSTRUIR PLAN TRANSFORMADO ====================
+    
+    const planTransformado = {
+      id: id,
+      id_paciente: paciente_id,
+      id_usuario: usuario_id,
+      fecha_creacion: backendPlan.fecha_creacion || new Date().toISOString(),
+      fecha_modificacion: backendPlan.fecha_modificacion || backendPlan.fecha_creacion || '',
+      
+      // DATOS PACIENTE
+      datos_paciente: {
+        id: paciente_id,
+        identificacion: identificacion,
+        edad: edad_calculada,
+        nombre_completo: nombre_completo,
+        peso: peso,
+        altura: altura,
+        imc: imc,
+        categoriaIMC: categoriaIMC,
+        fecha_consulta: fecha_consulta,
+        hora_consulta: hora_consulta
+      },
+      
+      // HISTORIA CLÍNICA
+      historia_clinica: {
+        nombre_completo: nombre_completo,
+        identificacion: identificacion,
+        ocupacion: ocupacion,
+        fecha_nacimiento: fecha_nacimiento,
+        edad_calculada: edad_calculada,
+        entidad: entidad,
+        telefono: telefono,
+        celular: celular,
+        direccion: direccion,
+        email: email,
+        motivo_consulta: motivo_consulta,
+        motivo_consulta_detalle: procedimiento_desc,
+        enfermedad_actual: enfermedad_actual_combined,
+        antecedentes: antecedentes_combined,
+        enfermedades_piel: false,
+        tratamientos_esteticos: '',
+        antecedentes_familiares: '',
+        peso: peso,
+        altura: altura,
+        imc: imc,
+        contextura: '',
+        notas_corporales: notas_corporales_combined,
+        diagnostico: descripcion_procedimiento || detalles,
+        plan_conducta: plan_conducta
+      },
+      
+      // CONDUCTA QUIRÚRGICA
+      conducta_quirurgica: {
+        duracion_estimada: duracion_estimada,
+        tipo_anestesia: tipo_anestesia,
+        requiere_hospitalizacion: requiere_hospitalizacion,
+        tiempo_hospitalizacion: tiempo_hospitalizacion,
+        reseccion_estimada: reseccion_estimada,
+        firma_cirujano: firma_cirujano,
+        firma_paciente: firma_paciente
+      },
+      
+      cirugias_previas: [],
+      dibujos_esquema: [],
+      notas_doctor: notas_doctor,
+      materiales_requeridos: materiales_requeridos,
+      riesgos: riesgos,
+      anestesiologo: anestesiologo,
+      tiempo_cirugia_minutos: tiempo_cirugia_minutos,
+      imagenes_adjuntas: imagenes_adjuntas,
+      esquema_mejorado: esquema_mejorado_json
+    };
+
+    console.log("✅ PLAN TRANSFORMADO COMPLETO:", {
+      id: planTransformado.id,
+      nombre: planTransformado.datos_paciente.nombre_completo,
+      identificacion: planTransformado.datos_paciente.identificacion,
+      tienePeso: !!peso,
+      tieneAltura: !!altura,
+      tieneIMC: !!imc
+    });
+
+    return planTransformado;
   },
 
+  // ======================================================================
+  // AQUÍ ES DONDE DEBES PONER LA FUNCIÓN createEmptyPlan
+  // ======================================================================
+  createEmptyPlan: () => ({
+    id: '',
+    id_paciente: '',
+    id_usuario: '',
+    fecha_creacion: '',
+    fecha_modificacion: '',
+    datos_paciente: {
+      id: '',
+      identificacion: '',
+      edad: 0,
+      nombre_completo: '',
+      peso: 0,
+      altura: 0,
+      imc: 0,
+      categoriaIMC: '',
+      fecha_consulta: '',
+      hora_consulta: ''
+    },
+    historia_clinica: {
+      nombre_completo: '',
+      identificacion: '',
+      ocupacion: '',
+      fecha_nacimiento: '',
+      edad_calculada: 0,
+      entidad: '',
+      telefono: '',
+      celular: '',
+      direccion: '',
+      email: '',
+      motivo_consulta: '',
+      motivo_consulta_detalle: '',
+      enfermedad_actual: {
+        hepatitis: false,
+        discrasia_sanguinea: false,
+        cardiopatias: false,
+        hipertension: false,
+        reumatologicas: false,
+        diabetes: false,
+        neurologicas: false,
+        enfermedad_mental: false,
+        no_refiere: true
+      },
+      antecedentes: {
+        farmacologicos: '',
+        traumaticos: '',
+        quirurgicos: '',
+        alergicos: '',
+        toxicos: '',
+        habitos: '',
+        ginecologicos: '',
+        fuma: 'no',
+        planificacion: ''
+      },
+      enfermedades_piel: false,
+      tratamientos_esteticos: '',
+      antecedentes_familiares: '',
+      peso: 0,
+      altura: 0,
+      imc: 0,
+      contextura: '',
+      notas_corporales: {
+        cabeza: '',
+        mamas: '',
+        tcs: '',
+        abdomen: '',
+        gluteos: '',
+        extremidades: '',
+        pies_faneras: ''
+      },
+      diagnostico: '',
+      plan_conducta: ''
+    },
+    conducta_quirurgica: {
+      duracion_estimada: 0,
+      tipo_anestesia: 'general',
+      requiere_hospitalizacion: false,
+      tiempo_hospitalizacion: '',
+      reseccion_estimada: '',
+      firma_cirujano: '',
+      firma_paciente: ''
+    },
+    cirugias_previas: [],
+    dibujos_esquema: [],
+    notas_doctor: '',
+    materiales_requeridos: '',
+    riesgos: '',
+    anestesiologo: '',
+    tiempo_cirugia_minutos: 0,
+    imagenes_adjuntas: [],
+    esquema_mejorado: {
+      zoneMarkings: {},
+      selectionHistory: [],
+      currentStrokeWidth: 3,
+      currentTextSize: 16,
+      selectedProcedure: 'liposuction'
+    }
+  }),
   // Transformación inversa - Paciente
   pacienteToBackend: (frontendPaciente: any) => {
     let genero = frontendPaciente.genero;
@@ -2100,38 +2572,18 @@ export const transformBackendToFrontend = {
     };
   },
 
-  // Transformación inversa - Plan Quirúrgico para enviar al backend
-  planQuirurgicoToBackend: (frontendPlan: any) => {
+    planQuirurgicoToBackend: (frontendPlan: any) => {
     console.log("🚀 Transformando plan quirúrgico para backend:", {
       id: frontendPlan.id,
       paciente_id: frontendPlan.id_paciente,
       hasEsquema: !!frontendPlan.esquema_mejorado
     });
     
-    // Extraer datos del paciente del frontend
-    const datosPaciente = frontendPlan.datos_paciente || {};
-    const historiaClinica = frontendPlan.historia_clinica || {};
-    const conductaQuirurgica = frontendPlan.conducta_quirurgica || {};
-    
-    // Mapear estado a estado_id
-    const estadoMap: Record<string, number> = {
-      'borrador': 1,
-      'aprobado': 2,
-      'completado': 3
-    };
-    
-    const estado_id = estadoMap[frontendPlan.estado] || 1;
-    
-    // Preparar datos JSON para campos complejos
-    const enfermedad_actual = historiaClinica.enfermedad_actual || {};
-    const antecedentes = historiaClinica.antecedentes || {};
-    const notas_corporales = historiaClinica.notas_corporales || {};
-    
     // Calcular IMC
-    const peso = datosPaciente.peso ? parseFloat(datosPaciente.peso) : null;
-    const altura = datosPaciente.altura ? parseFloat(datosPaciente.altura) : null;
-    let imc = datosPaciente.imc ? parseFloat(datosPaciente.imc) : null;
-    let categoriaIMC = datosPaciente.categoriaIMC || '';
+    const peso = frontendPlan.datos_paciente?.peso ? parseFloat(frontendPlan.datos_paciente.peso) : null;
+    const altura = frontendPlan.datos_paciente?.altura ? parseFloat(frontendPlan.datos_paciente.altura) : null;
+    let imc = frontendPlan.datos_paciente?.imc ? parseFloat(frontendPlan.datos_paciente.imc) : null;
+    let categoriaIMC = frontendPlan.datos_paciente?.categoriaIMC || '';
     
     if (!imc && peso && altura && altura > 0) {
       imc = peso / (altura * altura);
@@ -2149,11 +2601,14 @@ export const transformBackendToFrontend = {
     }
     
     // Calcular edad si no está presente
-    let edad_calculada = datosPaciente.edad || historiaClinica.edad_calculada || 0;
-    if (!edad_calculada && historiaClinica.fecha_nacimiento) {
-      const fechaNacimiento = new Date(historiaClinica.fecha_nacimiento);
+    let edad_calculada = frontendPlan.datos_paciente?.edad || frontendPlan.historia_clinica?.edad_calculada || 0;
+    let edad = edad_calculada; // Nuevo campo 'edad' (distinto de edad_calculada)
+    
+    if (!edad_calculada && frontendPlan.historia_clinica?.fecha_nacimiento) {
+      const fechaNacimiento = new Date(frontendPlan.historia_clinica.fecha_nacimiento);
       const hoy = new Date();
       edad_calculada = hoy.getFullYear() - fechaNacimiento.getFullYear();
+      edad = edad_calculada;
       
       // Ajustar si aún no ha cumplido años este año
       const mesCumple = fechaNacimiento.getMonth();
@@ -2163,89 +2618,115 @@ export const transformBackendToFrontend = {
       
       if (mesActual < mesCumple || (mesActual === mesCumple && diaActual < diaCumple)) {
         edad_calculada--;
+        edad = edad_calculada;
       }
     }
     
-    // Preparar datos del esquema (convertir a JSON string)
-    const esquema_corporal = frontendPlan.esquema_mejorado ? 
-      JSON.stringify(frontendPlan.esquema_mejorado) : null;
+    // Obtener datos del paciente si existen
+    const pacienteNombre = frontendPlan.datos_paciente?.nombre_completo || 
+                          frontendPlan.historia_clinica?.nombre_completo || '';
+    const pacienteIdentificacion = frontendPlan.datos_paciente?.identificacion || 
+                                  frontendPlan.historia_clinica?.identificacion || '';
+    
+    // Preparar imagen_procedimiento
+    const imagen_procedimiento = frontendPlan.imagenes_adjuntas && frontendPlan.imagenes_adjuntas.length > 0 ?
+      (Array.isArray(frontendPlan.imagenes_adjuntas) ? 
+      JSON.stringify(frontendPlan.imagenes_adjuntas) : 
+      frontendPlan.imagenes_adjuntas) : null;
+    
+    // Preparar campos JSON
+    const enfermedad_actual = frontendPlan.historia_clinica?.enfermedad_actual || {};
+    const antecedentes = frontendPlan.historia_clinica?.antecedentes || {};
+    const notas_corporales = frontendPlan.historia_clinica?.notas_corporales || {};
+    const esquema_mejorado = frontendPlan.esquema_mejorado || {};
     
     return {
-      // IDs
-      paciente_id: parseInt(frontendPlan.id_paciente),
-      usuario_id: parseInt(frontendPlan.id_usuario || '1'), // Usuario por defecto
-      estado_id: estado_id,
+      // 1. IDs básicos (2 campos)
+      paciente_id: parseInt(frontendPlan.id_paciente) || 0,
+      usuario_id: parseInt(frontendPlan.id_usuario || '1'),
       
-      // Información básica del plan
-      procedimiento_desc: historiaClinica.diagnostico || historiaClinica.motivo_consulta || '',
-      descripcion_procedimiento: historiaClinica.plan_conducta || '',
-      anestesiologo: conductaQuirurgica.tipo_anestesia || '',
-      duracion_estimada: conductaQuirurgica.duracion_estimada || null,
-      tiempo_cirugia_minutos: conductaQuirurgica.duracion_estimada || null,
-      requiere_hospitalizacion: conductaQuirurgica.requiere_hospitalizacion || false,
-      tiempo_hospitalizacion: conductaQuirurgica.tiempo_hospitalizacion || '',
-      reseccion_estimada: conductaQuirurgica.reseccion_estimada || '',
-      tipo_anestesia: conductaQuirurgica.tipo_anestesia || '',
-      firma_cirujano: conductaQuirurgica.firma_cirujano || '',
-      firma_paciente: conductaQuirurgica.firma_paciente || '',
+      // 2. Datos quirúrgicos básicos (6 campos)
+      procedimiento_desc: frontendPlan.historia_clinica?.diagnostico || 
+                        frontendPlan.historia_clinica?.motivo_consulta || '',
+      anestesiologo: frontendPlan.conducta_quirurgica?.tipo_anestesia || '',
+      materiales_requeridos: frontendPlan.historia_clinica?.diagnostico || '',
+      notas_preoperatorias: frontendPlan.notas_doctor || '',
+      riesgos: frontendPlan.historia_clinica?.diagnostico || '',
+      hora: frontendPlan.conducta_quirurgica?.duracion_estimada ? 
+            `00:${frontendPlan.conducta_quirurgica.duracion_estimada}:00` : null,
       
-      // Datos del paciente
-      nombre_completo: datosPaciente.nombre_completo || historiaClinica.nombre_completo || '',
-      identificacion: datosPaciente.identificacion || historiaClinica.identificacion || '',
+      // 3. Fecha programada (1 campo)
+      fecha_programada: frontendPlan.datos_paciente?.fecha_consulta || null,
+      
+      // 4. Datos personales básicos (5 campos)
+      nombre_completo: pacienteNombre,
       peso: peso,
       altura: altura,
+      fecha_nacimiento: frontendPlan.historia_clinica?.fecha_nacimiento || null,
       imc: imc,
+      
+      // 5. Imagen y procedimiento (4 campos)
+      imagen_procedimiento: imagen_procedimiento,
+      fecha_ultimo_procedimiento: null, // No disponible en frontend
+      descripcion_procedimiento: frontendPlan.historia_clinica?.plan_conducta || '',
+      detalles: frontendPlan.historia_clinica?.motivo_consulta || '',
+      
+      // 6. Notas y tiempo cirugía (2 campos)
+      notas_doctor: frontendPlan.notas_doctor || '', // CAMBIADO: notas_del_doctor → notas_doctor
+      tiempo_cirugia_minutos: frontendPlan.conducta_quirurgica?.duracion_estimada || null,
+      
+      // 7. Entidad y datos contacto (7 campos)
+      entidad: frontendPlan.historia_clinica?.entidad || '',
+      edad: edad, // NUEVO CAMPO: edad (no confundir con edad_calculada)
+      telefono: frontendPlan.historia_clinica?.telefono || '', // CAMBIADO: telefono_fijo → telefono
+      celular: frontendPlan.historia_clinica?.celular || '',
+      direccion: frontendPlan.historia_clinica?.direccion || '',
+      email: frontendPlan.historia_clinica?.email || '',
+      motivo_consulta: frontendPlan.historia_clinica?.motivo_consulta || '',
+      
+      // 8. Antecedentes (texto plano) (6 campos)
+      farmacologicos: frontendPlan.historia_clinica?.antecedentes?.farmacologicos || '',
+      traumaticos: frontendPlan.historia_clinica?.antecedentes?.traumaticos || '',
+      quirurgicos: frontendPlan.historia_clinica?.antecedentes?.quirurgicos || '',
+      alergicos: frontendPlan.historia_clinica?.antecedentes?.alergicos || '',
+      toxicos: frontendPlan.historia_clinica?.antecedentes?.toxicos || '',
+      habitos: frontendPlan.historia_clinica?.antecedentes?.habitos || '',
+      
+      // 9. Examen físico (texto plano) (7 campos)
+      cabeza: frontendPlan.historia_clinica?.notas_corporales?.cabeza || '',
+      mamas: frontendPlan.historia_clinica?.notas_corporales?.mamas || '',
+      tcs: frontendPlan.historia_clinica?.notas_corporales?.tcs || '',
+      abdomen: frontendPlan.historia_clinica?.notas_corporales?.abdomen || '',
+      gluteos: frontendPlan.historia_clinica?.notas_corporales?.gluteos || '',
+      extremidades: frontendPlan.historia_clinica?.notas_corporales?.extremidades || '',
+      pies_faneras: frontendPlan.historia_clinica?.notas_corporales?.pies_faneras || '',
+      
+      // 10. Identificación y consulta (6 campos)
+      identificacion: pacienteIdentificacion,
+      fecha_consulta: frontendPlan.datos_paciente?.fecha_consulta || new Date().toISOString().split('T')[0],
+      hora_consulta: frontendPlan.datos_paciente?.hora_consulta || new Date().toTimeString().slice(0, 5),
       categoriaIMC: categoriaIMC,
-      fecha_consulta: datosPaciente.fecha_consulta || new Date().toISOString().split('T')[0],
-      hora_consulta: datosPaciente.hora_consulta || new Date().toTimeString().slice(0, 5),
       edad_calculada: edad_calculada,
-      fecha_nacimiento: historiaClinica.fecha_nacimiento || null,
+      ocupacion: frontendPlan.historia_clinica?.ocupacion || '',
       
-      // Información de contacto
-      ocupacion: historiaClinica.ocupacion || '',
-      telefono_fijo: historiaClinica.telefono || '',
-      celular: historiaClinica.celular || '',
-      direccion: historiaClinica.direccion || '',
-      email: historiaClinica.email || '',
-      referido_por: historiaClinica.referido_por || null,
-      entidad: historiaClinica.entidad || '',
-      
-      // Antecedentes (texto plano - para compatibilidad)
-      farmacologicos: antecedentes.farmacologicos || '',
-      traumaticos: antecedentes.traumaticos || '',
-      quirurgicos: antecedentes.quirurgicos || '',
-      alergicos: antecedentes.alergicos || '',
-      toxicos: antecedentes.toxicos || '',
-      habitos: antecedentes.habitos || '',
-      
-      // Examen físico (texto plano - para compatibilidad)
-      cabeza: notas_corporales.cabeza || '',
-      mamas: notas_corporales.mamas || '',
-      tcs: notas_corporales.tcs || '',
-      abdomen: notas_corporales.abdomen || '',
-      gluteos: notas_corporales.gluteos || '',
-      extremidades: notas_corporales.extremidades || '',
-      pies_faneras: notas_corporales.pies_faneras || '',
-      
-      // Notas y riesgos
-      motivo_consulta: historiaClinica.motivo_consulta || '',
-      notas_preoperatorias: frontendPlan.notas_doctor || '',
-      notas_del_doctor: frontendPlan.notas_doctor || '',
-      riesgos: '',
-      detalles: '',
-      
-      // JSON fields
+      // 11. Campos JSON (3 campos)
       enfermedad_actual: enfermedad_actual,
       antecedentes: antecedentes,
       notas_corporales: notas_corporales,
       
-      // Esquemas
-      esquema_corporal: esquema_corporal,
-      esquema_facial: esquema_corporal, // Usar mismo por ahora
+      // 12. Datos quirúrgicos específicos (7 campos)
+      duracion_estimada: frontendPlan.conducta_quirurgica?.duracion_estimada || null,
+      tipo_anestesia: frontendPlan.conducta_quirurgica?.tipo_anestesia || '',
+      requiere_hospitalizacion: frontendPlan.conducta_quirurgica?.requiere_hospitalizacion || false,
+      tiempo_hospitalizacion: frontendPlan.conducta_quirurgica?.tiempo_hospitalizacion || '',
+      reseccion_estimada: frontendPlan.conducta_quirurgica?.reseccion_estimada || '',
+      firma_cirujano: frontendPlan.conducta_quirurgica?.firma_cirujano || '',
+      firma_paciente: frontendPlan.conducta_quirurgica?.firma_paciente || '',
       
-      // Imágenes
-      imagen_procedimiento: frontendPlan.imagenes_adjuntas && frontendPlan.imagenes_adjuntas.length > 0 ?
-        JSON.stringify(frontendPlan.imagenes_adjuntas) : null
+      // 13. NUEVOS CAMPOS AGREGADOS (3 campos)
+      plan_conducta: frontendPlan.historia_clinica?.plan_conducta || '',
+      esquema_mejorado: esquema_mejorado
+      // fecha_modificacion se maneja automáticamente en el backend
     };
   },
 };
