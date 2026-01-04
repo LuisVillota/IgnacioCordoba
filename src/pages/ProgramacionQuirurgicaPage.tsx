@@ -218,7 +218,7 @@ export function ProgramacionQuirurgicaPage() {
           }
         })
         
-        console.log(`✅ Programaciones formateadas: ${programacionesFormateadas.length} registros`);
+        console.log(`Programaciones formateadas: ${programacionesFormateadas.length} registros`);
         setProgramaciones(programacionesFormateadas)
         
         // Calcular estadísticas de la lista cargada
@@ -365,7 +365,7 @@ export function ProgramacionQuirurgicaPage() {
         return;
       }
 
-      console.log("✅ procedimiento_id convertido correctamente a número:", procedimientoIdNum);
+      console.log("procedimiento_id convertido correctamente a número:", procedimientoIdNum);
 
       let horaFormateada = data.hora;
       if (horaFormateada.includes(":") && horaFormateada.split(":").length === 2) {
@@ -435,8 +435,8 @@ export function ProgramacionQuirurgicaPage() {
       // 🔴 **SI ES ÉXITO**: response debería ser el objeto normal sin propiedad 'error'
       if (response && response.success !== false) {
         setSuccessMessage(editingId ? 
-          "✅ Programación actualizada correctamente" : 
-          "✅ Programación creada correctamente"
+          "Programación actualizada correctamente" : 
+          "Programación creada correctamente"
         );
         
         // Limpiar filtro de documento si existe
@@ -519,7 +519,7 @@ export function ProgramacionQuirurgicaPage() {
         // Actualizar el estado a Cancelado en lugar de eliminar
         await api.updateAgendaProcedimiento(idNum, datosParaCancelar);
         
-        setSuccessMessage("✅ Programación cancelada exitosamente");
+        setSuccessMessage("Programación cancelada exitosamente");
         
         // Limpiar filtro de documento si existe
         if (filterDocumento) {
@@ -567,7 +567,7 @@ export function ProgramacionQuirurgicaPage() {
       
       await api.updateAgendaProcedimiento(idNum, datosActualizar);
       
-      setSuccessMessage(`✅ Estado cambiado a "${nuevoEstado}"`);
+      setSuccessMessage(`Estado cambiado a "${nuevoEstado}"`);
       setRefreshKey(prev => prev + 1);
     } catch (err: any) {
       console.error("❌ Error cambiando estado:", err);
