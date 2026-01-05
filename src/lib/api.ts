@@ -200,6 +200,26 @@ export const api = {
   // ===== USUARIOS =====
   getUsuarios: () => fetchAPI('/api/usuarios'),
   getUsuario: (id: number) => fetchAPI(`/api/usuarios/${id}`),
+  createUsuario: (data: any) => 
+      fetchAPI('/api/usuarios', { 
+          method: 'POST', 
+          body: JSON.stringify(data) 
+      }),
+  updateUsuario: (id: number, data: any) =>
+      fetchAPI(`/api/usuarios/${id}`, { 
+          method: 'PUT', 
+          body: JSON.stringify(data) 
+      }),
+  deleteUsuario: (id: number) =>
+      fetchAPI(`/api/usuarios/${id}`, { method: 'DELETE' }),
+
+  // ===== ROLES Y PERMISOS =====
+  getRoles: () => fetchAPI('/api/roles'),
+  getPermisos: () => fetchAPI('/api/permisos'),
+  getPermisosRol: (rolId: number) => fetchAPI(`/api/roles/${rolId}/permisos`),
+
+  // ===== DEBUG =====
+  debugUsuariosTabla: () => fetchAPI('/api/debug/usuarios-tabla'),
   
   // ===== PACIENTES =====
   getPacientes: (limit?: number, offset?: number) => 
@@ -1680,6 +1700,18 @@ export const handleApiError = (error: any): string => {
 
 // Funciones helper para transformar datos - VERSIÓN MEJORADA
 export const transformBackendToFrontend = {
+
+  usuario: (backendUsuario: any) => ({
+      id: backendUsuario.id?.toString() || '',
+      username: backendUsuario.username || '',
+      nombre: backendUsuario.nombre || '',
+      email: backendUsuario.email || '',
+      rol: backendUsuario.rol || backendUsuario.tipo_rol || '',
+      activo: Boolean(backendUsuario.activo),
+      estado_usuario: backendUsuario.activo ? "activo" : "inactivo" as "activo" | "inactivo",
+      fecha_registro: backendUsuario.fecha_creacion || new Date().toISOString(),
+  }),
+
   // Transformar paciente del backend al formato del frontend
   paciente: (backendPaciente: any) => ({
     id: backendPaciente.id?.toString() || '',
@@ -2205,9 +2237,6 @@ export const transformBackendToFrontend = {
     return planTransformado;
   },
 
-  // ======================================================================
-  // AQUÍ ES DONDE DEBES PONER LA FUNCIÓN createEmptyPlan
-  // ======================================================================
   createEmptyPlan: () => ({
     id: '',
     id_paciente: '',
@@ -2305,6 +2334,27 @@ export const transformBackendToFrontend = {
       selectedProcedure: 'liposuction'
     }
   }),
+
+  // ==================== TRANSFORMACIONES INVERSAS (BACKEND) ====================
+
+  // Transformación inversa - Usuario para enviar al backend
+  usuarioToBackend: (frontendUsuario: any) => {
+    const backendData: any = {
+      username: frontendUsuario.username || '',
+      nombre: frontendUsuario.nombre || '',
+      email: frontendUsuario.email || '',
+      rol_id: parseInt(frontendUsuario.rol) || 1,
+      activo: frontendUsuario.estado_usuario === 'activo' || frontendUsuario.activo
+    };
+    
+    // Solo incluir password si se proporcionó (para edición)
+    if (frontendUsuario.password && frontendUsuario.password.trim() !== '') {
+      backendData.password = frontendUsuario.password;
+    }
+    
+    return backendData;
+  },
+
   // Transformación inversa - Paciente
   pacienteToBackend: (frontendPaciente: any) => {
     let genero = frontendPaciente.genero;
@@ -2572,7 +2622,7 @@ export const transformBackendToFrontend = {
     };
   },
 
-    planQuirurgicoToBackend: (frontendPlan: any) => {
+  planQuirurgicoToBackend: (frontendPlan: any) => {
     console.log("🚀 Transformando plan quirúrgico para backend:", {
       id: frontendPlan.id,
       paciente_id: frontendPlan.id_paciente,

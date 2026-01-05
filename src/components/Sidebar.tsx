@@ -17,6 +17,7 @@ import {
 interface SidebarProps {
   user: User
   onNavigate: (page: string) => void
+  currentPage: string
 }
 
 const menuItemsByRole = {
@@ -55,7 +56,7 @@ const menuItemsByRole = {
   ],
 }
 
-export function Sidebar({ user, onNavigate }: SidebarProps) {
+export function Sidebar({ user, onNavigate, currentPage }: SidebarProps) {
   const menuItems = menuItemsByRole[user.rol] || []
 
   return (
@@ -81,7 +82,11 @@ export function Sidebar({ user, onNavigate }: SidebarProps) {
             <li key={idx}>
               <button
                 onClick={() => onNavigate(item.href)}
-                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-[#155529] transition duration-200 text-left"
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition duration-200 text-left ${
+                  currentPage === item.href 
+                    ? 'bg-[#155529] font-semibold' 
+                    : 'hover:bg-[#155529]'
+                }`}
               >
                 <item.icon size={20} />
                 <span className="text-sm font-medium">{item.label}</span>

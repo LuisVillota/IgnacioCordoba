@@ -818,7 +818,7 @@ export const PlanQuirurgicoPage: React.FC = () => {
                           onClick={() => descargarArchivo(archivo)}
                           className="px-3 py-1 bg-[#1a6b32] text-white rounded hover:bg-[#155228] text-sm"
                         >
-                          ⬇️ Descargar
+                          Descargar
                         </button>
                       </div>
                     ))}

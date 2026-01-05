@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Plus, Edit2, Eye, Trash2, Loader2, RefreshCw } from "lucide-react"
+import { Search, Plus, Edit2, Eye, Loader2, RefreshCw } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { PacienteForm } from "../components/PacienteForm"
 import { PacienteModal } from "../components/PacienteModal"
@@ -125,20 +125,6 @@ export function PacientesPage() {
     setEditingId(paciente.id)
     setSelectedPaciente(paciente)
     setShowForm(true)
-  }
-
-  const handleDelete = async (id: string) => {
-    if (confirm("¿Estás seguro de que deseas eliminar este paciente?")) {
-      try {
-        await api.deletePaciente(parseInt(id))
-        if (selectedPaciente && selectedPaciente.id === id) {
-          setSelectedPaciente(null)
-        }
-        setPacientes(pacientes.filter((p) => p.id !== id))
-      } catch (err: any) {
-        alert(`Error: ${handleApiError(err)}`)
-      }
-    }
   }
 
   const handleRefresh = () => {
@@ -284,15 +270,6 @@ export function PacientesPage() {
                               title="Editar"
                             >
                               <Edit2 size={18} />
-                            </button>
-                          </ProtectedRoute>
-                          <ProtectedRoute permissions={["editar_paciente"]}>
-                            <button
-                              onClick={() => handleDelete(paciente.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Eliminar"
-                            >
-                              <Trash2 size={18} />
                             </button>
                           </ProtectedRoute>
                         </div>

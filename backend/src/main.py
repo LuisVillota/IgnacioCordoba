@@ -59,6 +59,22 @@ def parse_int_safe(value):
                     pass
     raise ValueError(f"No se pudo convertir a entero: {value}")
 
+class UsuarioCreate(BaseModel):
+    username: str
+    password: str
+    nombre: str
+    email: str
+    rol_id: int
+    activo: bool = True
+
+class UsuarioUpdate(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+    nombre: Optional[str] = None
+    email: Optional[str] = None
+    rol_id: Optional[int] = None
+    activo: Optional[bool] = None
+
 class PacienteBase(BaseModel):
     numero_documento: str
     tipo_documento: Optional[str] = "CC"
@@ -551,6 +567,184 @@ def test_frontend():
         }
 
 # ====================== ENDPOINTS DE USUARIOS ======================
+
+@app.post("/api/usuarios", response_model=dict)
+def create_usuario(usuario: UsuarioCreate):
+    try:
+        import hashlib
+        password_hash = hashlib.sha256(usuario.password.encode()).hexdigest()
+        
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar si el username ya existe
+                cursor.execute("SELECT id FROM usuario WHERE username = %s", (usuario.username,))
+                if cursor.fetchone():
+                    raise HTTPException(status_code=400, detail="El nombre de usuario ya existe")
+                
+                # Verificar si el email ya existe
+                cursor.execute("SELECT id FROM usuario WHERE email = %s", (usuario.email,))
+                if cursor.fetchone():
+                    raise HTTPException(status_code=400, detail="El email ya está registrado")
+                
+                # Verificar que el rol existe
+                cursor.execute("SELECT id FROM rol WHERE id = %s", (usuario.rol_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=400, detail="El rol especificado no existe")
+                
+                cursor.execute("""
+                    INSERT INTO usuario (username, password, nombre, email, rol_id, activo)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    usuario.username,
+                    password_hash,
+                    usuario.nombre,
+                    usuario.email,
+                    usuario.rol_id,
+                    1 if usuario.activo else 0
+                ))
+                usuario_id = cursor.lastrowid
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Usuario creado exitosamente",
+                    "usuario_id": usuario_id
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/usuarios/{usuario_id}", response_model=dict)
+def update_usuario(usuario_id: int, usuario: UsuarioUpdate):
+    try:
+        import hashlib
+        
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el usuario existe
+                cursor.execute("SELECT id FROM usuario WHERE id = %s", (usuario_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Usuario no encontrado")
+                
+                update_fields = []
+                values = []
+                
+                if usuario.username is not None:
+                    cursor.execute("SELECT id FROM usuario WHERE username = %s AND id != %s", (usuario.username, usuario_id))
+                    if cursor.fetchone():
+                        raise HTTPException(status_code=400, detail="El nombre de usuario ya está en uso")
+                    update_fields.append("username = %s")
+                    values.append(usuario.username)
+                
+                if usuario.password is not None:
+                    password_hash = hashlib.sha256(usuario.password.encode()).hexdigest()
+                    update_fields.append("password = %s")
+                    values.append(password_hash)
+                
+                if usuario.nombre is not None:
+                    update_fields.append("nombre = %s")
+                    values.append(usuario.nombre)
+                
+                if usuario.email is not None:
+                    cursor.execute("SELECT id FROM usuario WHERE email = %s AND id != %s", (usuario.email, usuario_id))
+                    if cursor.fetchone():
+                        raise HTTPException(status_code=400, detail="El email ya está en uso")
+                    update_fields.append("email = %s")
+                    values.append(usuario.email)
+                
+                if usuario.rol_id is not None:
+                    cursor.execute("SELECT id FROM rol WHERE id = %s", (usuario.rol_id,))
+                    if not cursor.fetchone():
+                        raise HTTPException(status_code=400, detail="El rol especificado no existe")
+                    update_fields.append("rol_id = %s")
+                    values.append(usuario.rol_id)
+                
+                if usuario.activo is not None:
+                    update_fields.append("activo = %s")
+                    values.append(1 if usuario.activo else 0)
+                
+                if not update_fields:
+                    raise HTTPException(status_code=400, detail="No se proporcionaron datos para actualizar")
+                
+                values.append(usuario_id)
+                query = f"UPDATE usuario SET {', '.join(update_fields)} WHERE id = %s"
+                cursor.execute(query, values)
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Usuario actualizado exitosamente",
+                    "usuario_id": usuario_id
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/usuarios/{usuario_id}", response_model=dict)
+def delete_usuario(usuario_id: int):
+    try:
+        conn = pymysql.connect(
+            host='localhost',
+            user='root',
+            password='root',
+            database='prueba_consultorio_db',
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el usuario existe
+                cursor.execute("SELECT id, nombre, username FROM usuario WHERE id = %s", (usuario_id,))
+                usuario = cursor.fetchone()
+                if not usuario:
+                    raise HTTPException(status_code=404, detail="Usuario no encontrado")
+                
+                # No permitir eliminar el último administrador
+                cursor.execute("SELECT COUNT(*) as count FROM usuario WHERE rol_id = 1 AND activo = 1")
+                admin_count = cursor.fetchone()['count']
+                
+                if admin_count <= 1:
+                    cursor.execute("SELECT rol_id FROM usuario WHERE id = %s", (usuario_id,))
+                    user_rol = cursor.fetchone()
+                    if user_rol and user_rol['rol_id'] == 1:
+                        raise HTTPException(
+                            status_code=400, 
+                            detail="No se puede eliminar el último administrador activo"
+                        )
+                
+                # Eliminar el usuario
+                cursor.execute("DELETE FROM usuario WHERE id = %s", (usuario_id,))
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Usuario eliminado exitosamente",
+                    "usuario_id": usuario_id,
+                    "usuario_nombre": usuario['nombre'],
+                    "usuario_username": usuario['username']
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/usuarios")
 def get_usuarios():
