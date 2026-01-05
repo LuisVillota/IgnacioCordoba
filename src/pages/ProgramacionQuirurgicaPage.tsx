@@ -931,7 +931,7 @@ export function ProgramacionQuirurgicaPage() {
                         </div>
                         <div className="flex items-center space-x-1 mt-1">
                           <Clock size={14} className="text-gray-400" />
-                          <span>{formatHora(prog.hora)}</span> {/* ✅ Usar formatHora aquí */}
+                          <span>{formatHora(prog.hora)}</span> {/* Usar formatHora aquí */}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
@@ -955,7 +955,7 @@ export function ProgramacionQuirurgicaPage() {
                                 className="text-xs text-green-600 hover:text-green-800"
                                 title="Confirmar"
                               >
-                                ✅
+                                
                               </button>
                             </ProtectedRoute>
                           )}
