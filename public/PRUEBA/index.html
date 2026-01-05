@@ -1,0 +1,2079 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esquemas Corporales Interactivos</title>
+  
+  <!-- SOLUCIÓN DEFINITIVA Y COMPLETA PARA ERRORES DE EXTENSIONES -->
+  <script>
+    (function() {
+      // 1. PREVENCIÓN TOTAL - Interceptar TODAS las llamadas a getAttribute
+      const originalGetAttribute = Element.prototype.getAttribute;
+      Element.prototype.getAttribute = function(name) {
+        try {
+          if (!this || this === null || this === undefined) {
+            return null;
+          }
+          return originalGetAttribute.call(this, name);
+        } catch (e) {
+          return null;
+        }
+      };
+      
+      // 2. PREVENIR que FilterContent cause errores
+      class FilterContent {
+        constructor(element) {
+          if (!element) return; // ← ESTA LÍNEA ES CLAVE
+
+          this.element = element;
+          this.type = element.getAttribute('data-type');
+          // resto del código
+        }
+      }
+
+      const filterEl = document.querySelector('.filter-content');
+      if (filterEl) {
+        new FilterContent(filterEl);
+      }
+
+      
+      // 3. INTERCEPTAR TODOS LOS ERRORES GLOBALMENTE
+      const originalOnerror = window.onerror;
+      window.onerror = function(msg, url, line, col, error) {
+        if (msg && typeof msg === 'string') {
+          if (msg.includes('filter_content.js') || 
+              msg.includes('FilterContent') ||
+              msg.includes('getAttribute')) {
+            return true;
+          }
+        }
+        if (originalOnerror) {
+          return originalOnerror(msg, url, line, col, error);
+        }
+        return false;
+      };
+    })();
+  </script>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 2rem;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 3rem;
+      font-size: 2rem;
+    }
+
+    .controls-panel {
+      background: white;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .control-group {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .control-group label {
+      font-weight: 500;
+      color: #555;
+    }
+
+    button {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-undo {
+      background: #f59e0b;
+      color: white;
+    }
+
+    .btn-undo:hover {
+      background: #d97706;
+    }
+
+    .btn-reset {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-reset:hover {
+      background: #dc2626;
+    }
+
+    .btn-draw {
+      background: #8b5cf6;
+      color: white;
+    }
+
+    .btn-draw:hover {
+      background: #7c3aed;
+    }
+
+    .btn-draw.active {
+      background: #6d28d9;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-text {
+      background: #10b981;
+      color: white;
+    }
+
+    .btn-text:hover {
+      background: #059669;
+    }
+
+    .btn-text.active {
+      background: #047857;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-save {
+      background: #3b82f6;
+      color: white;
+      position: relative;
+    }
+
+    .btn-save:hover {
+      background: #2563eb;
+    }
+
+    .btn-print {
+      background: #f59e0b;
+      color: white;
+      margin-left: 10px;
+    }
+
+    .btn-print:hover {
+      background: #d97706;
+    }
+
+    .save-dropdown {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 0.5rem;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      display: none;
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    .save-dropdown.active {
+      display: block;
+    }
+
+    .save-option {
+      padding: 0.75rem 1.5rem;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      color: #333;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .save-option:hover {
+      background: #f3f4f6;
+    }
+
+    .save-option:first-child {
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .procedure-selector {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .procedure-option {
+      padding: 0.75rem 1.5rem;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      color: #555;
+      background: white;
+    }
+
+    .procedure-option:hover {
+      border-color: #999;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .procedure-option.active {
+      border-color: #3b82f6;
+      background: #eff6ff;
+      color: #3b82f6;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #f9f9f9;
+      border-radius: 6px;
+    }
+
+    .legend-pattern {
+      width: 40px;
+      height: 30px;
+      border: 1px solid #ddd;
+    }
+
+    .schemas-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 4rem;
+    }
+
+    .schema-section {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+    }
+
+    .svg-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 400px;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+    }
+
+    .svg-container object {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* Styling for clickable zones */
+    .zone {
+      cursor: pointer;
+      transition: opacity 0.2s ease;
+    }
+
+    .zone:hover {
+      opacity: 0.8;
+    }
+
+    /* Prevent text from capturing clicks */
+    text {
+      pointer-events: none !important;
+    }
+
+    .drawing-mode {
+      cursor: crosshair !important;
+    }
+
+    .free-draw-path {
+      pointer-events: none;
+    }
+
+    .text-mode {
+      cursor: text !important;
+    }
+
+    /* Added input modal styles for text entry */
+    .text-input-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      display: none;
+    }
+
+    .text-input-modal.active {
+      display: block;
+    }
+
+    .text-input-modal input {
+      width: 300px;
+      padding: 0.75rem;
+      font-size: 1rem;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .text-input-modal .modal-buttons {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+
+    .text-input-modal button {
+      padding: 0.5rem 1rem;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      display: none;
+    }
+
+    .modal-overlay.active {
+      display: block;
+    }
+
+    /* Added slider control styles */
+    .slider-control {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #f9f9f9;
+      border-radius: 8px;
+    }
+
+    .slider-control label {
+      font-size: 0.9rem;
+      min-width: 80px;
+    }
+
+    .slider-control input[type="range"] {
+      width: 150px;
+      height: 6px;
+      border-radius: 3px;
+      background: #ddd;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .slider-control input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #3b82f6;
+      cursor: pointer;
+    }
+
+    .slider-control input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #3b82f6;
+      cursor: pointer;
+      border: none;
+    }
+
+    .slider-control .value-display {
+      font-weight: 600;
+      color: #3b82f6;
+      min-width: 35px;
+      text-align: right;
+    }
+
+    /* Estilos para los nuevos botones numéricos */
+    .number-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-left: 1rem;
+    }
+
+    .btn-number {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #6b7280;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-number:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-number.active {
+      background: #ef4444;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-number-1 { background: #3b82f6; }
+    .btn-number-1:hover { background: #2563eb; }
+    .btn-number-1.active { background: #1d4ed8; }
+
+    .btn-number-2 { background: #10b981; }
+    .btn-number-2:hover { background: #059669; }
+    .btn-number-2.active { background: #047857; }
+
+    .btn-number-3 { background: #8b5cf6; }
+    .btn-number-3:hover { background: #7c3aed; }
+    .btn-number-3.active { background: #6d28d9; }
+
+    .btn-number-4 { background: #f59e0b; }
+    .btn-number-4:hover { background: #d97706; }
+    .btn-number-4.active { background: #b45309; }
+
+    .btn-number-5 { background: #ef4444; }
+    .btn-number-5:hover { background: #dc2626; }
+    .btn-number-5.active { background: #b91c1c; }
+
+    .btn-number-6 { background: #06b6d4; }
+    .btn-number-6:hover { background: #0891b2; }
+    .btn-number-6.active { background: #0e7490; }
+
+    .btn-number-7 { background: #8b5cf6; }
+    .btn-number-7:hover { background: #7c3aed; }
+    .btn-number-7.active { background: #6d28d9; }
+
+    /* Estilo para el mensaje de carga */
+    .loading-message {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 25px 40px;
+      border-radius: 12px;
+      z-index: 9999;
+      display: none;
+      text-align: center;
+      min-width: 200px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(5px);
+    }
+
+    .loading-message.active {
+      display: block;
+    }
+
+    .loading-message .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+
+    /* Botón de retorno fijo */
+    .btn-return {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: #1a6b32;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-return:hover {
+      background: #155427;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Estilos para el modal de exportación */
+    .export-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 9999;
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .export-modal.active {
+      display: flex;
+    }
+
+    .export-modal-content {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .export-option {
+      margin: 20px 0;
+      padding: 15px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .export-option:hover {
+      border-color: #3b82f6;
+      background: #f0f7ff;
+    }
+
+    kbd {
+      background: #333;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* ============================================= */
+    /* ESTILOS ESPECÍFICOS PARA IMPRESIÓN */
+    /* ============================================= */
+    @media print {
+      /* Ocultar todo excepto los esquemas */
+      body * {
+        visibility: hidden;
+      }
+      
+      /* Mostrar solo los esquemas */
+      .schemas-wrapper,
+      .schemas-wrapper * {
+        visibility: visible;
+      }
+      
+      /* Posicionar los esquemas para impresión */
+      .schemas-wrapper {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+        background: white;
+      }
+      
+      /* Ajustar estilos de las secciones para impresión */
+      .schema-section {
+        background: white;
+        border-radius: 0;
+        padding: 20px 0;
+        margin: 0;
+        box-shadow: none;
+        page-break-inside: avoid;
+        page-break-after: always;
+      }
+      
+      .schema-section:last-child {
+        page-break-after: auto;
+      }
+      
+      .schema-section h2 {
+        text-align: center;
+        font-size: 24px;
+        margin-bottom: 20px;
+        color: #000;
+      }
+      
+      .svg-container {
+        min-height: auto;
+        margin: 0 auto;
+        max-width: 100%;
+      }
+      
+      .svg-container object {
+        width: 100%;
+        height: auto;
+        max-height: 900px;
+      }
+      
+      /* Ocultar botones y controles */
+      .btn-return,
+      .controls-panel,
+      .loading-message,
+      .export-modal,
+      .text-input-modal,
+      .modal-overlay {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Botón de retorno fijo -->
+  <button class="btn-return" onclick="returnToForm()">
+    ← Volver al Plan
+  </button>
+
+  <div class="container">
+    <h1>Esquemas Corporales Interactivos</h1>
+    
+    <div class="controls-panel">
+      <div class="control-group">
+        <button class="btn-undo" onclick="undoLastSelection()">Deshacer</button>
+        <button class="btn-reset" onclick="resetAllSelections()">Reestablecer Todo</button>
+        <button class="btn-draw" onclick="toggleDrawingMode()">✏️ Trazo Libre</button>
+        <button class="btn-text" onclick="toggleTextMode()">📝 Agregar Texto</button>
+        <button class="btn-print" onclick="simpleBackupExport()">
+          🖨️ Imprimir Esquemas
+        </button>
+      </div>
+
+      <!-- Contenedor para los botones numéricos del 1 al 7 -->
+      <div class="number-controls">
+        <button class="btn-number btn-number-1" onclick="toggleElement(1)">1</button>
+        <button class="btn-number btn-number-2" onclick="toggleElement(2)">2</button>
+        <button class="btn-number btn-number-3" onclick="toggleElement(3)">3</button>
+        <button class="btn-number btn-number-4" onclick="toggleElement(4)">4</button>
+        <button class="btn-number btn-number-5" onclick="toggleElement(5)">5</button>
+        <button class="btn-number btn-number-6" onclick="toggleElement(6)">6</button>
+        <button class="btn-number btn-number-7" onclick="toggleElement(7)">7</button>
+      </div>
+
+      <!-- Botón para depuración -->
+      <button onclick="logAllElements()" style="background: #6b7280; color: white; font-size: 0.9rem;">
+        🔍 Ver Elementos
+      </button>
+
+      <!-- Added sliders for stroke width and text size -->
+      <div class="slider-control">
+        <label>Grosor trazo:</label>
+        <input type="range" id="strokeSlider" min="1" max="10" value="3" oninput="updateStrokeWidth(this.value)">
+        <span class="value-display" id="strokeValue">3</span>
+      </div>
+
+      <div class="slider-control">
+        <label>Tamaño texto:</label>
+        <input type="range" id="textSizeSlider" min="4" max="48" value="16" oninput="updateTextSize(this.value)">
+        <span class="value-display" id="textSizeValue">16</span>
+      </div>
+
+      <div class="control-group">
+        <label>Procedimiento:</label>
+        <div class="procedure-selector">
+          <div class="procedure-option active" data-procedure="liposuction" onclick="selectProcedure('liposuction')">
+            Liposucción
+          </div>
+          <div class="procedure-option" data-procedure="lipotransfer" onclick="selectProcedure('lipotransfer')">
+            Lipotransferencia
+          </div>
+        </div>
+      </div>
+
+      <div class="legend-item">
+        <svg class="legend-pattern" viewBox="0 0 40 30">
+          <defs>
+            <pattern id="legend-lipo" patternUnits="userSpaceOnUse" width="3" height="3" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="3" stroke="#FF0000" stroke-width="2"/>
+            </pattern>
+          </defs>
+          <rect width="40" height="30" fill="url(#legend-lipo)"/>
+        </svg>
+        <span>Liposucción</span>
+      </div>
+
+      <div class="legend-item">
+        <svg class="legend-pattern" viewBox="0 0 40 30">
+          <defs>
+            <pattern id="legend-transfer" patternUnits="userSpaceOnUse" width="2.5" height="2.5">
+              <line x1="0" y1="0" x2="0" y2="2.5" stroke="#0000FF" stroke-width="1.5"/>
+              <line x1="0" y1="0" x2="2.5" y2="0" stroke="#0000FF" stroke-width="1.5"/>
+            </pattern>
+          </defs>
+          <rect width="40" height="30" fill="url(#legend-transfer)"/>
+        </svg>
+        <span>Lipotransferencia</span>
+      </div>
+    </div>
+
+    <div class="schemas-wrapper">
+      <!-- Schema Corporal Section -->
+      <div class="schema-section">
+        <h3>Esquema Corporal Femenino</h3>
+        <div class="svg-container">
+          <object id="body-schema" data="schema.svg" type="image/svg+xml" width="800" height="1000">
+            Tu navegador no soporta SVG
+          </object>
+        </div>
+      </div>
+
+      <!-- Schema Facial Section -->
+      <div class="schema-section">
+        <h3>Esquema Facial</h3>
+        <div class="svg-container">
+          <object id="facial-schema" data="schema-facial.svg" type="image/svg+xml" width="800" height="600">
+            Tu navegador no soporta SVG
+          </object>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Added modal for text input -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeTextModal()"></div>
+  <div class="text-input-modal" id="textModal">
+    <h3>Agregar Texto</h3>
+    <input type="text" id="textInput" placeholder="Escribe el texto aquí..." maxlength="50">
+    <div class="modal-buttons">
+      <button onclick="closeTextModal()">Cancelar</button>
+      <button onclick="addTextToSVG()" style="background: #10b981; color: white;">Agregar</button>
+    </div>
+  </div>
+
+  <!-- Mensaje de carga -->
+  <div class="loading-message" id="loadingMessage">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div class="spinner"></div>
+      <span>Generando imagen...</span>
+    </div>
+  </div>
+
+  <!-- Modal de exportación -->
+  <div class="export-modal" id="exportModal">
+    <div class="export-modal-content">
+      <h2 style="color: #333; margin-bottom: 20px;">Exportar Esquema</h2>
+      
+      <div class="export-option" onclick="exportUsingPrintMethod()">
+        <h3 style="color: #666;">Opción 1: Imprimir como PDF</h3>
+        <p>1. Presione <kbd>Ctrl</kbd> + <kbd>P</kbd> (Windows) o <kbd>Cmd</kbd> + <kbd>P</kbd> (Mac)<br>
+           2. Cambie destino a "Guardar como PDF"<br>
+           3. Ajuste márgenes y escala<br>
+           4. Haga clic en Guardar</p>
+      </div>
+      
+      <div class="export-option" onclick="exportUsingScreenshot()">
+        <h3 style="color: #666;">Opción 2: Captura de pantalla</h3>
+        <p>1. Presione <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> (Windows/Linux)<br>
+           2. Seleccione el área del esquema<br>
+           3. Guarde la imagen</p>
+      </div>
+      
+      <div class="export-option" onclick="exportUsingCopy()">
+        <h3 style="color: #666;">Opción 3: Copiar al portapapeles</h3>
+        <p>Haga clic aquí para copiar una imagen al portapapeles</p>
+      </div>
+      
+      <button onclick="closeExportModal()" style="
+        padding: 10px 20px;
+        background: #6b7280;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 20px;
+      ">
+        Cerrar
+      </button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <script>
+// =============================================
+// FUNCIÓN SIMPLIFICADA Y CONFIABLE PARA GUARDAR PDF
+// =============================================
+async function saveAsPDF() {
+  console.log('=== INICIANDO EXPORTACIÓN PDF ===');
+  console.log('¿Estamos en iframe?', window.self !== window.top);
+  
+  const loading = document.getElementById('loadingMessage');
+  loading.classList.add('active');
+  
+  // Dar tiempo para que se muestre el loading
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  try {
+    // MÉTODO MÁS SIMPLE Y CONFIABLE: Usar html2canvas directamente
+    console.log('Usando método html2canvas...');
+    
+    // Capturar solo los esquemas (sin controles)
+    const schemasWrapper = document.querySelector('.schemas-wrapper');
+    if (!schemasWrapper) {
+      throw new Error('No se encontró el contenido de esquemas');
+    }
+    
+    // Crear un contenedor temporal con estilos optimizados
+    const tempContainer = document.createElement('div');
+    tempContainer.style.cssText = `
+      position: fixed;
+      top: -9999px;
+      left: -9999px;
+      width: 794px; /* Ancho A4 en píxeles a 96 DPI */
+      background: white;
+      padding: 40px;
+      z-index: -9999;
+    `;
+    
+    // Clonar solo los esquemas con estilos de impresión
+    const schemasClone = schemasWrapper.cloneNode(true);
+    
+    // Aplicar estilos específicos para PDF
+    schemasClone.querySelectorAll('.schema-section').forEach(section => {
+      section.style.cssText = `
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        page-break-inside: avoid;
+      `;
+    });
+    
+    tempContainer.appendChild(schemasClone);
+    document.body.appendChild(tempContainer);
+    
+    try {
+      // Configuración optimizada de html2canvas
+      const canvas = await html2canvas(tempContainer, {
+        backgroundColor: '#ffffff',
+        scale: 2, // Alta resolución
+        useCORS: true,
+        logging: false,
+        allowTaint: true,
+        foreignObjectRendering: false,
+        imageTimeout: 15000,
+        removeContainer: true
+      });
+      
+      console.log('Canvas creado exitosamente:', canvas.width, 'x', canvas.height);
+      
+      // Crear PDF
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pageWidth = 210; // A4 ancho en mm
+      const pageHeight = 297; // A4 alto en mm
+      const margin = 10;
+      const contentWidth = pageWidth - (margin * 2);
+      
+      // Convertir canvas a imagen
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      
+      // Calcular dimensiones manteniendo proporción
+      const imgWidth = contentWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      // Verificar si la imagen cabe en una página
+      if (imgHeight > pageHeight - (margin * 2)) {
+        // Dividir en múltiples páginas
+        let remainingHeight = imgHeight;
+        let position = 0;
+        
+        while (remainingHeight > 0) {
+          if (position > 0) {
+            pdf.addPage();
+          }
+          
+          const pageImgHeight = Math.min(remainingHeight, pageHeight - (margin * 2));
+          const pageImgWidth = imgWidth;
+          
+          // Cortar la imagen (slicing)
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          const sliceHeight = (pageImgHeight * canvas.width) / imgWidth;
+          
+          tempCanvas.width = canvas.width;
+          tempCanvas.height = sliceHeight;
+          
+          // Dibujar porción de la imagen original
+          tempCtx.drawImage(
+            canvas,
+            0,
+            (position * canvas.height) / imgHeight,
+            canvas.width,
+            sliceHeight,
+            0,
+            0,
+            canvas.width,
+            sliceHeight
+          );
+          
+          const sliceDataUrl = tempCanvas.toDataURL('image/png', 1.0);
+          pdf.addImage(sliceDataUrl, 'PNG', margin, margin, pageImgWidth, pageImgHeight);
+          
+          remainingHeight -= pageImgHeight;
+          position += pageImgHeight;
+        }
+      } else {
+        // Una sola página
+        pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight);
+      }
+      
+      // Agregar título
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Esquemas Corporales Interactivos', pageWidth / 2, margin / 2, { align: 'center' });
+      
+      // Pie de página
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      const fecha = new Date().toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      pdf.text(`Generado el ${fecha}`, pageWidth / 2, pageHeight - 5, { align: 'center' });
+      
+      // Intentar guardar
+      try {
+        const fileName = `esquema-corporal-${Date.now()}.pdf`;
+        pdf.save(fileName);
+        console.log('PDF generado exitosamente:', fileName);
+      } catch (saveError) {
+        console.log('No se pudo guardar directamente, abriendo en nueva pestaña...');
+        
+        // Alternativa: abrir en nueva pestaña
+        const pdfBlob = pdf.output('blob');
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        
+        const newWindow = window.open(pdfUrl, '_blank');
+        if (!newWindow) {
+          // Si se bloquea el popup, mostrar enlace
+          showPDFLink(pdfUrl, 'esquema-corporal.pdf');
+        }
+        
+        setTimeout(() => URL.revokeObjectURL(pdfUrl), 10000);
+      }
+      
+    } finally {
+      // Limpiar contenedor temporal
+      if (tempContainer.parentNode) {
+        document.body.removeChild(tempContainer);
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error principal:', error);
+    loading.classList.remove('active');
+    
+    // Mostrar opciones alternativas
+    showAlternativeOptions();
+  } finally {
+    // Asegurarse de quitar el loading después de un tiempo
+    setTimeout(() => {
+      loading.classList.remove('active');
+    }, 1000);
+  }
+}
+
+// Función para mostrar enlace de descarga
+function showPDFLink(pdfUrl, fileName) {
+  const linkContainer = document.createElement('div');
+  linkContainer.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 10000;
+    text-align: center;
+  `;
+  
+  linkContainer.innerHTML = `
+    <h3>Descargar PDF</h3>
+    <p>Haga clic derecho en el enlace y seleccione "Guardar enlace como..."</p>
+    <a href="${pdfUrl}" download="${fileName}" style="
+      display: inline-block;
+      padding: 12px 24px;
+      background: #3b82f6;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      margin: 15px 0;
+    ">
+      📥 Descargar ${fileName}
+    </a>
+    <br>
+    <button onclick="this.parentElement.parentElement.remove()" style="
+      padding: 8px 16px;
+      background: #6b7280;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 10px;
+    ">
+      Cerrar
+    </button>
+  `;
+  
+  document.body.appendChild(linkContainer);
+}
+
+// Función para mostrar opciones alternativas
+function showAlternativeOptions() {
+  const modal = document.createElement('div');
+  modal.id = 'altExportModal';
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  `;
+  
+  modal.innerHTML = `
+    <div style="
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      max-width: 500px;
+      width: 90%;
+    ">
+      <h2 style="color: #333; margin-bottom: 20px;">Alternativas para Exportar</h2>
+      
+      <div style="margin: 20px 0; padding: 15px; border: 2px solid #ddd; border-radius: 8px;">
+        <h3 style="color: #666; margin-bottom: 10px;">📋 Método 1: Captura de Pantalla</h3>
+        <p style="margin: 10px 0;">
+          <strong>Windows/Linux:</strong> Presione <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd><br>
+          <strong>Mac:</strong> Presione <kbd>Cmd</kbd> + <kbd>Shift</kbd> + <kbd>4</kbd><br>
+          Seleccione el área del esquema y guárdela.
+        </p>
+      </div>
+      
+      <div style="margin: 20px 0; padding: 15px; border: 2px solid #ddd; border-radius: 8px;">
+        <h3 style="color: #666; margin-bottom: 10px;">🖨️ Método 2: Imprimir como PDF</h3>
+        <p style="margin: 10px 0;">
+          <strong>Windows:</strong> Presione <kbd>Ctrl</kbd> + <kbd>P</kbd><br>
+          <strong>Mac:</strong> Presione <kbd>Cmd</kbd> + <kbd>P</kbd><br>
+          En destino, seleccione "Guardar como PDF"
+        </p>
+        <button onclick="simpleBackupExport()" style="
+          padding: 10px 20px;
+          background: #3b82f6;
+          color: white;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          margin-top: 10px;
+        ">
+          🖨️ Imprimir Solo Esquemas
+        </button>
+      </div>
+      
+      <div style="margin: 20px 0; padding: 15px; border: 2px solid #ddd; border-radius: 8px;">
+        <h3 style="color: #666; margin-bottom: 10px;">📷 Método 3: Foto Rápida</h3>
+        <p style="margin: 10px 0;">
+          <button onclick="takeQuickPhoto()" style="
+            padding: 10px 20px;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+          ">
+            📸 Generar Imagen para Descargar
+          </button>
+        </p>
+      </div>
+      
+      <button onclick="document.getElementById('altExportModal').remove()" style="
+        padding: 10px 20px;
+        background: #6b7280;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 20px;
+        width: 100%;
+      ">
+        Cerrar
+      </button>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+}
+
+// Función para generar imagen rápida
+async function takeQuickPhoto() {
+  const modal = document.getElementById('altExportModal');
+  if (modal) modal.remove();
+  
+  const loading = document.getElementById('loadingMessage');
+  loading.classList.add('active');
+  
+  try {
+    const canvas = await html2canvas(document.querySelector('.schemas-wrapper'), {
+      backgroundColor: '#ffffff',
+      scale: 1.5,
+      useCORS: true,
+      logging: false
+    });
+    
+    const imgData = canvas.toDataURL('image/png');
+    
+    // Abrir en nueva ventana para descargar
+    const newWindow = window.open('', '_blank');
+    newWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Esquema Corporal - ${new Date().toLocaleDateString()}</title>
+        <style>
+          body { margin: 0; padding: 20px; text-align: center; background: #f5f5f5; }
+          img { max-width: 100%; height: auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2); border: 1px solid #ddd; }
+          .controls { margin: 20px; }
+          button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+          .download { background: #3b82f6; color: white; }
+          .print { background: #10b981; color: white; }
+          .close { background: #6b7280; color: white; }
+          .instructions { background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px; }
+        </style>
+      </head>
+      <body>
+        <h1>Esquema Corporal</h1>
+        <div class="instructions">
+          <strong>Instrucciones:</strong> Haga clic derecho en la imagen → "Guardar imagen como..."
+        </div>
+        <img src="${imgData}" alt="Esquema Corporal">
+        <div class="controls">
+          <button class="download" onclick="location.href='${imgData}'; this.textContent='Descargando...'">💾 Descargar Imagen</button>
+          <button class="print" onclick="window.print()">🖨️ Imprimir</button>
+          <button class="close" onclick="window.close()">✖️ Cerrar</button>
+        </div>
+        <script>
+          // Forzar descarga al hacer clic en la imagen
+          document.querySelector('img').addEventListener('click', function() {
+            const link = document.createElement('a');
+            link.download = 'esquema-corporal-${Date.now()}.png';
+            link.href = '${imgData}';
+            link.click();
+          });
+        <\/script>
+      </body>
+      </html>
+    `);
+    newWindow.document.close();
+    
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error al generar la imagen. Intente con captura de pantalla manual.');
+  } finally {
+    loading.classList.remove('active');
+  }
+}
+
+// Función de respaldo ultra simple - IMPRIMIR SOLO ESQUEMAS
+function simpleBackupExport() {
+  // Guardar el título original para restaurarlo después
+  const originalTitle = document.title;
+  
+  // Cambiar título para impresión
+  document.title = 'Esquemas Corporales - ' + new Date().toLocaleDateString();
+  
+  // Forzar vista previa de impresión
+  window.print();
+  
+  // Restaurar título después de un momento
+  setTimeout(() => {
+    document.title = originalTitle;
+  }, 1000);
+}
+
+// Funciones auxiliares para el modal de exportación
+function exportUsingPrintMethod() {
+  closeExportModal();
+  simpleBackupExport();
+}
+
+function exportUsingScreenshot() {
+  closeExportModal();
+  
+  const loading = document.getElementById('loadingMessage');
+  loading.classList.add('active');
+  
+  setTimeout(() => {
+    loading.classList.remove('active');
+    alert('Use la combinación de teclas:\n\nWindows/Linux: Ctrl + Shift + S\nMac: Cmd + Shift + 4\n\nLuego seleccione el área del esquema.');
+  }, 500);
+}
+
+async function exportUsingCopy() {
+  closeExportModal();
+  
+  const loading = document.getElementById('loadingMessage');
+  loading.classList.add('active');
+  
+  try {
+    const canvas = await html2canvas(document.querySelector('.schemas-wrapper'), {
+      backgroundColor: '#ffffff',
+      scale: 1,
+      useCORS: true,
+      logging: false
+    });
+    
+    canvas.toBlob(async function(blob) {
+      try {
+        const item = new ClipboardItem({ 'image/png': blob });
+        await navigator.clipboard.write([item]);
+        alert('✅ Imagen copiada al portapapeles');
+      } catch (clipboardError) {
+        console.error('Error al copiar:', clipboardError);
+        alert('No se pudo copiar al portapapeles. Intente con captura de pantalla.');
+      } finally {
+        loading.classList.remove('active');
+      }
+    });
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error al generar la imagen');
+    loading.classList.remove('active');
+  }
+}
+
+function closeExportModal() {
+  document.getElementById('exportModal').classList.remove('active');
+}
+  </script>
+
+  <script>
+// Detectar problemas comunes
+console.log('=== DETECCIÓN DE CONFIGURACIÓN ===');
+console.log('html2canvas disponible:', typeof html2canvas !== 'undefined');
+console.log('jsPDF disponible:', typeof jspdf !== 'undefined');
+console.log('En iframe:', window.self !== window.top);
+console.log('URL actual:', window.location.href);
+
+// Verificar si los SVG están cargados
+function checkSVGLoaded() {
+  const bodySchema = document.getElementById('body-schema');
+  const facialSchema = document.getElementById('facial-schema');
+  
+  console.log('Body SVG cargado:', bodySchema?.contentDocument ? 'Sí' : 'No');
+  console.log('Facial SVG cargado:', facialSchema?.contentDocument ? 'Sí' : 'No');
+  
+  // Intentar forzar carga si no están listos
+  if (!bodySchema.contentDocument || !facialSchema.contentDocument) {
+    console.log('Los SVG no están completamente cargados, reintentando...');
+    setTimeout(checkSVGLoaded, 1000);
+  }
+}
+
+// Verificar después de un tiempo
+setTimeout(checkSVGLoaded, 2000);
+
+// =============================================
+// CÓDIGO ORIGINAL DEL EDITOR DE ESQUEMAS
+// =============================================
+
+    // Función para volver al formulario
+    function returnToForm() {
+      if (window.parent !== window) {
+        window.parent.postMessage({ 
+          type: 'CLOSE_ESQUEMA_VIEWER',
+          source: 'esquema-editor'
+        }, '*');
+      }
+    }
+
+    const selectionHistory = [];
+    let svgDocuments = [];
+    let selectedProcedure = 'liposuction';
+    let isDrawingMode = false;
+    let isDrawing = false;
+    let currentPath = null;
+    let pathPoints = [];
+    let isTextMode = false;
+    let pendingTextPosition = null;
+    let pendingTextSvgDoc = null;
+    let currentStrokeWidth = 3;
+    let currentTextSize = 16;
+
+    // Configuración actualizada de los elementos
+    const elementsConfig = {
+      1: {
+        id: 'g68',
+        label: 'circular-pezon-izquierdo',
+        type: 'group'
+      },
+      2: {
+        id: 'g67',
+        label: 'circular-pezon-derecho',
+        type: 'group'
+      },
+      3: {
+        id: 'g65',
+        label: 'incision-circular-pezon-izquierdo',
+        type: 'group'
+      },
+      4: {
+        id: 'g65-5',
+        label: 'incision-circular-pezon-derecho',
+        type: 'group'
+      },
+      5: {
+        id: 'path63-5',
+        label: 'incicion-i',
+        type: 'path'
+      },
+      6: {
+        id: 'path65-6',
+        label: 'incision-d',
+        type: 'path'
+      },
+      7: {
+        id: 'path38',
+        label: 'elipse-abdominal',
+        type: 'ellipse'
+      }
+    };
+
+    // Estado para los elementos numéricos
+    const elementStates = {
+      1: false,
+      2: false,
+      3: false,
+      4: false,
+      5: false,
+      6: false,
+      7: false
+    };
+
+    // Historial de elementos activados por botones numéricos
+    const numericSelectionHistory = [];
+
+    // Función mejorada para encontrar elementos
+    function findElementInSVG(svgDoc, config) {
+      let element = null;
+      
+      if (config.id) {
+        element = svgDoc.getElementById(config.id);
+      }
+      
+      if (!element && config.label) {
+        const selectors = [
+          `[inkscape\\:label="${config.label}"]`,
+          `[label="${config.label}"]`,
+          `[data-label="${config.label}"]`
+        ];
+        
+        for (const selector of selectors) {
+          element = svgDoc.querySelector(selector);
+          if (element) break;
+        }
+        
+        if (!element) {
+          const allElements = svgDoc.querySelectorAll('*');
+          for (const el of allElements) {
+            const label = el.getAttribute('inkscape:label') || 
+                         el.getAttribute('label') || 
+                         el.getAttribute('data-label');
+            if (label === config.label) {
+              element = el;
+              break;
+            }
+          }
+        }
+      }
+      
+      return element;
+    }
+
+    // Función para activar un elemento individual
+    function activateElement(element, config) {
+      if (!element.hasAttribute('data-original-stroke')) {
+        element.setAttribute('data-original-stroke', element.getAttribute('stroke') || '');
+      }
+      if (!element.hasAttribute('data-original-stroke-opacity')) {
+        element.setAttribute('data-original-stroke-opacity', element.getAttribute('stroke-opacity') || '0');
+      }
+      if (!element.hasAttribute('data-original-fill-opacity')) {
+        element.setAttribute('data-original-fill-opacity', element.getAttribute('fill-opacity') || '0');
+      }
+      
+      element.style.stroke = '#ff0000';
+      element.style.strokeWidth = '1px';
+      element.style.strokeOpacity = '1';
+      element.setAttribute('stroke-opacity', '1');
+      element.style.fillOpacity = '0';
+      element.setAttribute('fill-opacity', '0');
+      
+      if (config.type === 'group' && element.children) {
+        Array.from(element.children).forEach(child => {
+          if (!child.hasAttribute('data-original-stroke')) {
+            child.setAttribute('data-original-stroke', child.getAttribute('stroke') || '');
+          }
+          if (!child.hasAttribute('data-original-stroke-opacity')) {
+            child.setAttribute('data-original-stroke-opacity', child.getAttribute('stroke-opacity') || '0');
+          }
+          
+          child.style.stroke = '#ff0000';
+          child.style.strokeOpacity = '1';
+          child.setAttribute('stroke-opacity', '1');
+          child.style.fillOpacity = '0';
+          child.setAttribute('fill-opacity', '0');
+        });
+      }
+    }
+
+    // Función para desactivar un elemento individual
+    function deactivateSingleElement(element, config) {
+      const originalStroke = element.getAttribute('data-original-stroke');
+      const originalStrokeOpacity = element.getAttribute('data-original-stroke-opacity') || '0';
+      const originalFillOpacity = element.getAttribute('data-original-fill-opacity') || '0';
+      
+      if (originalStroke !== null) {
+        element.style.stroke = originalStroke;
+      }
+      
+      element.style.strokeOpacity = originalStrokeOpacity;
+      element.setAttribute('stroke-opacity', originalStrokeOpacity);
+      element.style.fillOpacity = originalFillOpacity;
+      element.setAttribute('fill-opacity', originalFillOpacity);
+      
+      if (config.type === 'group' && element.children) {
+        Array.from(element.children).forEach(child => {
+          const childStroke = child.getAttribute('data-original-stroke');
+          const childStrokeOpacity = child.getAttribute('data-original-stroke-opacity') || '0';
+          const childFillOpacity = child.getAttribute('data-original-fill-opacity') || '0';
+          
+          if (childStroke !== null) {
+            child.style.stroke = childStroke;
+          }
+          
+          child.style.strokeOpacity = childStrokeOpacity;
+          child.setAttribute('stroke-opacity', childStrokeOpacity);
+          child.style.fillOpacity = childFillOpacity;
+          child.setAttribute('fill-opacity', childFillOpacity);
+        });
+      }
+    }
+
+    // Función para alternar elemento - VERSIÓN MEJORADA
+    function toggleElement(buttonNumber) {
+      const button = document.querySelector(`.btn-number-${buttonNumber}`);
+      const config = elementsConfig[buttonNumber];
+      
+      if (!config) {
+        console.error(`❌ No hay configuración para el botón ${buttonNumber}`);
+        return;
+      }
+      
+      const isActive = !elementStates[buttonNumber];
+      elementStates[buttonNumber] = isActive;
+      button.classList.toggle('active', isActive);
+      
+      let elementFound = false;
+      
+      svgDocuments.forEach(svgDoc => {
+        if (!svgDoc) return;
+        
+        const element = findElementInSVG(svgDoc, config);
+        
+        if (element) {
+          elementFound = true;
+          
+          if (isActive) {
+            activateElement(element, config);
+            
+            numericSelectionHistory.push({
+              buttonNumber: buttonNumber,
+              element: element,
+              config: config,
+              svgDoc: svgDoc
+            });
+          } else {
+            deactivateSingleElement(element, config);
+            
+            const index = numericSelectionHistory.findIndex(item => 
+              item.buttonNumber === buttonNumber && item.element === element
+            );
+            if (index > -1) {
+              numericSelectionHistory.splice(index, 1);
+            }
+          }
+        }
+      });
+      
+      if (!elementFound) {
+        elementStates[buttonNumber] = !isActive;
+        button.classList.toggle('active', !isActive);
+      }
+    }
+
+    // Función para desactivar elemento específico (para undo/redo)
+    function deactivateElement(buttonNumber) {
+      const button = document.querySelector(`.btn-number-${buttonNumber}`);
+      const config = elementsConfig[buttonNumber];
+      
+      if (!config) return;
+      
+      elementStates[buttonNumber] = false;
+      button.classList.remove('active');
+      
+      svgDocuments.forEach(svgDoc => {
+        if (!svgDoc) return;
+        
+        const element = findElementInSVG(svgDoc, config);
+        
+        if (element) {
+          deactivateSingleElement(element, config);
+        }
+      });
+    }
+
+    // Función para resetear todos los elementos numéricos
+    function resetNumericElements() {
+      for (let i = 1; i <= 7; i++) {
+        const button = document.querySelector(`.btn-number-${i}`);
+        const config = elementsConfig[i];
+        
+        if (button && config) {
+          button.classList.remove('active');
+          elementStates[i] = false;
+          
+          svgDocuments.forEach(svgDoc => {
+            if (!svgDoc) return;
+            
+            const element = findElementInSVG(svgDoc, config);
+            if (element) {
+              deactivateSingleElement(element, config);
+            }
+          });
+        }
+      }
+      
+      numericSelectionHistory.length = 0;
+      selectionHistory.length = 0;
+    }
+
+    // Función para listar todos los elementos
+    function logAllElements() {
+      console.clear();
+      console.log('🔍 === ELEMENTOS DISPONIBLES ===');
+      
+      svgDocuments.forEach((svgDoc, index) => {
+        if (!svgDoc) return;
+        
+        console.log(`\n📄 SVG ${index + 1}:`);
+        
+        const elementsWithId = svgDoc.querySelectorAll('[id]');
+        console.log(`🔹 Elementos con ID (${elementsWithId.length}):`);
+        elementsWithId.forEach(el => {
+          const id = el.id;
+          const label = el.getAttribute('inkscape:label');
+          const tagName = el.tagName;
+          
+          console.log(`   - ID: "${id}" (${tagName}) ${label ? `[label: "${label}"]` : ''}`);
+        });
+      });
+    }
+
+    function updateStrokeWidth(value) {
+      currentStrokeWidth = value;
+      document.getElementById('strokeValue').textContent = value;
+    }
+
+    function updateTextSize(value) {
+      currentTextSize = value;
+      document.getElementById('textSizeValue').textContent = value;
+    }
+
+    function selectProcedure(procedure) {
+      selectedProcedure = procedure;
+      
+      document.querySelectorAll('.procedure-option').forEach(option => {
+        option.classList.remove('active');
+      });
+      
+      document.querySelector(`[data-procedure="${procedure}"]`).classList.add('active');
+    }
+
+    function getSelectedProcedure() {
+      return selectedProcedure;
+    }
+
+    function toggleDrawingMode() {
+      isDrawingMode = !isDrawingMode;
+      const btn = document.querySelector('.btn-draw');
+      
+      if (isDrawingMode) {
+        btn.classList.add('active');
+        btn.textContent = '✏️ Trazo Libre (Activado)';
+        svgDocuments.forEach(doc => {
+          doc.documentElement.classList.add('drawing-mode');
+        });
+      } else {
+        btn.classList.remove('active');
+        btn.textContent = '✏️ Trazo Libre';
+        svgDocuments.forEach(doc => {
+          doc.documentElement.classList.remove('drawing-mode');
+        });
+      }
+    }
+
+    function removeFreeDrawPath(pathElement) {
+      if (pathElement && pathElement.parentNode) {
+        pathElement.parentNode.removeChild(pathElement);
+      }
+    }
+
+    function toggleTextMode() {
+      isTextMode = !isTextMode;
+      const btn = document.querySelector('.btn-text');
+      
+      if (isTextMode) {
+        if (isDrawingMode) {
+          toggleDrawingMode();
+        }
+        
+        btn.classList.add('active');
+        btn.textContent = '📝 Agregar Texto (Activado)';
+        svgDocuments.forEach(doc => {
+          doc.documentElement.classList.add('text-mode');
+        });
+      } else {
+        btn.classList.remove('active');
+        btn.textContent = '📝 Agregar Texto';
+        svgDocuments.forEach(doc => {
+          doc.documentElement.classList.remove('text-mode');
+        });
+      }
+    }
+
+    function openTextModal(x, y, svgDoc) {
+      pendingTextPosition = { x, y };
+      pendingTextSvgDoc = svgDoc;
+      
+      document.getElementById('modalOverlay').classList.add('active');
+      document.getElementById('textModal').classList.add('active');
+      document.getElementById('textInput').value = '';
+      document.getElementById('textInput').focus();
+    }
+
+    function closeTextModal() {
+      document.getElementById('modalOverlay').classList.remove('active');
+      document.getElementById('textModal').classList.remove('active');
+      pendingTextPosition = null;
+      pendingTextSvgDoc = null;
+    }
+
+    function addTextToSVG() {
+      const textValue = document.getElementById('textInput').value.trim();
+      
+      if (!textValue || !pendingTextPosition || !pendingTextSvgDoc) {
+        closeTextModal();
+        return;
+      }
+      
+      const textElement = pendingTextSvgDoc.createElementNS('http://www.w3.org/2000/svg', 'text');
+      textElement.setAttribute('x', pendingTextPosition.x);
+      textElement.setAttribute('y', pendingTextPosition.y);
+      textElement.setAttribute('fill', '#000000');
+      textElement.setAttribute('font-size', currentTextSize);
+      textElement.setAttribute('font-family', 'Arial, sans-serif');
+      textElement.setAttribute('font-weight', 'bold');
+      textElement.textContent = textValue;
+      textElement.classList.add('user-added-text');
+      
+      pendingTextSvgDoc.documentElement.appendChild(textElement);
+      
+      selectionHistory.push({
+        element: textElement,
+        type: 'text'
+      });
+      
+      closeTextModal();
+    }
+
+    function removeTextElement(textElement) {
+      if (textElement && textElement.parentNode) {
+        textElement.parentNode.removeChild(textElement);
+      }
+    }
+
+    function undoLastSelection() {
+      if (selectionHistory.length > 0) {
+        const lastSelection = selectionHistory.pop();
+        if (lastSelection.type === 'zone') {
+          removeProcedurePattern(lastSelection.element);
+        } else if (lastSelection.type === 'freedraw') {
+          removeFreeDrawPath(lastSelection.element);
+        } else if (lastSelection.type === 'text') {
+          removeTextElement(lastSelection.element);
+        }
+        return;
+      }
+      
+      if (numericSelectionHistory.length > 0) {
+        const lastNumericSelection = numericSelectionHistory.pop();
+        if (lastNumericSelection) {
+          deactivateElement(lastNumericSelection.buttonNumber);
+        }
+      }
+    }
+
+    function resetAllSelections() {
+      selectionHistory.forEach(selection => {
+        if (selection.type === 'zone') {
+          removeProcedurePattern(selection.element);
+        } else if (selection.type === 'freedraw') {
+          removeFreeDrawPath(selection.element);
+        } else if (selection.type === 'text') {
+          removeTextElement(selection.element);
+        }
+      });
+      
+      resetNumericElements();
+    }
+
+    function startDrawing(e, svgDoc) {
+      if (isTextMode) {
+        const pt = getSVGPoint(e, svgDoc);
+        openTextModal(pt.x, pt.y, svgDoc);
+        return;
+      }
+      
+      if (!isDrawingMode) return;
+      
+      isDrawing = true;
+      pathPoints = [];
+      
+      const pt = getSVGPoint(e, svgDoc);
+      pathPoints.push(pt);
+      
+      currentPath = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'path');
+      currentPath.classList.add('free-draw-path');
+      currentPath.setAttribute('fill', 'none');
+      currentPath.setAttribute('stroke', '#000000');
+      currentPath.setAttribute('stroke-width', currentStrokeWidth);
+      currentPath.setAttribute('stroke-linecap', 'round');
+      currentPath.setAttribute('stroke-linejoin', 'round');
+      
+      svgDoc.documentElement.appendChild(currentPath);
+    }
+
+    function continueDrawing(e, svgDoc) {
+      if (isTextMode) return;
+      if (!isDrawingMode || !isDrawing) return;
+      
+      const pt = getSVGPoint(e, svgDoc);
+      pathPoints.push(pt);
+      
+      updatePathData();
+    }
+
+    function stopDrawing(e, svgDoc) {
+      if (isTextMode) return;
+      if (!isDrawingMode || !isDrawing) return;
+      
+      isDrawing = false;
+      
+      if (currentPath && pathPoints.length > 2) {
+        selectionHistory.push({
+          element: currentPath,
+          type: 'freedraw'
+        });
+      } else if (currentPath) {
+        currentPath.parentNode.removeChild(currentPath);
+      }
+      
+      currentPath = null;
+      pathPoints = [];
+    }
+
+    function getSVGPoint(e, svgDoc) {
+      const svg = svgDoc.documentElement;
+      const pt = svg.createSVGPoint();
+      
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      
+      const matrix = svg.getScreenCTM().inverse();
+      return pt.matrixTransform(matrix);
+    }
+
+    function updatePathData() {
+      if (!currentPath || pathPoints.length < 2) return;
+      
+      let d = `M ${pathPoints[0].x} ${pathPoints[0].y}`;
+      
+      for (let i = 1; i < pathPoints.length - 1; i++) {
+        const xc = (pathPoints[i].x + pathPoints[i + 1].x) / 2;
+        const yc = (pathPoints[i].y + pathPoints[i + 1].y) / 2;
+        d += ` Q ${pathPoints[i].x} ${pathPoints[i].y}, ${xc} ${yc}`;
+      }
+      
+      if (pathPoints.length > 1) {
+        const last = pathPoints[pathPoints.length - 1];
+        d += ` L ${last.x} ${last.y}`;
+      }
+      
+      currentPath.setAttribute('d', d);
+    }
+
+    function createPatterns(svgDoc) {
+      let defs = svgDoc.querySelector('defs');
+      if (!defs) {
+        defs = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svgDoc.documentElement.insertBefore(defs, svgDoc.documentElement.firstChild);
+      }
+
+      const lipoPattern = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+      lipoPattern.setAttribute('id', 'liposuction-pattern');
+      lipoPattern.setAttribute('patternUnits', 'userSpaceOnUse');
+      lipoPattern.setAttribute('width', '3');
+      lipoPattern.setAttribute('height', '3');
+      lipoPattern.setAttribute('patternTransform', 'rotate(45)');
+      
+      const lipoLine = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
+      lipoLine.setAttribute('x1', '0');
+      lipoLine.setAttribute('y1', '0');
+      lipoLine.setAttribute('x2', '0');
+      lipoLine.setAttribute('y2', '3');
+      lipoLine.setAttribute('stroke', '#FF0000');
+      lipoLine.setAttribute('stroke-width', '2');
+      
+      lipoPattern.appendChild(lipoLine);
+      defs.appendChild(lipoPattern);
+
+      const transferPattern = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+      transferPattern.setAttribute('id', 'lipotransfer-pattern');
+      transferPattern.setAttribute('patternUnits', 'userSpaceOnUse');
+      transferPattern.setAttribute('width', '2.5');
+      transferPattern.setAttribute('height', '2.5');
+      
+      const transferLineH = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
+      transferLineH.setAttribute('x1', '0');
+      transferLineH.setAttribute('y1', '0');
+      transferLineH.setAttribute('x2', '2.5');
+      transferLineH.setAttribute('y2', '0');
+      transferLineH.setAttribute('stroke', '#0000FF');
+      transferLineH.setAttribute('stroke-width', '1.5');
+      
+      const transferLineV = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
+      transferLineV.setAttribute('x1', '0');
+      transferLineV.setAttribute('y1', '0');
+      transferLineV.setAttribute('x2', '0');
+      transferLineV.setAttribute('y2', '2.5');
+      transferLineV.setAttribute('stroke', '#0000FF');
+      transferLineV.setAttribute('stroke-width', '1.5');
+      
+      transferPattern.appendChild(transferLineH);
+      transferPattern.appendChild(transferLineV);
+      defs.appendChild(transferPattern);
+    }
+
+    function applyProcedurePattern(element, procedure) {
+      const originalFill = element.getAttribute('data-original-fill') || element.style.fill || element.getAttribute('fill') || '';
+      
+      element.style.fillOpacity = '1';
+      
+      if (procedure === 'liposuction') {
+        element.style.fill = 'url(#liposuction-pattern)';
+      } else if (procedure === 'lipotransfer') {
+        element.style.fill = 'url(#lipotransfer-pattern)';
+      }
+      
+      element.setAttribute('data-procedure', procedure);
+    }
+
+    function removeProcedurePattern(element) {
+      const originalFill = element.getAttribute('data-original-fill') || '';
+      element.style.fill = originalFill;
+      const originalOpacity = element.getAttribute('data-original-opacity') || '';
+      if (originalOpacity) {
+        element.style.fillOpacity = originalOpacity;
+      }
+      element.removeAttribute('data-procedure');
+    }
+
+    function initializeSchema(objectId) {
+      const objectElement = document.getElementById(objectId);
+      
+      objectElement.addEventListener('load', function() {
+        const svgDoc = objectElement.contentDocument;
+        if (!svgDoc) return;
+
+        svgDocuments.push(svgDoc);
+        createPatterns(svgDoc);
+
+        const svgElement = svgDoc.documentElement;
+        
+        svgElement.style.userSelect = 'none';
+        svgElement.style.webkitUserSelect = 'none';
+        
+        svgElement.addEventListener('mousedown', (e) => startDrawing(e, svgDoc));
+        svgElement.addEventListener('mousemove', (e) => continueDrawing(e, svgDoc));
+        svgElement.addEventListener('mouseup', (e) => stopDrawing(e, svgDoc));
+        svgElement.addEventListener('mouseleave', (e) => stopDrawing(e, svgDoc));
+
+        console.log(`✅ SVG cargado: ${objectId}`);
+
+        const allElements = svgDoc.querySelectorAll('*');
+        allElements.forEach(element => {
+          const label = element.getAttribute('inkscape:label');
+          if (label) {
+            const originalFill = element.style.fill || element.getAttribute('fill') || '';
+            element.setAttribute('data-original-fill', originalFill);
+            
+            const originalOpacity = element.style.fillOpacity || element.getAttribute('fill-opacity') || '';
+            if (originalOpacity) {
+              element.setAttribute('data-original-opacity', originalOpacity);
+            }
+            
+            element.classList.add('zone');
+            element.style.cursor = 'pointer';
+            
+            element.addEventListener('click', function(e) {
+              if (isDrawingMode) {
+                e.stopPropagation();
+                return;
+              }
+              
+              if (isTextMode) {
+                e.stopPropagation();
+                return;
+              }
+              
+              const currentProcedure = element.getAttribute('data-procedure');
+              
+              if (currentProcedure) {
+                removeProcedurePattern(this);
+                
+                const index = selectionHistory.findIndex(s => s.element === this);
+                if (index > -1) {
+                  selectionHistory.splice(index, 1);
+                }
+              } else {
+                const selectedProcedure = getSelectedProcedure();
+                applyProcedurePattern(this, selectedProcedure);
+                
+                selectionHistory.push({
+                  element: this,
+                  procedure: selectedProcedure,
+                  type: 'zone'
+                });
+              }
+            });
+          }
+        });
+
+        const textElements = svgDoc.querySelectorAll('text');
+        textElements.forEach(text => {
+          text.style.pointerEvents = 'none';
+          text.style.userSelect = 'none';
+          text.style.webkitUserSelect = 'none';
+        });
+      });
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && document.getElementById('textModal').classList.contains('active')) {
+        addTextToSVG();
+      } else if (e.key === 'Escape' && document.getElementById('textModal').classList.contains('active')) {
+        closeTextModal();
+      }
+    });
+
+    // Función para inicializar cuando el DOM esté listo
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('✅ Editor de esquemas cargado');
+      
+      // Verificar si estamos en iframe
+      console.log('¿En iframe?', window.self !== window.top);
+      console.log('Referrer:', document.referrer);
+      
+      // Inicializar los esquemas SVG
+      initializeSchema('body-schema');
+      initializeSchema('facial-schema');
+      
+      // Notificar al padre que ya cargó
+      if (window.parent !== window) {
+        window.parent.postMessage({ 
+          type: 'ESQUEMA_LOADED',
+          source: 'esquema-editor'
+        }, '*');
+      }
+    });
+  </script>
+</body>
+</html>

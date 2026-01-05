@@ -14,9 +14,11 @@ import { ProgramacionQuirurgicaPage } from "../pages/ProgramacionQuirurgicaPage"
 import { PlanQuirurgicoPage } from "../pages/PlanQuirurgicoPage"
 import { OrdenExamenesPage } from "../pages/OrdenExamenesPage"
 import { ProcedimientosPage } from "../pages/ProcedimientosPage"
+import { UsuariosPage } from "../pages/UsuarioPage" 
 
 type CurrentPage =
   | "home"
+  | "usuarios" 
   | "pacientes"
   | "agenda"
   | "historia"
@@ -31,15 +33,20 @@ export function DashboardLayout() {
   const auth = useContext(AuthContext)
   const [currentPage, setCurrentPage] = useState<CurrentPage>("home")
 
-  if (!auth) return null
+  if (!auth || !auth.user) return null
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar user={auth.user} onNavigate={(page) => setCurrentPage(page as CurrentPage)} />
+      <Sidebar 
+        user={auth.user} 
+        onNavigate={(page) => setCurrentPage(page as CurrentPage)} 
+        currentPage={currentPage}
+      />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header user={auth.user} onLogout={auth.logout} />
         <main className="flex-1 overflow-auto">
           {currentPage === "home" && <DashboardHome user={auth.user} hasPermission={auth.hasPermission} />}
+          {currentPage === "usuarios" && <UsuariosPage />}
           {currentPage === "pacientes" && <PacientesPage />}
           {currentPage === "agenda" && <AgendaPage />}
           {currentPage === "historia" && <HistoriaClinicaPage />}

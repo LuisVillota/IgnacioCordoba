@@ -111,12 +111,6 @@ export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: CitaMod
             Editar
           </button>
           <button
-            onClick={onDelete}
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg transition"
-          >
-            Eliminar
-          </button>
-          <button
             onClick={onClose}
             className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 rounded-lg transition"
           >

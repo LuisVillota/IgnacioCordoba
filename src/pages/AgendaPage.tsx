@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight, Plus, Edit2, Trash2, Calendar, Clock, User, AlertCircle, RefreshCw, AlertTriangle, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Edit2, Calendar, Clock, User, AlertCircle, RefreshCw, AlertTriangle, X } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { CitaForm } from "../components/CitaForm"
 import { CitaModal } from "../components/CitaModal"
@@ -638,23 +638,6 @@ export function AgendaPage() {
     setShowForm(true)
   }
 
-  const handleDelete = async (id: string) => {
-    if (confirm("¿Estás seguro de que deseas eliminar esta cita?")) {
-      try {
-        await api.deleteCita(parseInt(id))
-        await loadData()
-        
-        toast.success('Cita eliminada exitosamente')
-        
-        if (selectedCita?.id === id) {
-          setSelectedCita(null)
-        }
-      } catch (error: any) {
-        toast.error('Error eliminando cita: ' + handleApiError(error))
-      }
-    }
-  }
-
   const changeMonth = (offset: number) => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1))
   }
@@ -1002,13 +985,6 @@ export function AgendaPage() {
                             >
                               <Edit2 size={16} />
                             </button>
-                            <button
-                              onClick={() => handleDelete(cita.id)}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded transition"
-                              title="Eliminar cita"
-                            >
-                              <Trash2 size={16} />
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -1070,10 +1046,6 @@ export function AgendaPage() {
             }}
             onClose={() => setSelectedCita(null)}
             onEdit={() => handleEdit(selectedCita)}
-            onDelete={() => {
-              handleDelete(selectedCita.id)
-              setSelectedCita(null)
-            }}
           />
         )}
 

@@ -10,7 +10,7 @@ rol_permiso = Table(
     Column('rol_id', Integer, ForeignKey('rol.id'), primary_key=True),
     Column('permiso_id', Integer, ForeignKey('permiso.id'), primary_key=True)
 )
-
+    
 class Rol(BaseModel):
     __tablename__ = "rol"  # Nota: en SQL es "Rol" con mayúscula
     
@@ -28,16 +28,3 @@ class Permiso(BaseModel):
     descripcion = Column(String(255))
     
     roles = relationship("Rol", secondary=rol_permiso, back_populates="permisos")
-
-class Usuario(BaseModel):
-    __tablename__ = "usuario"
-    
-    username = Column(String(50), unique=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)  # En SQL es "password"
-    nombre = Column(String(100), nullable=False)
-    email = Column(String(100), unique=True, nullable=False)
-    rol_id = Column(Integer, ForeignKey("rol.id"), nullable=False)
-    activo = Column(Boolean, default=True)
-    fecha_creacion = Column(DateTime, server_default=func.now())
-    
-    rol = relationship("Rol", back_populates="usuarios")
