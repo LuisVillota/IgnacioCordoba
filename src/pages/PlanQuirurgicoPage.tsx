@@ -517,22 +517,6 @@ export const PlanQuirurgicoPage: React.FC = () => {
         </div>
       )}
 
-      {/* Debug panel (solo en desarrollo) */}
-      {process.env.NODE_ENV === 'development' && planesQuirurgicos.length > 0 && (
-        <div className="mt-8 p-4 bg-gray-50 rounded-lg border">
-          <details>
-            <summary className="font-medium text-gray-700 cursor-pointer">Debug Info</summary>
-            <div className="mt-2 text-sm">
-              <p>Total planes: {planesQuirurgicos.length}</p>
-              <p>Primer plan datos:</p>
-              <pre className="mt-2 p-2 bg-gray-800 text-gray-100 rounded overflow-auto text-xs max-h-60">
-                {JSON.stringify(planesQuirurgicos[0], null, 2)}
-              </pre>
-            </div>
-          </details>
-        </div>
-      )}
-
       {/* MODAL DE DETALLES DEL PLAN */}
       {showDetallesModal && planParaVer && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
