@@ -1424,6 +1424,136 @@ export const api = {
     });
   },
 
+  downloadPlanFile: async (nombreArchivo: string, planId: string) => {
+    const callKey = `downloadPlanFile_${planId}_${nombreArchivo}_${Date.now()}`;
+    
+    return preventDuplicateCall(callKey, async () => {
+      try {
+        console.log("📥 Descargando archivo:", { nombreArchivo, planId });
+        
+        // Obtener el token de autenticación
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        
+        // Extraer el ID numérico del plan (sin el prefijo 'plan_')
+        const planIdClean = planId.replace('plan_', '');
+        
+        // Crear la URL completa
+        const url = `${API_URL}/api/planes-quirurgicos/${planIdClean}/descargar-archivo`;
+        
+        console.log("📤 Enviando solicitud a:", url);
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ nombreArchivo }),
+        });
+        
+        console.log("📥 Respuesta de descarga:", {
+          status: response.status,
+          statusText: response.statusText
+        });
+        
+        if (!response.ok) {
+          // Si hay error, leer el mensaje
+          const errorText = await response.text();
+          console.error("❌ Error en respuesta:", errorText);
+          
+          let errorMessage = `Error ${response.status}: ${response.statusText}`;
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.detail || errorData.message || errorData.error || errorMessage;
+          } catch {
+            if (errorText) errorMessage = errorText;
+          }
+          
+          throw new Error(errorMessage);
+        }
+        
+        // Verificar si es un JSON (error) o un archivo
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+          // Es un error en formato JSON
+          const errorData = await response.json();
+          throw new Error(errorData.detail || errorData.message || 'Error desconocido');
+        }
+        
+        // Es un archivo, proceder con la descarga
+        const blob = await response.blob();
+        
+        // Crear URL para el blob
+        const blobUrl = window.URL.createObjectURL(blob);
+        
+        // Crear elemento <a> temporal para descargar
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = nombreArchivo;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Limpiar
+        setTimeout(() => {
+          window.URL.revokeObjectURL(blobUrl);
+          document.body.removeChild(a);
+        }, 100);
+        
+        console.log("✅ Archivo descargado exitosamente:", nombreArchivo);
+        
+        return { 
+          success: true, 
+          filename: nombreArchivo,
+          size: blob.size
+        };
+        
+      } catch (error: any) {
+        console.error("❌ Error descargando archivo:", error);
+        
+        return {
+          success: false,
+          error: true,
+          message: error.message || "Error al descargar el archivo"
+        };
+      }
+    });
+  },
+
+  // También agrega un método para verificar si hay archivos
+  checkPlanFiles: async (planId: string) => {
+    try {
+      console.log("🔍 Verificando archivos para plan:", planId);
+      
+      const plan = await api.getPlanQuirurgico(planId);
+      
+      if (plan.success && plan.imagenes_adjuntas) {
+        const archivos = plan.imagenes_adjuntas;
+        console.log("📁 Archivos encontrados:", archivos);
+        return {
+          success: true,
+          archivos: Array.isArray(archivos) ? archivos : [],
+          total: Array.isArray(archivos) ? archivos.length : 0
+        };
+      }
+      
+      return {
+        success: false,
+        archivos: [],
+        total: 0,
+        message: "No se encontraron archivos"
+      };
+    } catch (error) {
+      console.error("❌ Error verificando archivos:", error);
+      return {
+        success: false,
+        archivos: [],
+        total: 0,
+        message: "Error verificando archivos"
+      };
+    }
+  },
+
   getPlanQuirurgico: (id: string) => {
     const callKey = `getPlanQuirurgico_${id}_${Date.now()}`;
     

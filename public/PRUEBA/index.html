@@ -593,6 +593,48 @@
       font-family: monospace;
     }
 
+    /* Estilos para el selector de color del trazo */
+    .color-selector {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #f9f9f9;
+      border-radius: 8px;
+    }
+
+    .color-selector label {
+      font-size: 0.9rem;
+      min-width: 80px;
+      color: #555;
+      font-weight: 500;
+    }
+
+    .color-options {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .color-option {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .color-option:hover {
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .color-option.active {
+      border: 2px solid #333;
+      transform: scale(1.1);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+    }
+
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
@@ -706,11 +748,24 @@
         🔍 Ver Elementos
       </button>
 
-      <!-- Added sliders for stroke width and text size -->
+      <!-- Controles para el trazo libre -->
       <div class="slider-control">
         <label>Grosor trazo:</label>
         <input type="range" id="strokeSlider" min="1" max="10" value="3" oninput="updateStrokeWidth(this.value)">
         <span class="value-display" id="strokeValue">3</span>
+      </div>
+
+      <!-- Selector de color para el trazo libre -->
+      <div class="color-selector">
+        <label>Color trazo:</label>
+        <div class="color-options">
+          <div class="color-option active" style="background: #000000;" data-color="#000000" onclick="selectStrokeColor('#000000')"></div>
+          <div class="color-option" style="background: #FF0000;" data-color="#FF0000" onclick="selectStrokeColor('#FF0000')"></div>
+          <div class="color-option" style="background: #0000FF;" data-color="#0000FF" onclick="selectStrokeColor('#0000FF')"></div>
+          <div class="color-option" style="background: #008000;" data-color="#008000" onclick="selectStrokeColor('#008000')"></div>
+          <div class="color-option" style="background: #FFA500;" data-color="#FFA500" onclick="selectStrokeColor('#FFA500')"></div>
+          <div class="color-option" style="background: #800080;" data-color="#800080" onclick="selectStrokeColor('#800080')"></div>
+        </div>
       </div>
 
       <div class="slider-control">
@@ -1366,6 +1421,7 @@ setTimeout(checkSVGLoaded, 2000);
     let pendingTextSvgDoc = null;
     let currentStrokeWidth = 3;
     let currentTextSize = 16;
+    let currentStrokeColor = '#000000'; // Color por defecto negro
 
     // Configuración actualizada de los elementos
     const elementsConfig = {
@@ -1419,6 +1475,20 @@ setTimeout(checkSVGLoaded, 2000);
 
     // Historial de elementos activados por botones numéricos
     const numericSelectionHistory = [];
+
+    // Función para seleccionar color del trazo
+    function selectStrokeColor(color) {
+      currentStrokeColor = color;
+      
+      // Actualizar la interfaz
+      document.querySelectorAll('.color-option').forEach(option => {
+        option.classList.remove('active');
+      });
+      
+      document.querySelector(`[data-color="${color}"]`).classList.add('active');
+      
+      console.log(`Color de trazo cambiado a: ${color}`);
+    }
 
     // Función mejorada para encontrar elementos
     function findElementInSVG(svgDoc, config) {
@@ -1823,7 +1893,7 @@ setTimeout(checkSVGLoaded, 2000);
       currentPath = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'path');
       currentPath.classList.add('free-draw-path');
       currentPath.setAttribute('fill', 'none');
-      currentPath.setAttribute('stroke', '#000000');
+      currentPath.setAttribute('stroke', currentStrokeColor); // Usar el color seleccionado
       currentPath.setAttribute('stroke-width', currentStrokeWidth);
       currentPath.setAttribute('stroke-linecap', 'round');
       currentPath.setAttribute('stroke-linejoin', 'round');
