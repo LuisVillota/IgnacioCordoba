@@ -126,11 +126,11 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
   ]
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 md:p-6 lg:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Bienvenido, {user.nombre_completo}</h1>
-          <p className="text-gray-600 mt-2">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Bienvenido, {user.nombre_completo.split(' ')[0]}</h1>
+          <p className="text-gray-600 mt-1 md:mt-2 text-sm md:text-base">
             Panel de control - Rol: <span className="font-semibold capitalize">{user.rol}</span>
           </p>
         </div>
@@ -138,7 +138,7 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
         <button
           onClick={handleRefresh}
           disabled={refreshing}
-          className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-700 disabled:opacity-50"
+          className="flex items-center justify-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-700 disabled:opacity-50 w-full sm:w-auto"
         >
           <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
           <span>Actualizar</span>
@@ -158,28 +158,28 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
       )}
 
       {loading && (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1a6b32] mx-auto mb-4"></div>
+        <div className="text-center py-8 md:py-12">
+          <div className="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-b-2 border-[#1a6b32] mx-auto mb-4"></div>
           <p className="text-gray-600">Cargando estadísticas...</p>
         </div>
       )}
 
       {!loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
           {statCards.map(
             (stat, idx) =>
               (!stat.permission || hasPermission(stat.permission)) && (
                 <div
                   key={idx}
-                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition"
+                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 hover:shadow-md transition"
                 >
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-gray-600 text-sm font-medium">{stat.label}</p>
-                      <p className="text-3xl font-bold text-gray-800 mt-2">{stat.value}</p>
+                      <p className="text-2xl md:text-3xl font-bold text-gray-800 mt-1 md:mt-2">{stat.value}</p>
                     </div>
-                    <div className={`${stat.color} p-3 rounded-lg`}>
-                      <stat.icon size={24} className="text-white" />
+                    <div className={`${stat.color} p-2 md:p-3 rounded-lg`}>
+                      <stat.icon size={20} className="text-white" />
                     </div>
                   </div>
                 </div>
@@ -189,9 +189,9 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
       )}
 
       {!loading && hasPermission("ver_agenda" as Permission) && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-            <Calendar className="mr-2 text-[#669933]" size={20} />
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
+          <h2 className="text-base md:text-lg font-bold text-gray-800 mb-4 flex items-center">
+            <Calendar className="mr-2 text-[#669933]" size={18} />
             Citas Recientes
           </h2>
           <div className="space-y-3">
@@ -199,9 +199,9 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
               citasRecientes.map((cita, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition gap-2"
                 >
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-gray-800">
                       {cita.paciente_nombre} {cita.paciente_apellido}
                     </p>
@@ -211,7 +211,7 @@ export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
                        cita.tipo_cita === "valoracion" ? "Valoración" : "Programación Quirúrgica"}
                     </p>
                   </div>
-                  <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                  <span className={`text-xs font-semibold px-3 py-1 rounded-full w-fit ${
                     cita.estado === "confirmada" 
                       ? "text-[#1a6b32] bg-[#99d6e8]/30" 
                       : cita.estado === "pendiente"

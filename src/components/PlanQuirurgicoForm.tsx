@@ -25,6 +25,8 @@ interface DibujoAccion {
 type ZoneMarkingsSVG = { [zoneId: string]: 'liposuction' | 'lipotransfer' | null };
 
 export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel }) => {
+
+  
   // ---------------------------
   // Estado para selector de pacientes
   // ---------------------------
@@ -1480,8 +1482,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       {/* ESQUEMA MEJORADO - VERSIÓN CON EDITOR SEPARADO */}
       {/* =========================== */}
       <section className="p-4 border rounded bg-white">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-bold text-lg text-[#1a6b32]">Editor de Esquemas</h3>
+        <div className="flex justify-between items-center">
+          <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Editor de Esquemas</h3>
           <button
             onClick={() => setShowEsquemaViewer(true)}
             className="px-6 py-2 bg-[#1a6b32] text-white rounded-lg hover:bg-[#155427] flex items-center gap-2"
@@ -1489,38 +1491,20 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             🎨 Abrir Editor de Esquemas
           </button>
         </div>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-gray-600">
           Abre el editor interactivo para marcar zonas de liposucción, lipotransferencia, agregar texto y dibujos libres.
         </p>
-        
-        {/* Información sobre el esquema guardado */}
-        {(plan?.esquema_mejorado?.zoneMarkings && Object.keys(plan.esquema_mejorado.zoneMarkings).length > 0) ? (
-          <div className="p-3 bg-green-50 border border-green-200 rounded">
-            <div className="flex items-center gap-3">
-              <span className="text-green-600">✓</span>
-              <div>
-                <div className="font-medium text-green-800">Esquema guardado</div>
-                <div className="text-sm text-green-700">
-                  {Object.keys(plan.esquema_mejorado.zoneMarkings).length} zonas marcadas | 
-                  Procedimiento actual: {plan.esquema_mejorado.selectedProcedure === 'liposuction' ? 'Liposucción' : 'Lipotransferencia'}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
-            <div className="flex items-center gap-3">
-              <span className="text-yellow-600">⚠</span>
-              <div>
-                <div className="font-medium text-yellow-800">Esquema no configurado</div>
-                <div className="text-sm text-yellow-700">
-                  Haga clic en "Abrir Editor de Esquemas" para marcar zonas de procedimientos
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </section>
+      
+      {/* VISOR DE ESQUEMAS - MODAL */}
+      {showEsquemaViewer && (
+        <EsquemaViewer 
+          onClose={() => setShowEsquemaViewer(false)} 
+          planId={plan?.id}
+        />
+      )}
+
+
 
       {/* NOTAS Y ARCHIVOS ADJUNTOS */}
       <section className="p-4 border rounded bg-white">
@@ -1879,168 +1863,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </div>
       </div>
 
-      {/* VISOR DE ESQUEMAS MODAL */}
-      {showEsquemaViewer && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
-            <div className="p-4 border-b flex justify-between items-center bg-[#1a6b32] text-white">
-              <div>
-                <h3 className="text-lg font-semibold">Editor de Esquemas</h3>
-                <p className="text-sm opacity-90">Marque zonas de liposucción, lipotransferencia, agregue texto y dibujos</p>
-              </div>
-              <button
-                onClick={() => setShowEsquemaViewer(false)}
-                className="text-white hover:text-gray-200 text-xl"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="p-4 border-b bg-gray-50">
-              <div className="flex flex-wrap gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Procedimiento:</span>
-                  <button
-                    onClick={() => selectProcedure('liposuction')}
-                    className={`px-3 py-1 rounded ${selectedProcedure === 'liposuction' ? 'bg-red-600 text-white' : 'bg-gray-200'}`}
-                  >
-                    Liposucción
-                  </button>
-                  <button
-                    onClick={() => selectProcedure('lipotransfer')}
-                    className={`px-3 py-1 rounded ${selectedProcedure === 'lipotransfer' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-                  >
-                    Lipotransferencia
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Modos:</span>
-                  <button
-                    onClick={toggleDrawingMode}
-                    className={`px-3 py-1 rounded ${isDrawingMode ? 'bg-purple-600 text-white' : 'bg-gray-200'}`}
-                  >
-                    ✏️ Dibujo libre
-                  </button>
-                  <button
-                    onClick={toggleTextMode}
-                    className={`px-3 py-1 rounded ${isTextMode ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
-                  >
-                    📝 Texto
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={undoLastSelection}
-                    className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                  >
-                    ↩️ Deshacer
-                  </button>
-                  <button
-                    onClick={resetAllSelections}
-                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                  >
-                    🗑️ Limpiar todo
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex-1 overflow-auto p-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="border rounded-lg p-2">
-                  <h4 className="font-medium mb-2 text-center">Cuerpo Completo</h4>
-                  <div className="border rounded overflow-auto max-h-[500px]">
-                    <object 
-                      ref={bodySvgRef}
-                      data="/esquemas/cuerpo_completo.svg" 
-                      type="image/svg+xml" 
-                      className="w-full h-auto"
-                    >
-                      Esquema de cuerpo completo no disponible
-                    </object>
-                  </div>
-                </div>
-                
-                <div className="border rounded-lg p-2">
-                  <h4 className="font-medium mb-2 text-center">Facial</h4>
-                  <div className="border rounded overflow-auto max-h-[500px]">
-                    <object 
-                      ref={facialSvgRef}
-                      data="/esquemas/facial.svg" 
-                      type="image/svg+xml" 
-                      className="w-full h-auto"
-                    >
-                      Esquema facial no disponible
-                    </object>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-4 border-t flex justify-between items-center">
-              <div className="text-sm text-gray-600">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1">
-                    <div className="w-4 h-4 bg-[url(#liposuction-pattern)] border"></div>
-                    <span>Liposucción</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-4 h-4 bg-[url(#lipotransfer-pattern)] border"></div>
-                    <span>Lipotransferencia</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowEsquemaViewer(false)}
-                  className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  Cerrar
-                </button>
-                <button
-                  onClick={() => setShowEsquemaViewer(false)}
-                  className="px-4 py-2 bg-[#1a6b32] text-white rounded hover:bg-[#155228]"
-                >
-                  Guardar y Continuar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL PARA TEXTO */}
-      {showTextModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-3">Agregar Texto</h3>
-            <input
-              type="text"
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              placeholder="Escriba el texto aquí..."
-              className="w-full border p-2 rounded mb-3"
-              autoFocus
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={closeTextModal}
-                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={addTextToSVG}
-                className="px-4 py-2 bg-[#1a6b32] text-white rounded hover:bg-[#155228]"
-              >
-                Agregar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
