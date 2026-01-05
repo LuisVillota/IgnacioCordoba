@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Plus, Edit2, Eye, ArrowLeft, Trash2, Upload } from "lucide-react"
+import { Plus, Edit2, Eye, ArrowLeft, Upload } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { HistoriaForm } from "../components/HistoriaForm"
 import { HistoriaModal } from "../components/HistoriaModal"
@@ -151,40 +151,6 @@ export function HistoriaClinicaPage() {
     setShowForm(true)
   }
 
-  const handleDeleteHistoria = async (historiaId: string) => {
-    if (!window.confirm("¿Estás seguro de que quieres eliminar esta historia clínica?\n\n⚠️ Esta acción no se puede deshacer.")) {
-      return
-    }
-    
-    try {
-      setLoading(prev => ({ ...prev, saving: true }))
-      setError(null)
-      
-      await api.deleteHistoriaClinica(parseInt(historiaId))
-      
-      setHistorias(prev => prev.filter(h => h.id !== historiaId))
-      
-      alert('Historia clínica eliminada exitosamente')
-      
-    } catch (error: any) {
-      const errorMessage = handleApiError(error)
-      
-      if (errorMessage.includes('404') || errorMessage.includes('no encontrado')) {
-        await loadHistorias(parseInt(selectedPacienteId))
-        setError('La historia ya fue eliminada.')
-      } else if (errorMessage.includes('IntegrityError') || errorMessage.includes('relacionados')) {
-        setError('No se puede eliminar la historia porque tiene registros relacionados.')
-      } else {
-        setError(`Error eliminando historia: ${errorMessage}`)
-      }
-      
-      await loadHistorias(parseInt(selectedPacienteId))
-      
-    } finally {
-      setLoading(prev => ({ ...prev, saving: false }))
-    }
-  }
-
   const paciente = pacientes.find((p) => p.id === selectedPacienteId)
   const pacienteHistorias = historias.filter((h) => h.id_paciente === selectedPacienteId)
 
@@ -204,6 +170,7 @@ export function HistoriaClinicaPage() {
               <button 
                 onClick={() => { setError(null); loadPacientes() }}
                 className="mt-2 text-sm text-red-600 hover:text-red-800"
+                type="button"
               >
                 Reintentar
               </button>
@@ -232,6 +199,7 @@ export function HistoriaClinicaPage() {
                       key={p.id}
                       onClick={() => setSelectedPacienteId(p.id)}
                       className="p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-[#1a6b32] transition text-left"
+                      type="button"
                     >
                       <p className="font-semibold text-gray-800">
                         {p.nombres} {p.apellidos}
@@ -398,17 +366,6 @@ export function HistoriaClinicaPage() {
                         type="button"
                       >
                         <Edit2 size={18} />
-                      </button>
-                    </ProtectedRoute>
-                    <ProtectedRoute allowedRoles={["admin"]}>
-                      <button
-                        onClick={() => handleDeleteHistoria(historia.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                        title="Eliminar"
-                        disabled={loading.saving}
-                        type="button"
-                      >
-                        <Trash2 size={18} />
                       </button>
                     </ProtectedRoute>
                   </div>
