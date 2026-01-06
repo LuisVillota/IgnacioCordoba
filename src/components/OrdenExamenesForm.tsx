@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState } from "react"
 import { Calendar, Clock, Download } from "lucide-react"
-import type { paciente } from "../pages/pacientesPage"
+import type { paciente } from "../types/paciente"
 import { generarPDFOrdenExamenes } from "../utils/simplePdfGenerator"
 
 interface OrdenExamenesFormProps {

@@ -1,20 +1,19 @@
 "use client"
 
 import { X, Mail, Phone, MapPin, Calendar, Download } from "lucide-react"
-import type { paciente } from "../pages/pacientesPage"
+import type { paciente } from "../types/paciente"
 import { generarPDFpaciente } from "../utils/pacientePdfGenerator"
 import { useState, useEffect } from "react"
 
-interface pacienteModalProps {
+interface PacienteModalProps {
   paciente: paciente
   onClose: () => void
 }
 
-export function pacienteModal({ paciente, onClose }: pacienteModalProps) {
+export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
   const [descargando, setDescargando] = useState(false)
-  const [currentpaciente, setCurrentpaciente] = useState(paciente)
-
-  // Actualizar el estado local cuando cambie el prop paciente
+  const [currentpaciente, setCurrentpaciente] = useState<paciente>(paciente)
+  
   useEffect(() => {
     setCurrentpaciente(paciente)
   }, [paciente])
