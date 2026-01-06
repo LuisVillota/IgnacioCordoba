@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 
-interface Paciente {
+interface paciente {
   id: string
   nombres: string
   apellidos: string
@@ -43,7 +43,7 @@ const valorSeguro = (valor: any, defaultValue: string = 'No especificado'): stri
   return valor || defaultValue
 }
 
-export async function generarPDFPaciente(paciente: Paciente) {
+export async function generarPDFpaciente(paciente: paciente) {
   try {
     const doc = new jsPDF()
     const pageWidth = doc.internal.pageSize.getWidth()
@@ -84,7 +84,7 @@ export async function generarPDFPaciente(paciente: Paciente) {
     // Título principal
     addText('CLINICARX', 18, true, margin, 8, '#1a6b32')
     addText('CIRUGÍA PLÁSTICA', 14, false, margin, 8, '#669933')
-    addText('Ficha del Paciente', 12, false, margin, 12, '#000000')
+    addText('Ficha del paciente', 12, false, margin, 12, '#000000')
     
     yPosition = margin + 35
 
@@ -93,7 +93,7 @@ export async function generarPDFPaciente(paciente: Paciente) {
     doc.line(margin, yPosition, pageWidth - margin, yPosition)
     yPosition += 15
 
-    // Información Principal del Paciente
+    // Información Principal del paciente
     addText('INFORMACIÓN PRINCIPAL', 14, true, margin, 10, '#1a6b32')
     yPosition += 2
 

@@ -12,7 +12,7 @@ interface ProgramacionFormProps {
   isLoading?: boolean
 }
 
-interface Paciente {
+interface paciente {
   id: string
   nombre: string
   apellido: string
@@ -130,10 +130,10 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
     observaciones: programacion?.observaciones || "",
   })
 
-  const [pacientes, setPacientes] = useState<Paciente[]>([])
+  const [pacientes, setpacientes] = useState<paciente[]>([])
   const [procedimientos, setProcedimientos] = useState<Procedimiento[]>([])
   const [loadingData, setLoadingData] = useState(false)
-  const [pacientesLoading, setPacientesLoading] = useState(true)
+  const [pacientesLoading, setpacientesLoading] = useState(true)
   const [procedimientosLoading, setProcedimientosLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
@@ -160,9 +160,9 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       try {
         console.log("📥 Cargando datos para formulario...");
         
-        setPacientesLoading(true)
+        setpacientesLoading(true)
         console.log("📥 Cargando pacientes...");
-        const pacientesData = await api.getPacientes(1000, 0)
+        const pacientesData = await api.getpacientes(1000, 0)
         
         console.log("📥 Respuesta de pacientes:", pacientesData);
         
@@ -174,10 +174,10 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
             numero_documento: pac.numero_documento || ""
           }))
           console.log(`✅ ${pacientesFormateados.length} pacientes cargados`);
-          setPacientes(pacientesFormateados)
+          setpacientes(pacientesFormateados)
         } else {
           console.warn("⚠️ No se pudieron cargar pacientes, respuesta inesperada");
-          setPacientes([])
+          setpacientes([])
         }
 
         setProcedimientosLoading(true)
@@ -225,7 +225,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
         console.error("❌ Error cargando datos:", err);
         setError(handleApiError(err))
       } finally {
-        setPacientesLoading(false)
+        setpacientesLoading(false)
         setProcedimientosLoading(false)
         setLoadingData(false)
         console.log("✅ Carga de datos completada");
@@ -557,7 +557,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Paciente
+              paciente
               {pacientesLoading && <Loader2 className="inline ml-2 h-4 w-4 animate-spin" />}
             </label>
             <select
@@ -721,7 +721,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
             <h4 className="font-medium text-gray-700 mb-2">Resumen de la programación</h4>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
-                <span className="text-gray-500">Paciente:</span>
+                <span className="text-gray-500">paciente:</span>
                 <p className="font-medium">
                   {formData.numero_documento ? 
                     pacientes.find(p => p.numero_documento === formData.numero_documento)?.nombre + " " + 
@@ -809,7 +809,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
                       </div>
                       {conflictInfo.paciente_nombre && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Paciente:</span>
+                          <span className="text-gray-600">paciente:</span>
                           <span className="font-medium">{conflictInfo.paciente_nombre} {conflictInfo.paciente_apellido}</span>
                         </div>
                       )}

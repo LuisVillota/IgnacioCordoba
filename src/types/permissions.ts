@@ -4,12 +4,12 @@ export type Permission =
   | "crear_usuario"
   | "editar_usuario"
 
-  // Pacientes
+  // pacientes
   | "ver_pacientes"
   | "crear_paciente"
   | "editar_paciente"
 
-  // Agenda / Citas
+  // Agenda / citas
   | "ver_agenda"
   | "crear_cita"
   | "editar_cita"

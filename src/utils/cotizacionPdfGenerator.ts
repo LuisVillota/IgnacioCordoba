@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 
-interface Paciente {
+interface paciente {
   id: string
   nombres: string
   apellidos: string
@@ -39,7 +39,7 @@ interface CotizacionData {
     subtotalOtrosAdicionales: number
     total: number
   }
-  paciente: Paciente
+  paciente: paciente
   items: CotizacionItem[]
   serviciosIncluidos: ServicioIncluido[]
 }
@@ -155,8 +155,8 @@ export async function generarPDFCotizacion(data: CotizacionData) {
     // Agregar encabezado a la primera página
     agregarEncabezado(doc, data, pageWidth, margin, logoBase64)
 
-    // Información del Paciente
-    addText('INFORMACIÓN DEL PACIENTE', 14, true, margin, 10, '#1a6b32')
+    // Información del paciente
+    addText('INFORMACIÓN DEL paciente', 14, true, margin, 10, '#1a6b32')
     yPosition += 2
 
     // Cuadro de información del paciente
@@ -379,7 +379,7 @@ export async function generarPDFCotizacion(data: CotizacionData) {
     doc.line(margin, firmasY + 18, margin + 80, firmasY + 18)
     
     // Firma del paciente
-    doc.text('Paciente/Acompañante', pageWidth - margin - 80, firmasY + 10)
+    doc.text('paciente/Acompañante', pageWidth - margin - 80, firmasY + 10)
     doc.text('Aceptación de cotización', pageWidth - margin - 80, firmasY + 15)
     doc.line(pageWidth - margin - 80, firmasY + 18, pageWidth - margin, firmasY + 18)
 

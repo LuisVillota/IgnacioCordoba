@@ -30,10 +30,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // ---------------------------
   // Estado para selector de pacientes
   // ---------------------------
-  const [cargandoPacientes, setCargandoPacientes] = useState(false)
-  const [pacientes, setPacientes] = useState<any[]>([])
-  const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any>(null)
-  const [showSelectorPacientes, setShowSelectorPacientes] = useState(false)
+  const [cargandopacientes, setCargandopacientes] = useState(false)
+  const [pacientes, setpacientes] = useState<any[]>([])
+  const [pacienteSeleccionado, setpacienteSeleccionado] = useState<any>(null)
+  const [showSelectorpacientes, setShowSelectorpacientes] = useState(false)
   const [searchTerm, setSearchTerm] = useState("") 
   
   // ---------------------------
@@ -44,7 +44,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // ---------------------------
   // Datos paciente
   // ---------------------------
-  const [datosPaciente, setDatosPaciente] = useState({
+  const [datospaciente, setDatospaciente] = useState({
     id: plan?.datos_paciente?.id ?? "",
     identificacion: plan?.datos_paciente?.identificacion ?? "",
     edad: plan?.datos_paciente?.edad ?? 0,
@@ -95,8 +95,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   }
 
   const defaultHistoriaClinica = {
-    nombre_completo: datosPaciente.nombre_completo,
-    identificacion: datosPaciente.identificacion,
+    nombre_completo: datospaciente.nombre_completo,
+    identificacion: datospaciente.identificacion,
     ocupacion: "",
     fecha_nacimiento: "",
     edad_calculada: 0,
@@ -112,9 +112,9 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     enfermedades_piel: false,
     tratamientos_esteticos: "",
     antecedentes_familiares: "",
-    peso: datosPaciente.peso,
-    altura: datosPaciente.altura,
-    imc: datosPaciente.imc,
+    peso: datospaciente.peso,
+    altura: datospaciente.altura,
+    imc: datospaciente.imc,
     contextura: "",
     notas_corporales: defaultNotasCorporales,
     diagnostico: "",
@@ -236,25 +236,25 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     const initializeForm = async () => {
       if (!plan) {
         // Cargar pacientes automáticamente cuando se crea un nuevo plan
-        await cargarPacientes();
+        await cargarpacientes();
         
         const now = new Date();
         const fecha = now.toISOString().split('T')[0];
         const hora = now.toTimeString().slice(0, 5);
         
-        setDatosPaciente(prev => ({
+        setDatospaciente(prev => ({
           ...prev,
           fecha_consulta: fecha,
           hora_consulta: hora
         }));
       } else if (plan.datos_paciente?.id) {
         // Si ya hay un plan, cargar el paciente específico
-        await cargarPacientes();
+        await cargarpacientes();
         
         // Buscar el paciente en la lista cargada
         const paciente = pacientes.find(p => p.id.toString() === plan.datos_paciente.id);
         if (paciente) {
-          setPacienteSeleccionado(paciente);
+          setpacienteSeleccionado(paciente);
         }
       }
     };
@@ -265,10 +265,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // ---------------------------
   // Función para cargar todos los pacientes
   // ---------------------------
-  const cargarPacientes = async () => {
-    setCargandoPacientes(true);
+  const cargarpacientes = async () => {
+    setCargandopacientes(true);
     try {
-      const pacientesData = await api.getTodosPacientes();
+      const pacientesData = await api.getTodospacientes();
       
       // Si la función devuelve un array directamente
       let pacientesArray = [];
@@ -280,7 +280,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       } else if (pacientesData && pacientesData.data && Array.isArray(pacientesData.data)) {
         pacientesArray = pacientesData.data;
       } else {
-        setPacientes([]);
+        setpacientes([]);
         return;
       }
       
@@ -335,21 +335,21 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         };
       });
       
-      setPacientes(pacientesMapeados);
+      setpacientes(pacientesMapeados);
       
       // Si ya hay un paciente seleccionado, mantenerlo
-      if (datosPaciente.id && pacientesMapeados.length > 0) {
+      if (datospaciente.id && pacientesMapeados.length > 0) {
         const pacienteExistente = pacientesMapeados.find((p: any) => 
-          p.id.toString() === datosPaciente.id.toString()
+          p.id.toString() === datospaciente.id.toString()
         );
         if (pacienteExistente) {
-          setPacienteSeleccionado(pacienteExistente);
+          setpacienteSeleccionado(pacienteExistente);
         }
       }
       
       // Si no hay plan y no hay paciente seleccionado, mostrar selector
       if (!plan && !pacienteSeleccionado && pacientesMapeados.length > 0) {
-        setShowSelectorPacientes(true);
+        setShowSelectorpacientes(true);
       }
       
     } catch (error) {
@@ -366,7 +366,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       }
       
       alert(errorMessage);
-      setPacientes([]);
+      setpacientes([]);
       
       // Datos de ejemplo para desarrollo
       if (process.env.NODE_ENV === 'development') {
@@ -406,10 +406,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             genero: "Femenino"
           }
         ];
-        setPacientes(pacientesEjemplo);
+        setpacientes(pacientesEjemplo);
       }
     } finally {
-      setCargandoPacientes(false);
+      setCargandopacientes(false);
     }
   };
   
@@ -433,9 +433,9 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // ---------------------------
   // Función para seleccionar un paciente
   // ---------------------------
-  const seleccionarPaciente = async (paciente: any) => {
+  const seleccionarpaciente = async (paciente: any) => {
     try {
-      setPacienteSeleccionado(paciente);
+      setpacienteSeleccionado(paciente);
       
       // Calcular edad si no está en los datos
       let edad = paciente.edad || 0;
@@ -455,7 +455,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       }
       
       // Actualizar datos del paciente en el formulario
-      setDatosPaciente(prev => ({
+      setDatospaciente(prev => ({
         ...prev,
         id: paciente.id.toString(),
         identificacion: paciente.numero_documento || paciente.documento || '',
@@ -478,7 +478,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       }));
       
       // Cerrar el selector
-      setShowSelectorPacientes(false);
+      setShowSelectorpacientes(false);
       
     } catch (error) {
       console.error("Error seleccionando paciente:", error);
@@ -490,12 +490,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // IMC en tiempo real
   // ---------------------------
   useEffect(() => {
-    const p = parseFloat(datosPaciente.peso.toString())
-    const h = parseFloat(datosPaciente.altura.toString())
+    const p = parseFloat(datospaciente.peso.toString())
+    const h = parseFloat(datospaciente.altura.toString())
 
     if (!p || !h || isNaN(p) || isNaN(h)) {
-      setDatosPaciente(prev => ({ ...prev, imc: 0, categoriaIMC: "" }))
-      setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, peso: datosPaciente.peso, altura: datosPaciente.altura, imc: 0 }))
+      setDatospaciente(prev => ({ ...prev, imc: 0, categoriaIMC: "" }))
+      setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, peso: datospaciente.peso, altura: datospaciente.altura, imc: 0 }))
       return
     }
 
@@ -507,9 +507,9 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     else if (rounded < 30) categoria = "Sobrepeso"
     else categoria = "Obesidad"
 
-    setDatosPaciente(prev => ({ ...prev, imc: rounded, categoriaIMC: categoria }))
-    setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, peso: datosPaciente.peso, altura: datosPaciente.altura, imc: rounded }))
-  }, [datosPaciente.peso, datosPaciente.altura])
+    setDatospaciente(prev => ({ ...prev, imc: rounded, categoriaIMC: categoria }))
+    setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, peso: datospaciente.peso, altura: datospaciente.altura, imc: rounded }))
+  }, [datospaciente.peso, datospaciente.altura])
 
   // ===========================
   // FUNCIONES DEL ESQUEMA - CON NUEVAS FUNCIONALIDADES
@@ -1100,7 +1100,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     const diff = Date.now() - new Date(dob).getTime()
     const age = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25))
     setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, edad_calculada: age }))
-    setDatosPaciente(prev => ({ ...prev, edad: age }))
+    setDatospaciente(prev => ({ ...prev, edad: age }))
   }, [historiaClinica.fecha_nacimiento])
 
   // Guardar esquema
@@ -1114,7 +1114,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // ---------------------------
   const handleSubmit = () => {
     // Validar que se haya seleccionado un paciente (solo para nuevo plan)
-    if (!plan && !datosPaciente.id) {
+    if (!plan && !datospaciente.id) {
       alert("Debe seleccionar un paciente antes de guardar")
       return
     }
@@ -1129,17 +1129,17 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     };
 
     // Preparar datos limpios
-    const datosPacienteLimpios = {
-      id: datosPaciente.id,
-      identificacion: datosPaciente.identificacion,
-      edad: limpiarValorNumerico(datosPaciente.edad) || 0,
-      nombre_completo: datosPaciente.nombre_completo,
-      peso: limpiarValorNumerico(datosPaciente.peso) || 0,
-      altura: limpiarValorNumerico(datosPaciente.altura) || 0,
-      imc: limpiarValorNumerico(datosPaciente.imc) || 0,
-      categoriaIMC: datosPaciente.categoriaIMC,
-      fecha_consulta: datosPaciente.fecha_consulta,
-      hora_consulta: datosPaciente.hora_consulta,
+    const datospacienteLimpios = {
+      id: datospaciente.id,
+      identificacion: datospaciente.identificacion,
+      edad: limpiarValorNumerico(datospaciente.edad) || 0,
+      nombre_completo: datospaciente.nombre_completo,
+      peso: limpiarValorNumerico(datospaciente.peso) || 0,
+      altura: limpiarValorNumerico(datospaciente.altura) || 0,
+      imc: limpiarValorNumerico(datospaciente.imc) || 0,
+      categoriaIMC: datospaciente.categoriaIMC,
+      fecha_consulta: datospaciente.fecha_consulta,
+      hora_consulta: datospaciente.hora_consulta,
     };
 
     const historiaClinicaLimpia = {
@@ -1157,11 +1157,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
 
     const nuevoPlan: PlanQuirurgico = {
       id: plan?.id ?? `plan_${Date.now()}`,
-      id_paciente: datosPaciente.id || plan?.id_paciente || "",
+      id_paciente: datospaciente.id || plan?.id_paciente || "",
       id_usuario: plan?.id_usuario ?? "1",
       fecha_creacion: plan?.fecha_creacion ?? new Date().toISOString(),
       fecha_modificacion: new Date().toISOString(),
-      datos_paciente: datosPacienteLimpios,
+      datos_paciente: datospacienteLimpios,
       historia_clinica: historiaClinicaLimpia,
       cirugias_previas: [],
       conducta_quirurgica: conductaQuirurgicaLimpia,
@@ -1198,11 +1198,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </div>
       )}
 
-      {/* SELECTOR DE PACIENTE (solo cuando se crea nuevo o no hay selección) */}
+      {/* SELECTOR DE paciente (solo cuando se crea nuevo o no hay selección) */}
       {(!plan || !pacienteSeleccionado) && (
         <section className="p-4 border rounded bg-white">
           <h3 className="font-bold text-lg text-[#1a6b32] mb-3">
-            {plan ? "Paciente del Plan" : "Seleccionar Paciente"}
+            {plan ? "paciente del Plan" : "Seleccionar paciente"}
           </h3>
           
           {pacienteSeleccionado ? (
@@ -1210,11 +1210,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               <div className="flex justify-between items-center">
                 <div>
                   <div className="font-semibold text-green-800">
-                    Paciente seleccionado: {pacienteSeleccionado.nombre_completo}
+                    paciente seleccionado: {pacienteSeleccionado.nombre_completo}
                   </div>
                   <div className="text-sm text-green-700">
                     Documento: {pacienteSeleccionado.numero_documento || pacienteSeleccionado.documento} | 
-                    Edad: {datosPaciente.edad} años | 
+                    Edad: {datospaciente.edad} años | 
                     Tel: {pacienteSeleccionado.telefono || 'No registrado'}
                   </div>
                   <div className="text-xs text-green-600 mt-1">
@@ -1223,7 +1223,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowSelectorPacientes(true)}
+                  onClick={() => setShowSelectorpacientes(true)}
                   className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
                 >
                   Cambiar paciente
@@ -1233,7 +1233,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           ) : (
             <div>
               <button
-                onClick={() => setShowSelectorPacientes(true)}
+                onClick={() => setShowSelectorpacientes(true)}
                 className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg text-center hover:border-[#1a6b32] hover:bg-green-50 transition-colors"
               >
                 <div className="flex flex-col items-center justify-center gap-2">
@@ -1244,7 +1244,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               </button>
               
               {/* Mostrar cargando si está cargando pacientes */}
-              {cargandoPacientes && (
+              {cargandopacientes && (
                 <div className="mt-4 text-center">
                   <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#1a6b32] mb-2"></div>
                   <p className="text-sm text-gray-600">Cargando lista de pacientes...</p>
@@ -1254,17 +1254,17 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           )}
 
           {/* Modal/Selector de pacientes */}
-          {showSelectorPacientes && (
+          {showSelectorpacientes && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
               {/* Encabezado */}
               <div className="p-4 border-b flex justify-between items-center bg-[#1a6b32] text-white">
                 <div>
-                  <h3 className="text-lg font-semibold">Seleccionar Paciente</h3>
+                  <h3 className="text-lg font-semibold">Seleccionar paciente</h3>
                   <p className="text-sm opacity-90">Seleccione un paciente para el plan quirúrgico</p>
                 </div>
                 <button
-                  onClick={() => setShowSelectorPacientes(false)}
+                  onClick={() => setShowSelectorpacientes(false)}
                   className="text-white hover:text-gray-200 text-xl"
                 >
                   ✕
@@ -1287,7 +1287,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               
               {/* Contenido principal */}
               <div className="flex-1 overflow-hidden">
-                {cargandoPacientes ? (
+                {cargandopacientes ? (
                   <div className="flex items-center justify-center h-64">
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1a6b32] mx-auto mb-3"></div>
@@ -1300,7 +1300,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                       <span className="text-3xl mb-3 block">😕</span>
                       <p className="text-gray-600">No hay pacientes registrados</p>
                       <button
-                        onClick={cargarPacientes}
+                        onClick={cargarpacientes}
                         className="mt-3 px-4 py-2 bg-[#1a6b32] text-white rounded hover:bg-[#155228]"
                       >
                         Reintentar
@@ -1334,7 +1334,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                               <tr 
                                 key={paciente.id} 
                                 className="hover:bg-gray-50 transition cursor-pointer"
-                                onClick={() => seleccionarPaciente(paciente)}
+                                onClick={() => seleccionarpaciente(paciente)}
                               >
                                 <td className="px-6 py-4 text-sm">
                                   <p className="font-medium text-gray-800">
@@ -1356,7 +1356,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                                 <td className="px-6 py-4 text-sm">
                                   <div className="flex items-center justify-center">
                                     <button
-                                      onClick={() => seleccionarPaciente(paciente)}
+                                      onClick={() => seleccionarpaciente(paciente)}
                                       className="px-3 py-1 bg-[#1a6b32] text-white text-sm rounded hover:bg-[#155228] transition"
                                     >
                                       Seleccionar
@@ -1386,17 +1386,17 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setShowSelectorPacientes(false)}
+                    onClick={() => setShowSelectorpacientes(false)}
                     className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
                   >
                     Cancelar
                   </button>
                   <button
-                    onClick={cargarPacientes}
-                    disabled={cargandoPacientes}
+                    onClick={cargarpacientes}
+                    disabled={cargandopacientes}
                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 flex items-center gap-2 disabled:opacity-50"
                   >
-                    <span className={cargandoPacientes ? "animate-spin" : ""}>↻</span>
+                    <span className={cargandopacientes ? "animate-spin" : ""}>↻</span>
                     Recargar lista
                   </button>
                 </div>
@@ -1407,16 +1407,16 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </section>
       )}
 
-      {/* DATOS DEL PACIENTE */}
+      {/* DATOS DEL paciente */}
       <section className="p-4 border rounded bg-white">
-        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Datos del Paciente</h3>
+        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Datos del paciente</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Identificación</label>
             <input 
               className="w-full border p-2 rounded bg-gray-50" 
               placeholder="Identificación" 
-              value={datosPaciente.identificacion}
+              value={datospaciente.identificacion}
               readOnly
             />
           </div>
@@ -1426,8 +1426,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             <input 
               className="w-full border p-2 rounded" 
               type="date" 
-              value={datosPaciente.fecha_consulta || new Date().toISOString().split('T')[0]}
-              onChange={e => setDatosPaciente(prev => ({ ...prev, fecha_consulta: e.target.value }))}
+              value={datospaciente.fecha_consulta || new Date().toISOString().split('T')[0]}
+              onChange={e => setDatospaciente(prev => ({ ...prev, fecha_consulta: e.target.value }))}
             />
           </div>
           
@@ -1436,8 +1436,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             <input 
               className="w-full border p-2 rounded" 
               type="time" 
-              value={datosPaciente.hora_consulta || new Date().toTimeString().slice(0, 5)}
-              onChange={e => setDatosPaciente(prev => ({ ...prev, hora_consulta: e.target.value }))}
+              value={datospaciente.hora_consulta || new Date().toTimeString().slice(0, 5)}
+              onChange={e => setDatospaciente(prev => ({ ...prev, hora_consulta: e.target.value }))}
             />
           </div>
           
@@ -1446,7 +1446,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             <input 
               className="w-full border p-2 rounded bg-gray-50" 
               placeholder="Nombre completo" 
-              value={datosPaciente.nombre_completo}
+              value={datospaciente.nombre_completo}
               readOnly
             />
           </div>
@@ -1458,8 +1458,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               type="number" 
               step="0.1"
               placeholder="Peso (kg)" 
-              value={datosPaciente.peso}
-              onChange={e => setDatosPaciente(prev => ({ ...prev, peso: e.target.value }))} 
+              value={datospaciente.peso}
+              onChange={e => setDatospaciente(prev => ({ ...prev, peso: e.target.value }))} 
             />
           </div>
           
@@ -1470,8 +1470,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               type="number" 
               step="0.01"
               placeholder="Altura (m)" 
-              value={datosPaciente.altura}
-              onChange={e => setDatosPaciente(prev => ({ ...prev, altura: e.target.value }))} 
+              value={datospaciente.altura}
+              onChange={e => setDatospaciente(prev => ({ ...prev, altura: e.target.value }))} 
             />
           </div>
           
@@ -1487,9 +1487,9 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           </div>
           
           <div className="p-3 bg-gray-50 rounded border">
-            <div className="text-sm font-semibold">IMC: {datosPaciente.imc ? datosPaciente.imc.toFixed(1) : "—"}</div>
-            <div className="text-xs text-gray-600">Categoría: {datosPaciente.categoriaIMC || "—"}</div>
-            <div className="text-xs text-gray-600">Edad: {historiaClinica.edad_calculada || datosPaciente.edad || "—"} años</div>
+            <div className="text-sm font-semibold">IMC: {datospaciente.imc ? datospaciente.imc.toFixed(1) : "—"}</div>
+            <div className="text-xs text-gray-600">Categoría: {datospaciente.categoriaIMC || "—"}</div>
+            <div className="text-xs text-gray-600">Edad: {historiaClinica.edad_calculada || datospaciente.edad || "—"} años</div>
           </div>
         </div>
       </section>
@@ -1860,11 +1860,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           <button 
             onClick={() => {
               // Validar campos requeridos
-              if (!datosPaciente.nombre_completo) {
+              if (!datospaciente.nombre_completo) {
                 alert("El nombre completo del paciente es requerido")
                 return
               }
-              if (!datosPaciente.identificacion) {
+              if (!datospaciente.identificacion) {
                 alert("La identificación del paciente es requerida")
                 return
               }

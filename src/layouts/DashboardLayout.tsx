@@ -5,7 +5,7 @@ import { AuthContext } from "../context/AuthContext"
 import { Sidebar } from "../components/Sidebar"
 import { Menu, LogOut } from "lucide-react" 
 import DashboardHome from "../pages/DashboardHome"
-import PacientesPage from "../pages/PacientesPage"
+import pacientesPage from "../pages/pacientesPage"
 import AgendaPage from "../pages/AgendaPage"
 import HistoriaClinicaPage from "../pages/HistoriaClinicaPage"
 import CotizacionesPage from "../pages/CotizacionesPage"
@@ -108,7 +108,7 @@ export function DashboardLayout() {
                 <h1 className="text-lg font-bold text-gray-800">
                   {currentPage === "home" && "Dashboard"}
                   {currentPage === "usuarios" && "Usuarios"}
-                  {currentPage === "pacientes" && "Pacientes"}
+                  {currentPage === "pacientes" && "pacientes"}
                   {currentPage === "agenda" && "Agenda"}
                   {currentPage === "historia" && "Historia Clínica"}
                   {currentPage === "cotizaciones" && "Cotizaciones"}
@@ -140,7 +140,7 @@ export function DashboardLayout() {
         <main className="flex-1 overflow-auto p-4 md:p-6">
           {currentPage === "home" && <DashboardHome user={auth.user} hasPermission={auth.hasPermission} />}
           {currentPage === "usuarios" && <UsuariosPage />}
-          {currentPage === "pacientes" && <PacientesPage />}
+          {currentPage === "pacientes" && <pacientesPage />}
           {currentPage === "agenda" && <AgendaPage />}
           {currentPage === "historia" && <HistoriaClinicaPage />}
           {currentPage === "cotizaciones" && <CotizacionesPage />}

@@ -33,7 +33,7 @@ export const mockUsers = [
   },
 ]
 
-export const mockPacientes = [
+export const mockpacientes = [
   {
     id: "1",
     nombres: "Juan",
@@ -66,7 +66,7 @@ export const mockPacientes = [
   },
 ]
 
-export const mockCitas = [
+export const mockcitas = [
   {
     id: "1",
     id_paciente: "1",

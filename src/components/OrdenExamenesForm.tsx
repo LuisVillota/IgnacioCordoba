@@ -3,11 +3,11 @@
 import type React from "react"
 import { useState } from "react"
 import { Calendar, Clock, Download } from "lucide-react"
-import type { Paciente } from "../pages/PacientesPage"
+import type { paciente } from "../pages/pacientesPage"
 import { generarPDFOrdenExamenes } from "../utils/simplePdfGenerator"
 
 interface OrdenExamenesFormProps {
-  paciente: Paciente
+  paciente: paciente
 }
 
 interface Examen {
@@ -85,9 +85,9 @@ export function OrdenExamenesForm({ paciente }: OrdenExamenesFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Información del Paciente */}
+      {/* Información del paciente */}
       <div className="bg-blue-50 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-800 mb-2">Información del Paciente</h3>
+        <h3 className="font-semibold text-blue-800 mb-2">Información del paciente</h3>
         <p className="text-blue-700">
           <strong>Nombre:</strong> {paciente.nombres} {paciente.apellidos}
         </p>

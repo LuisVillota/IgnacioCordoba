@@ -2,11 +2,11 @@
 
 import { X, Calendar, FileText, Image as ImageIcon } from "lucide-react"
 import type { HistoriaClinica } from "../pages/HistoriaClinicaPage"
-import type { PacienteFrontend } from "../pages/HistoriaClinicaPage"
+import type { pacienteFrontend } from "../pages/HistoriaClinicaPage"
 
 interface HistoriaModalProps {
   historia: HistoriaClinica
-  paciente?: PacienteFrontend
+  paciente?: pacienteFrontend
   onClose: () => void
   onEdit: () => void
 }

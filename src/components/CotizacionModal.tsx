@@ -4,7 +4,7 @@ import { X, Calendar, Printer, Loader2 } from "lucide-react"
 import { useState } from "react"
 import type { Cotizacion } from "../types/cotizacion"
 
-interface Paciente {
+interface paciente {
   nombres: string
   apellidos: string
   documento?: string
@@ -12,7 +12,7 @@ interface Paciente {
 
 interface CotizacionModalProps {
   cotizacion: Cotizacion
-  paciente?: Paciente
+  paciente?: paciente
   onClose: () => void
   onEdit: () => void
 }
@@ -99,7 +99,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               </div>
               <div>
                 <div class="info-item">
-                  <div class="info-label">PACIENTE</div>
+                  <div class="info-label">paciente</div>
                   <div class="info-value">${paciente?.nombres} ${paciente?.apellidos}</div>
                 </div>
                 <div class="info-item">

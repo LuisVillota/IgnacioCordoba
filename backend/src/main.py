@@ -98,7 +98,7 @@ class UsuarioUpdate(BaseModel):
     rol_id: Optional[int] = None
     activo: Optional[bool] = None
 
-class PacienteBase(BaseModel):
+class pacienteBase(BaseModel):
     numero_documento: str
     tipo_documento: Optional[str] = "CC"
     nombre: str
@@ -110,13 +110,13 @@ class PacienteBase(BaseModel):
     direccion: Optional[str] = None
     ciudad: Optional[str] = None
 
-class PacienteCreate(PacienteBase):
+class pacienteCreate(pacienteBase):
     pass
 
-class PacienteUpdate(PacienteBase):
+class pacienteUpdate(pacienteBase):
     pass
 
-class CitaCreate(BaseModel):
+class citaCreate(BaseModel):
     paciente_id: int
     usuario_id: int
     fecha_hora: str
@@ -125,7 +125,7 @@ class CitaCreate(BaseModel):
     estado_id: int = 4
     notas: Optional[str] = None
 
-class CitaUpdate(BaseModel):
+class citaUpdate(BaseModel):
     paciente_id: int
     usuario_id: int
     fecha_hora: str
@@ -494,13 +494,13 @@ def test_frontend():
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) as count FROM Paciente")
+                cursor.execute("SELECT COUNT(*) as count FROM paciente")
                 pacientes_count = cursor.fetchone()['count']
                 
                 cursor.execute("SELECT COUNT(*) as count FROM Usuario")
                 usuarios_count = cursor.fetchone()['count']
                 
-                cursor.execute("SELECT COUNT(*) as count FROM Cita")
+                cursor.execute("SELECT COUNT(*) as count FROM cita")
                 citas_count = cursor.fetchone()['count']
                 
                 try:
@@ -808,7 +808,7 @@ def login(username: str, password: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ====================== ENDPOINTS DE PACIENTES ======================
+# ====================== ENDPOINTS DE pacienteS ======================
 
 @app.get("/api/pacientes", response_model=dict)
 def get_pacientes(limit: int = 100, offset: int = 0):
@@ -816,11 +816,11 @@ def get_pacientes(limit: int = 100, offset: int = 0):
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) as total FROM Paciente")
+                cursor.execute("SELECT COUNT(*) as total FROM paciente")
                 total = cursor.fetchone()['total']
                 
                 cursor.execute("""
-                    SELECT * FROM Paciente 
+                    SELECT * FROM paciente 
                     ORDER BY id DESC 
                     LIMIT %s OFFSET %s
                 """, (limit, offset))
@@ -841,10 +841,10 @@ def get_paciente(paciente_id: int):
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM Paciente WHERE id = %s", (paciente_id,))
+                cursor.execute("SELECT * FROM paciente WHERE id = %s", (paciente_id,))
                 paciente = cursor.fetchone()
                 if not paciente:
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                    raise HTTPException(status_code=404, detail="paciente no encontrado")
                 return paciente
     except HTTPException:
         raise
@@ -852,20 +852,20 @@ def get_paciente(paciente_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/pacientes", response_model=dict)
-def create_paciente(paciente: PacienteCreate):
+def create_paciente(paciente: pacienteCreate):
     try:
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute(
-                    "SELECT id FROM Paciente WHERE numero_documento = %s", 
+                    "SELECT id FROM paciente WHERE numero_documento = %s", 
                     (paciente.numero_documento,)
                 )
                 if cursor.fetchone():
                     raise HTTPException(status_code=400, detail="El numero de documento ya existe")
                 
                 cursor.execute("""
-                    INSERT INTO Paciente (
+                    INSERT INTO paciente (
                         numero_documento, tipo_documento, nombre, apellido,
                         fecha_nacimiento, genero, telefono, email, direccion, ciudad
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -886,7 +886,7 @@ def create_paciente(paciente: PacienteCreate):
                 
                 return {
                     "success": True,
-                    "message": "Paciente creado exitosamente",
+                    "message": "paciente creado exitosamente",
                     "paciente_id": paciente_id
                 }
     except HTTPException:
@@ -899,17 +899,17 @@ def create_paciente(paciente: PacienteCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/pacientes/{paciente_id}", response_model=dict)
-def update_paciente(paciente_id: int, paciente: PacienteUpdate):
+def update_paciente(paciente_id: int, paciente: pacienteUpdate):
     try:
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM Paciente WHERE id = %s", (paciente_id,))
+                cursor.execute("SELECT id FROM paciente WHERE id = %s", (paciente_id,))
                 if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                    raise HTTPException(status_code=404, detail="paciente no encontrado")
                 
                 cursor.execute("""
-                    SELECT id FROM Paciente 
+                    SELECT id FROM paciente 
                     WHERE numero_documento = %s AND id != %s
                 """, (paciente.numero_documento, paciente_id))
                 if cursor.fetchone():
@@ -919,7 +919,7 @@ def update_paciente(paciente_id: int, paciente: PacienteUpdate):
                     )
                 
                 cursor.execute("""
-                    UPDATE Paciente SET
+                    UPDATE paciente SET
                         numero_documento = %s,
                         tipo_documento = %s,
                         nombre = %s,
@@ -948,7 +948,7 @@ def update_paciente(paciente_id: int, paciente: PacienteUpdate):
                 
                 return {
                     "success": True,
-                    "message": "Paciente actualizado exitosamente",
+                    "message": "paciente actualizado exitosamente",
                     "paciente_id": paciente_id
                 }
     except HTTPException:
@@ -962,12 +962,12 @@ def delete_paciente(paciente_id: int):
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id, nombre, apellido FROM Paciente WHERE id = %s", (paciente_id,))
+                cursor.execute("SELECT id, nombre, apellido FROM paciente WHERE id = %s", (paciente_id,))
                 paciente = cursor.fetchone()
                 if not paciente:
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                    raise HTTPException(status_code=404, detail="paciente no encontrado")
                 
-                cursor.execute("SELECT COUNT(*) as count FROM Cita WHERE paciente_id = %s", (paciente_id,))
+                cursor.execute("SELECT COUNT(*) as count FROM cita WHERE paciente_id = %s", (paciente_id,))
                 citas_count = cursor.fetchone()['count']
                 
                 cursor.execute("SELECT COUNT(*) as count FROM historial_clinico WHERE paciente_id = %s", (paciente_id,))
@@ -977,14 +977,14 @@ def delete_paciente(paciente_id: int):
                     cursor.execute("DELETE FROM historial_clinico WHERE paciente_id = %s", (paciente_id,))
                 
                 if citas_count > 0:
-                    cursor.execute("DELETE FROM Cita WHERE paciente_id = %s", (paciente_id,))
+                    cursor.execute("DELETE FROM cita WHERE paciente_id = %s", (paciente_id,))
                 
-                cursor.execute("DELETE FROM Paciente WHERE id = %s", (paciente_id,))
+                cursor.execute("DELETE FROM paciente WHERE id = %s", (paciente_id,))
                 conn.commit()
                 
                 return {
                     "success": True,
-                    "message": "Paciente y registros relacionados eliminados exitosamente",
+                    "message": "paciente y registros relacionados eliminados exitosamente",
                     "paciente_id": paciente_id,
                     "paciente_nombre": f"{paciente['nombre']} {paciente['apellido']}",
                     "citas_eliminadas": citas_count,
@@ -996,7 +996,7 @@ def delete_paciente(paciente_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ====================== ENDPOINTS DE CITAS ======================
+# ====================== ENDPOINTS DE citaS ======================
 
 @app.get("/api/citas")
 def get_citas(limit: int = 50, offset: int = 0):
@@ -1011,10 +1011,10 @@ def get_citas(limit: int = 50, offset: int = 0):
                            u.nombre as doctor_nombre,
                            ec.nombre as estado_nombre,
                            ec.color as estado_color
-                    FROM Cita c
-                    JOIN Paciente p ON c.paciente_id = p.id
+                    FROM cita c
+                    JOIN paciente p ON c.paciente_id = p.id
                     JOIN Usuario u ON c.usuario_id = u.id
-                    JOIN Estado_Cita ec ON c.estado_id = ec.id
+                    JOIN estado_cita ec ON c.estado_id = ec.id
                     ORDER BY c.fecha_hora DESC
                     LIMIT %s OFFSET %s
                 """, (limit, offset))
@@ -1036,15 +1036,15 @@ def get_cita(cita_id: int):
                            u.nombre as doctor_nombre,
                            ec.nombre as estado_nombre,
                            ec.color as estado_color
-                    FROM Cita c
-                    JOIN Paciente p ON c.paciente_id = p.id
+                    FROM cita c
+                    JOIN paciente p ON c.paciente_id = p.id
                     JOIN Usuario u ON c.usuario_id = u.id
-                    JOIN Estado_Cita ec ON c.estado_id = ec.id
+                    JOIN estado_cita ec ON c.estado_id = ec.id
                     WHERE c.id = %s
                 """, (cita_id,))
                 cita = cursor.fetchone()
                 if not cita:
-                    raise HTTPException(status_code=404, detail="Cita no encontrada")
+                    raise HTTPException(status_code=404, detail="cita no encontrada")
                 return cita
     except HTTPException:
         raise
@@ -1052,7 +1052,7 @@ def get_cita(cita_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/citas", response_model=dict)
-def create_cita(cita: CitaCreate):
+def create_cita(cita: citaCreate):
     try:
         from datetime import datetime
         fecha_hora_limpia = cita.fecha_hora.replace('Z', '')
@@ -1063,10 +1063,10 @@ def create_cita(cita: CitaCreate):
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id, nombre, apellido FROM Paciente WHERE id = %s", (cita.paciente_id,))
+                cursor.execute("SELECT id, nombre, apellido FROM paciente WHERE id = %s", (cita.paciente_id,))
                 resultado = cursor.fetchone()
                 if not resultado:
-                    raise HTTPException(status_code=404, detail=f"Paciente con ID {cita.paciente_id} no encontrado")
+                    raise HTTPException(status_code=404, detail=f"paciente con ID {cita.paciente_id} no encontrado")
                 
                 paciente_nombre = ""
                 paciente_apellido = ""
@@ -1090,7 +1090,7 @@ def create_cita(cita: CitaCreate):
                     usuario_nombre = resultado_usuario[1]
                 
                 cursor.execute("""
-                    SELECT id FROM Cita 
+                    SELECT id FROM cita 
                     WHERE usuario_id = %s 
                     AND fecha_hora = %s
                     AND estado_id != 4
@@ -1100,7 +1100,7 @@ def create_cita(cita: CitaCreate):
                     pass
                 
                 cursor.execute("""
-                    INSERT INTO Cita (
+                    INSERT INTO cita (
                         paciente_id, usuario_id, fecha_hora, tipo,
                         duracion_minutos, estado_id, notas
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -1118,7 +1118,7 @@ def create_cita(cita: CitaCreate):
                 
                 return {
                     "success": True,
-                    "message": "Cita creada exitosamente",
+                    "message": "cita creada exitosamente",
                     "cita_id": cita_id,
                     "paciente_nombre": f"{paciente_nombre} {paciente_apellido}",
                     "doctor_nombre": usuario_nombre,
@@ -1133,17 +1133,17 @@ def create_cita(cita: CitaCreate):
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 @app.put("/api/citas/{cita_id}", response_model=dict)
-def update_cita(cita_id: int, cita: CitaUpdate):
+def update_cita(cita_id: int, cita: citaUpdate):
     try:
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM Cita WHERE id = %s", (cita_id,))
+                cursor.execute("SELECT id FROM cita WHERE id = %s", (cita_id,))
                 if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Cita no encontrado")
+                    raise HTTPException(status_code=404, detail="cita no encontrado")
                 
                 cursor.execute("""
-                    UPDATE Cita SET
+                    UPDATE cita SET
                         paciente_id = %s,
                         usuario_id = %s,
                         fecha_hora = %s,
@@ -1166,7 +1166,7 @@ def update_cita(cita_id: int, cita: CitaUpdate):
                 
                 return {
                     "success": True,
-                    "message": "Cita actualizada exitosamente",
+                    "message": "cita actualizada exitosamente",
                     "cita_id": cita_id
                 }
     except HTTPException:
@@ -1180,14 +1180,14 @@ def delete_cita(cita_id: int):
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM Cita WHERE id = %s", (cita_id,))
+                cursor.execute("SELECT id FROM cita WHERE id = %s", (cita_id,))
                 if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Cita no encontrado")
+                    raise HTTPException(status_code=404, detail="cita no encontrado")
                 
-                cursor.execute("DELETE FROM Cita WHERE id = %s", (cita_id,))
+                cursor.execute("DELETE FROM cita WHERE id = %s", (cita_id,))
                 conn.commit()
                 
-                return MessageResponse(message="Cita eliminada exitosamente")
+                return MessageResponse(message="cita eliminada exitosamente")
                 
     except pymysql.err.IntegrityError as e:
         raise HTTPException(
@@ -1207,7 +1207,7 @@ def get_estados_citas():
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM Estado_Cita ORDER BY id")
+                cursor.execute("SELECT * FROM estado_cita ORDER BY id")
                 estados = cursor.fetchall()
                 return {"estados": estados}
     except Exception as e:
@@ -1219,7 +1219,7 @@ def get_estados_quirurgicos():
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM Estado_Quirurgico ORDER BY id")
+                cursor.execute("SELECT * FROM estado_Quirurgico ORDER BY id")
                 estados = cursor.fetchall()
                 return {"estados": estados}
     except Exception as e:
@@ -1859,7 +1859,7 @@ def get_historias_by_paciente(paciente_id: int):
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM paciente WHERE id = %s", (paciente_id,))
                 if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                    raise HTTPException(status_code=404, detail="paciente no encontrado")
                 
                 cursor.execute("""
                     SELECT * FROM historial_clinico 
@@ -1901,7 +1901,7 @@ def create_historia_clinica(historia: HistorialClinicoCreate):
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM paciente WHERE id = %s", (historia.paciente_id,))
                 if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                    raise HTTPException(status_code=404, detail="paciente no encontrado")
                 
                 cursor.execute("""
                     INSERT INTO historial_clinico (
@@ -1951,7 +1951,7 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
                 
                 cursor.execute("SELECT id FROM paciente WHERE id = %s", (historia.paciente_id,))
                 if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                    raise HTTPException(status_code=404, detail="paciente no encontrado")
                 
                 cursor.execute("""
                     UPDATE historial_clinico SET
@@ -2130,12 +2130,12 @@ def get_sala_espera(mostrarTodos: bool = True):
                     
                     if count_estados == 0:
                         estados = [
-                            ('pendiente', 'Paciente pendiente de atencion', '#9CA3AF', 1),
-                            ('llegada', 'Paciente ha llegado', '#FBBF24', 2),
-                            ('confirmada', 'Cita confirmada', '#10B981', 3),
-                            ('en_consulta', 'Paciente en consulta', '#3B82F6', 4),
+                            ('pendiente', 'paciente pendiente de atencion', '#9CA3AF', 1),
+                            ('llegada', 'paciente ha llegado', '#FBBF24', 2),
+                            ('confirmada', 'cita confirmada', '#10B981', 3),
+                            ('en_consulta', 'paciente en consulta', '#3B82F6', 4),
                             ('completada', 'Consulta completada', '#8B5CF6', 5),
-                            ('no_asistio', 'Paciente no asistio', '#EF4444', 6)
+                            ('no_asistio', 'paciente no asistio', '#EF4444', 6)
                         ]
                         
                         for estado in estados:
@@ -2313,14 +2313,14 @@ def crear_registro_sala_espera(registro: SalaEsperaCreate):
                 cursor.execute("SELECT id, nombre, apellido FROM paciente WHERE id = %s", (registro.paciente_id,))
                 paciente = cursor.fetchone()
                 if not paciente:
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                    raise HTTPException(status_code=404, detail="paciente no encontrado")
                 
                 cursor.execute("SELECT id FROM estado_sala_espera WHERE nombre = 'pendiente'")
                 estado = cursor.fetchone()
                 if not estado:
                     cursor.execute("""
                         INSERT INTO estado_sala_espera (nombre, descripcion, color, orden)
-                        VALUES ('pendiente', 'Paciente pendiente de atencion', '#9CA3AF', 1)
+                        VALUES ('pendiente', 'paciente pendiente de atencion', '#9CA3AF', 1)
                     """)
                     estado_id = cursor.lastrowid
                     estado = {'id': estado_id}
@@ -2375,7 +2375,7 @@ def crear_registro_sala_espera(registro: SalaEsperaCreate):
                 
                 return {
                     "success": True,
-                    "message": "Paciente registrado en sala de espera",
+                    "message": "paciente registrado en sala de espera",
                     "registro_id": registro_id,
                     "already_exists": False,
                     "estado": "pendiente"
@@ -2397,7 +2397,7 @@ def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
                 cursor.execute("SELECT id, nombre, apellido FROM paciente WHERE id = %s", (paciente_id,))
                 paciente = cursor.fetchone()
                 if not paciente:
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                    raise HTTPException(status_code=404, detail="paciente no encontrado")
                 
                 cursor.execute("SELECT id FROM estado_sala_espera WHERE nombre = %s", (datos.estado,))
                 estado = cursor.fetchone()
@@ -2981,10 +2981,10 @@ def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
                 
                 paciente = cursor.fetchone()
                 if not paciente:
-                    print(f"❌ Paciente no encontrado: {procedimiento.numero_documento}")
+                    print(f"❌ paciente no encontrado: {procedimiento.numero_documento}")
                     raise HTTPException(
                         status_code=404, 
-                        detail=f"Paciente con documento {procedimiento.numero_documento} no encontrado"
+                        detail=f"paciente con documento {procedimiento.numero_documento} no encontrado"
                     )
                 
                 cursor.execute("""
@@ -3563,7 +3563,7 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
                 if cotizacion.paciente_id is not None:
                     cursor.execute("SELECT id FROM paciente WHERE id = %s", (cotizacion.paciente_id,))
                     if not cursor.fetchone():
-                        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                        raise HTTPException(status_code=404, detail="paciente no encontrado")
                     
                     update_fields.append("paciente_id = %s")
                     values.append(cotizacion.paciente_id)
@@ -3702,7 +3702,7 @@ def create_cotizacion(cotizacion: CotizacionCreate):
                 cursor.execute("SELECT id, nombre, apellido FROM paciente WHERE id = %s", (cotizacion.paciente_id,))
                 paciente = cursor.fetchone()
                 if not paciente:
-                    raise HTTPException(status_code=404, detail=f"Paciente con ID {cotizacion.paciente_id} no encontrado")
+                    raise HTTPException(status_code=404, detail=f"paciente con ID {cotizacion.paciente_id} no encontrado")
                 
                 paciente_nombre = paciente['nombre']
                 paciente_apellido = paciente['apellido']
@@ -4062,7 +4062,7 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
             cursor.execute("SELECT * FROM paciente WHERE id=%s", (plan.paciente_id,))
             paciente = cursor.fetchone()
             if not paciente:
-                raise HTTPException(404, "Paciente no encontrado")
+                raise HTTPException(404, "paciente no encontrado")
 
             cursor.execute("SELECT * FROM usuario WHERE id=%s", (plan.usuario_id,))
             usuario = cursor.fetchone()

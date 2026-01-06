@@ -141,7 +141,7 @@ def create_initial_data():
                 
                 for nombre, color in estados_cita:
                     cursor.execute(
-                        "INSERT IGNORE INTO Estado_Cita (nombre, color) VALUES (%s, %s)",
+                        "INSERT IGNORE INTO estado_cita (nombre, color) VALUES (%s, %s)",
                         (nombre, color)
                     )
                 
@@ -173,7 +173,7 @@ def create_initial_data():
                 
                 for paciente in pacientes:
                     cursor.execute("""
-                        INSERT IGNORE INTO Paciente 
+                        INSERT IGNORE INTO paciente 
                         (numero_documento, tipo_documento, nombre, apellido, 
                          fecha_nacimiento, genero, telefono, email, direccion)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
