@@ -64,10 +64,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (storedUser && storedToken) {
         try {
           const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          setBackendUser(parsedUser.backendUser);
-          setToken(storedToken);
+          
+          // ✅ VALIDAR QUE EL TOKEN SEA VÁLIDO
+          try {
+            console.log('🔐 Validando token almacenado...');
+            const response = await api.testConnection();
+            
+            if (response.success) {
+              // Token válido, restaurar sesión
+              console.log('✅ Token válido, restaurando sesión');
+              setUser(parsedUser);
+              setBackendUser(parsedUser.backendUser);
+              setToken(storedToken);
+            } else {
+              // Token inválido, limpiar sesión
+              console.warn('⚠️ Token inválido, limpiando sesión');
+              logout();
+            }
+          } catch (error) {
+            console.error('❌ Error validando token:', error);
+            logout();
+          }
+          
         } catch (error) {
+          console.error('❌ Error parseando usuario de localStorage:', error);
           logout();
         }
       }
@@ -81,9 +101,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       
+      console.log('🔐 Intentando login...');
       const response = await api.login(username, password);
       
       if (response.success && response.usuario) {
+        console.log('✅ Login exitoso');
+        
         const backendUserData: BackendUser = {
           id: response.usuario.id,
           username: response.usuario.username,
@@ -107,11 +130,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('user', JSON.stringify(fullUserData));
         localStorage.setItem('token', response.token || response.access_token || '');
         
+        console.log('💾 Sesión guardada en localStorage');
+        
         return true;
       } else {
+        console.error('❌ Login fallido:', response);
         return false;
       }
     } catch (error) {
+      console.error('❌ Error en login:', error);
       return false;
     } finally {
       setLoading(false);
@@ -119,11 +146,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
+    console.log('🚪 Cerrando sesión...');
     setUser(null);
     setBackendUser(null);
     setToken(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    console.log('✅ Sesión cerrada');
   };
 
   const hasPermission = (permission: Permission): boolean => {
