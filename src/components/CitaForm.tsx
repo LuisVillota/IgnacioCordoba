@@ -16,9 +16,10 @@ interface paciente {
 interface citaFormProps {
   cita?: Cita;
   pacientes?: paciente[];
-  onSave: (data: Omit<Cita, "id">) => void;
+  onSave: (data: Omit<Cita, "id">) => void | Promise<void>; 
   onClose: () => void;
 }
+
 
 const tiposDeVisita = {
   consulta: { label: "Consulta", duracion: 60 },
@@ -98,19 +99,18 @@ export function CitaForm({ cita, pacientes = [], onSave, onClose }: citaFormProp
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
-      console.log("📤 citaForm - Enviando datos:", formData);
-      
-      // Preparar datos para enviar
       const dataToSend = {
         ...formData,
         fecha: formatDateForDB(formData.fecha),
-        hora: formData.hora + ":00", // Agregar segundos para el backend
+        hora: formData.hora + ":00",
         duracion: Number(formData.duracion),
+        observaciones: formData.observaciones || "", // ✅ nunca undefined
       };
-      
+
       onSave(dataToSend);
     }
   };
+
 
   const handleTipoChange = (tipo: string) => {
     const duracion = tiposDeVisita[tipo as keyof typeof tiposDeVisita]?.duracion || 60;
