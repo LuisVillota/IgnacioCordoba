@@ -1,30 +1,56 @@
 const fs = require('fs');
 const path = require('path');
 
-function copyRecursiveSync(src, dest) {
-  const exists = fs.existsSync(src);
-  const stats = exists && fs.statSync(src);
-  const isDirectory = exists && stats.isDirectory();
-  
-  if (isDirectory) {
-    if (!fs.existsSync(dest)) {
-      fs.mkdirSync(dest, { recursive: true });
-    }
-    fs.readdirSync(src).forEach(childItemName => {
-      copyRecursiveSync(
-        path.join(src, childItemName),
-        path.join(dest, childItemName)
-      );
-    });
-  } else {
-    fs.copyFileSync(src, dest);
+// Next.js 16 puede usar diferentes carpetas de salida
+const possibleDirs = [
+  path.join(__dirname, 'out'),
+  path.join(__dirname, '.next', 'standalone'),
+  path.join(__dirname, '.next', 'server', 'pages')
+];
+
+let buildDir = null;
+
+// Encontrar la carpeta correcta
+for (const dir of possibleDirs) {
+  if (fs.existsSync(dir)) {
+    buildDir = dir;
+    console.log(`✅ Carpeta de build encontrada: ${dir}`);
+    break;
   }
 }
 
-if (fs.existsSync('out')) {
-  console.log('📦 Copiando archivos de out/ a la raíz...');
-  copyRecursiveSync('out', '.');
-  console.log('✅ Archivos copiados exitosamente');
-} else {
-  console.error('❌ La carpeta out/ no existe');
+if (!buildDir) {
+  console.error('❌ No se encontró ninguna carpeta de build');
+  
+  // Crear carpeta out manualmente desde .next
+  const nextDir = path.join(__dirname, '.next');
+  const outDir = path.join(__dirname, 'out');
+  
+  if (fs.existsSync(nextDir)) {
+    console.log('Intentando copiar desde .next a out/...');
+    fs.mkdirSync(outDir, { recursive: true });
+    
+    // Copiar archivos necesarios
+    const staticDir = path.join(nextDir, 'static');
+    const serverDir = path.join(nextDir, 'server', 'pages');
+    
+    if (fs.existsSync(staticDir)) {
+      const destStatic = path.join(outDir, '_next', 'static');
+      fs.mkdirSync(destStatic, { recursive: true });
+      fs.cpSync(staticDir, destStatic, { recursive: true });
+      console.log('✅ Archivos estáticos copiados');
+    }
+    
+    if (fs.existsSync(serverDir)) {
+      fs.cpSync(serverDir, outDir, { recursive: true });
+      console.log('✅ Páginas copiadas');
+    }
+    
+    buildDir = outDir;
+  } else {
+    process.exit(1);
+  }
 }
+
+// Tu lógica adicional de postbuild aquí...
+console.log('✅ Post-build completado');
