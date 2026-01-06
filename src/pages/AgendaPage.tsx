@@ -17,7 +17,7 @@ export interface cita {
   hora: string
   duracion: number
   estado: "pendiente" | "confirmada" | "cancelada" | "completada"
-  observaciones: string
+  observaciones?: string
   paciente_nombre?: string
   paciente_apellido?: string
   doctor_nombre?: string
@@ -534,41 +534,45 @@ export default function AgendaPage() {
   }
 
   const handleSaveCita = async (data: Omit<cita, "id">) => {
+    // Forzar que observaciones siempre sea string
+    data.observaciones = data.observaciones || ""
+
     try {
       if (!data.id_paciente || !data.fecha || !data.hora || !data.id_usuario) {
         toast.error("Por favor completa todos los campos requeridos")
         return
       }
-      
+
       const usuarioId = parseInt(data.id_usuario);
       if (isNaN(usuarioId)) {
         data.id_usuario = "1";
       }
-      
+
       if (!/^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) {
         toast.error("Formato de fecha inválido. Use YYYY-MM-DD")
         return
       }
-      
+
       if (!/^\d{2}:\d{2}/.test(data.hora)) {
         toast.error("Formato de hora inválido. Use HH:MM")
         return
       }
-      
+
       const conflicto = verificarConflictoHorario(data, editingId || undefined)
-      
+
       if (conflicto) {
         setConflictoHorario(conflicto)
         setPendienteGuardar(data)
         return
       }
-      
+
       await guardarcitaSinConflicto(data)
-      
+
     } catch (error: any) {
       toast.error('Error al guardar la cita: ' + (error.message || "Error desconocido"))
     }
   }
+
 
   const guardarcitaSinConflicto = async (data: Omit<cita, "id">) => {
     try {
