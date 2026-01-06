@@ -19,7 +19,7 @@ const tiposDeVisita: Record<string, string> = {
   programacion_quirurgica: "Programación Quirúrgica",
 }
 
-export function citaModal({ cita, paciente, onClose, onEdit, onDelete }: citaModalProps) {
+export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: citaModalProps) {
   const estadoColors: Record<string, string> = {
     pendiente: "bg-[#669933]/20 text-[#1a6b32]",
     confirmada: "bg-[#99d6e8]/20 text-[#1a6b32]",

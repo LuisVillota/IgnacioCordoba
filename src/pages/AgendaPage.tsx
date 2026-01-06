@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react"
 import { ChevronLeft, ChevronRight, Plus, Edit2, Calendar, Clock, User, AlertCircle, RefreshCw, AlertTriangle, X } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
-import { citaForm } from "../components/citaForm"
-import { citaModal } from "../components/citaModal"
+import { CitaForm } from "../components/CitaForm"
+import { CitaModal } from "../components/CitaModal"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
 
@@ -549,7 +549,7 @@ export default function AgendaPage() {
     return h * 60 + m
   }
 
-  const handleSavecita = async (data: Omit<cita, "id">) => {
+  const handleSaveCita = async (data: Omit<cita, "id">) => {
     try {
       if (!data.id_paciente || !data.fecha || !data.hora || !data.id_usuario) {
         toast.error("Por favor completa todos los campos requeridos")
@@ -946,54 +946,39 @@ export default function AgendaPage() {
                       nombres: cita.paciente_nombre || '',
                       apellidos: cita.paciente_apellido || ''
                     }
+
+                    const tipoColor = {
+                      consulta: "bg-blue-500",
+                      control: "bg-green-500",
+                      valoracion: "bg-purple-500",
+                      programacion_quirurgica: "bg-red-500"
+                    }[cita.tipo_cita] || "bg-gray-500"
+
+                    const estadoColor = {
+                      confirmada: "bg-[#1a6b32]",
+                      pendiente: "bg-[#669933]",
+                      completada: "bg-blue-500",
+                      cancelada: "bg-gray-400"
+                    }[cita.estado] || "bg-gray-500"
+
                     return (
-                      <div key={cita.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition border border-gray-200">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center mb-1">
-                              <Clock size={14} className="text-gray-500 mr-2" />
-                              <p className="font-medium text-gray-800 text-sm">
-                                {cita.hora} - {agregarMinutos(cita.hora, cita.duracion)}
-                              </p>
-                            </div>
-                            <div className="flex items-center mb-2">
-                              <User size={14} className="text-gray-500 mr-2" />
-                              <p className="text-xs text-gray-600">
-                                {paciente.nombres} {paciente.apellidos}
-                              </p>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span
-                                className={`inline-block px-2 py-1 text-xs font-semibold rounded capitalize ${
-                                  cita.estado === "confirmada"
-                                    ? "bg-[#99d6e8]/30 text-[#1a6b32]"
-                                    : cita.estado === "pendiente"
-                                      ? "bg-[#669933]/30 text-[#1a6b32]"
-                                      : cita.estado === "completada"
-                                        ? "bg-blue-100 text-blue-700"
-                                        : "bg-gray-200 text-gray-600"
-                                }`}
-                              >
-                                {cita.estado}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                {tiposDeVisita[cita.tipo_cita]?.label || cita.tipo_cita}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex space-x-1 ml-2">
-                            <button
-                              onClick={() => handleEdit(cita)}
-                              className="p-1 text-[#669933] hover:bg-green-50 rounded transition"
-                              title="Editar cita"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                          </div>
+                      <div
+                        key={cita.id}
+                        className={`p-3 rounded-lg flex justify-between items-center text-white ${estadoColor} cursor-pointer hover:opacity-90 transition`}
+                        onClick={() => handleEdit(cita)}
+                        title={`${cita.hora} - ${paciente.nombres} ${paciente.apellidos} (${cita.estado}, ${tiposDeVisita[cita.tipo_cita]?.label})`}
+                      >
+                        <div>
+                          <p className="font-medium">{paciente.nombres.split(' ')[0]} {paciente.apellidos.split(' ')[0].charAt(0)}.</p>
+                          <p className="text-xs">{cita.hora} - {tiposDeVisita[cita.tipo_cita]?.label}</p>
                         </div>
+                        <span className={`px-2 py-1 text-[10px] rounded ${tipoColor}`}>
+                          {tiposDeVisita[cita.tipo_cita]?.label?.charAt(0)}
+                        </span>
                       </div>
                     )
                   })
+
                 )}
               </div>
             </div>
@@ -1029,10 +1014,10 @@ export default function AgendaPage() {
         </div>
 
         {showForm && (
-          <citaForm
+          <CitaForm
             cita={selectedcita || undefined}
             pacientes={pacientes}
-            onSave={handleSavecita}
+            onSave={handleSaveCita}
             onClose={() => {
               setShowForm(false)
               setEditingId(null)
@@ -1042,7 +1027,7 @@ export default function AgendaPage() {
         )}
 
         {selectedcita && !showForm && (
-          <citaModal
+          <CitaModal
             cita={selectedcita}
             paciente={getpacienteById(selectedcita.id_paciente) || {
               id: selectedcita.id_paciente,
