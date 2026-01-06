@@ -497,7 +497,7 @@ def test_frontend():
                 cursor.execute("SELECT COUNT(*) as count FROM paciente")
                 pacientes_count = cursor.fetchone()['count']
                 
-                cursor.execute("SELECT COUNT(*) as count FROM Usuario")
+                cursor.execute("SELECT COUNT(*) as count FROM usuario")
                 usuarios_count = cursor.fetchone()['count']
                 
                 cursor.execute("SELECT COUNT(*) as count FROM cita")
@@ -747,7 +747,7 @@ def get_usuarios():
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
-                    FROM Usuario u 
+                    FROM usuario u 
                     JOIN Rol r ON u.rol_id = r.id
                     ORDER BY u.id
                 """)
@@ -764,7 +764,7 @@ def get_usuario(usuario_id: int):
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
-                    FROM Usuario u 
+                    FROM usuario u 
                     JOIN Rol r ON u.rol_id = r.id
                     WHERE u.id = %s
                 """, (usuario_id,))
@@ -788,7 +788,7 @@ def login(username: str, password: str):
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
-                    FROM Usuario u 
+                    FROM usuario u 
                     JOIN Rol r ON u.rol_id = r.id
                     WHERE u.username = %s AND u.password = %s AND u.activo = 1
                 """, (username, password_hash))
@@ -1013,7 +1013,7 @@ def get_citas(limit: int = 50, offset: int = 0):
                            ec.color as estado_color
                     FROM cita c
                     JOIN paciente p ON c.paciente_id = p.id
-                    JOIN Usuario u ON c.usuario_id = u.id
+                    JOIN usuario u ON c.usuario_id = u.id
                     JOIN estado_cita ec ON c.estado_id = ec.id
                     ORDER BY c.fecha_hora DESC
                     LIMIT %s OFFSET %s
@@ -1038,7 +1038,7 @@ def get_cita(cita_id: int):
                            ec.color as estado_color
                     FROM cita c
                     JOIN paciente p ON c.paciente_id = p.id
-                    JOIN Usuario u ON c.usuario_id = u.id
+                    JOIN usuario u ON c.usuario_id = u.id
                     JOIN estado_cita ec ON c.estado_id = ec.id
                     WHERE c.id = %s
                 """, (cita_id,))
@@ -1078,7 +1078,7 @@ def create_cita(cita: citaCreate):
                     paciente_nombre = resultado[1]
                     paciente_apellido = resultado[2]
                 
-                cursor.execute("SELECT id, nombre FROM Usuario WHERE id = %s", (cita.usuario_id,))
+                cursor.execute("SELECT id, nombre FROM usuario WHERE id = %s", (cita.usuario_id,))
                 resultado_usuario = cursor.fetchone()
                 if not resultado_usuario:
                     raise HTTPException(status_code=404, detail=f"Usuario con ID {cita.usuario_id} no encontrado")
