@@ -59,7 +59,7 @@ const formatTimeForInput = (time: string): string => {
   return match ? match[1] : '09:00';
 };
 
-export function citaForm({ cita, pacientes = [], onSave, onClose }: citaFormProps) {
+export function CitaForm({ cita, pacientes = [], onSave, onClose }: citaFormProps) {
   // Preparar datos iniciales
   const [formData, setFormData] = useState({
     id_paciente: cita?.id_paciente || "",
