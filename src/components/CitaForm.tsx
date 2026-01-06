@@ -3,20 +3,20 @@
 import type React from "react";
 import { useState } from "react";
 import { X } from "lucide-react";
-import type { Cita } from "../pages/AgendaPage";
+import type { cita } from "../pages/AgendaPage";
 import DatePickerColombia from "../components/DatePickerColombia";
 
-interface Paciente {
+interface paciente {
   id: string;
   nombres: string;
   apellidos: string;
   documento: string;
 }
 
-interface CitaFormProps {
-  cita?: Cita;
-  pacientes?: Paciente[];
-  onSave: (data: Omit<Cita, "id">) => void;
+interface citaFormProps {
+  cita?: cita;
+  pacientes?: paciente[];
+  onSave: (data: Omit<cita, "id">) => void;
   onClose: () => void;
 }
 
@@ -59,7 +59,7 @@ const formatTimeForInput = (time: string): string => {
   return match ? match[1] : '09:00';
 };
 
-export function CitaForm({ cita, pacientes = [], onSave, onClose }: CitaFormProps) {
+export function citaForm({ cita, pacientes = [], onSave, onClose }: citaFormProps) {
   // Preparar datos iniciales
   const [formData, setFormData] = useState({
     id_paciente: cita?.id_paciente || "",
@@ -98,7 +98,7 @@ export function CitaForm({ cita, pacientes = [], onSave, onClose }: CitaFormProp
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
-      console.log("📤 CitaForm - Enviando datos:", formData);
+      console.log("📤 citaForm - Enviando datos:", formData);
       
       // Preparar datos para enviar
       const dataToSend = {
@@ -126,7 +126,7 @@ export function CitaForm({ cita, pacientes = [], onSave, onClose }: CitaFormProp
       <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
 
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800">{cita ? "Editar Cita" : "Nueva Cita"}</h2>
+          <h2 className="text-xl font-bold text-gray-800">{cita ? "Editar cita" : "Nueva cita"}</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
             <X size={20} />
           </button>
@@ -134,10 +134,10 @@ export function CitaForm({ cita, pacientes = [], onSave, onClose }: CitaFormProp
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
 
-          {/* Paciente */}
+          {/* paciente */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Paciente {pacientes.length === 0 && <span className="text-red-500">*</span>}
+              paciente {pacientes.length === 0 && <span className="text-red-500">*</span>}
             </label>
             {pacientes.length === 0 ? (
               <div className="text-sm text-yellow-600 bg-yellow-50 p-3 rounded">
@@ -276,7 +276,7 @@ export function CitaForm({ cita, pacientes = [], onSave, onClose }: CitaFormProp
           {pacientes.length === 0 && (
             <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded mt-2">
               <p className="font-medium">⚠️ Atención:</p>
-              <p>No puedes crear citas sin pacientes. Primero crea pacientes en la sección de Pacientes.</p>
+              <p>No puedes crear citas sin pacientes. Primero crea pacientes en la sección de pacientes.</p>
             </div>
           )}
 

@@ -8,7 +8,7 @@ import { CotizacionModal } from "../components/CotizacionModal"
 import { api, transformBackendToFrontend } from "../lib/api"
 import type { Cotizacion } from "../types/cotizacion"
 
-export interface Paciente {
+export interface paciente {
   id: string
   nombres: string
   apellidos: string
@@ -21,7 +21,7 @@ type ModalType = 'none' | 'form' | 'view'
 
 export default function CotizacionesPage() {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
-  const [pacientes, setPacientes] = useState<Paciente[]>([])
+  const [pacientes, setpacientes] = useState<paciente[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,7 +31,7 @@ export default function CotizacionesPage() {
   
   useEffect(() => {
     fetchData()
-    fetchPacientes()
+    fetchpacientes()
   }, [])
 
   const fetchData = async () => {
@@ -55,13 +55,13 @@ export default function CotizacionesPage() {
     }
   }
 
-  const fetchPacientes = async () => {
+  const fetchpacientes = async () => {
     try {
-      const response = await api.getPacientes()
+      const response = await api.getpacientes()
       
       if (response && response.pacientes) {
         const pacientesTransformados = response.pacientes.map(transformBackendToFrontend.paciente)
-        setPacientes(pacientesTransformados)
+        setpacientes(pacientesTransformados)
       }
     } catch (err: any) {
       console.error("Error cargando pacientes:", err)
@@ -250,7 +250,7 @@ export default function CotizacionesPage() {
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">#</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Paciente</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">paciente</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Fecha</th>
                       <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Total</th>
                       <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Acciones</th>

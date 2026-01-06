@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from ...models.historial_clinico import HistorialClinico
-from ...models.paciente import Paciente
+from ...models.paciente import paciente
 from ...schemas.historial_clinico import (
     HistorialClinicoCreate, 
     HistorialClinicoUpdate, 
@@ -41,11 +41,11 @@ def get_historias_by_paciente(
     """
     try:
         # Verificar que el paciente existe
-        paciente = db.query(Paciente).filter(Paciente.id == paciente_id).first()
+        paciente = db.query(paciente).filter(paciente.id == paciente_id).first()
         if not paciente:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Paciente con ID {paciente_id} no encontrado"
+                detail=f"paciente con ID {paciente_id} no encontrado"
             )
         
         historias = db.query(HistorialClinico).filter(
@@ -99,11 +99,11 @@ def create_historia_clinica(
     """
     try:
         # Verificar que el paciente existe
-        paciente = db.query(Paciente).filter(Paciente.id == historia.paciente_id).first()
+        paciente = db.query(paciente).filter(paciente.id == historia.paciente_id).first()
         if not paciente:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Paciente con ID {historia.paciente_id} no encontrado"
+                detail=f"paciente con ID {historia.paciente_id} no encontrado"
             )
         
         # Crear la historia clínica

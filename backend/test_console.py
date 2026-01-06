@@ -78,7 +78,7 @@ def test_database():
         print("\n5. 🏷️ Verificando estados del sistema...")
         
         estados_tablas = [
-            ("Estado_Cita", "estados de cita"),
+            ("estado_cita", "estados de cita"),
             ("Estado_Quirurgico", "estados quirúrgicos"),
             ("Estado_Cotizacion", "estados de cotización"),
             ("Estado_Factura", "estados de factura"),
@@ -92,12 +92,12 @@ def test_database():
         
         # 6. Verificar pacientes
         print("\n6. 🧑‍⚕️ Verificando pacientes...")
-        cursor.execute("SELECT COUNT(*) FROM Paciente")
+        cursor.execute("SELECT COUNT(*) FROM paciente")
         paciente_count = cursor.fetchone()[0]
         print(f"   👤 Total pacientes: {paciente_count}")
         
         if paciente_count > 0:
-            cursor.execute("SELECT nombre, apellido, numero_documento FROM Paciente LIMIT 3")
+            cursor.execute("SELECT nombre, apellido, numero_documento FROM paciente LIMIT 3")
             for paciente in cursor.fetchall():
                 print(f"   📝 {paciente[0]} {paciente[1]} (Doc: {paciente[2]})")
             if paciente_count > 3:
@@ -105,7 +105,7 @@ def test_database():
         
         # 7. Verificar citas
         print("\n7. 📅 Verificando citas...")
-        cursor.execute("SELECT COUNT(*) FROM Cita")
+        cursor.execute("SELECT COUNT(*) FROM cita")
         cita_count = cursor.fetchone()[0]
         print(f"   📆 Total citas: {cita_count}")
         
@@ -115,7 +115,7 @@ def test_database():
         print("-" * 50)
         
         resumen_tablas = [
-            "Rol", "Usuario", "Paciente", "Cita", "Estado_Cita",
+            "Rol", "Usuario", "paciente", "cita", "estado_cita",
             "Estado_Quirurgico", "Estado_Cotizacion", "Estado_Factura",
             "Tipo_Documento", "Permiso", "Rol_Permiso", "Historial_Clinico"
         ]

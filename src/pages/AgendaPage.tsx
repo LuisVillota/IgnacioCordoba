@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react"
 import { ChevronLeft, ChevronRight, Plus, Edit2, Calendar, Clock, User, AlertCircle, RefreshCw, AlertTriangle, X } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
-import { CitaForm } from "../components/CitaForm"
-import { CitaModal } from "../components/CitaModal"
+import { citaForm } from "../components/citaForm"
+import { citaModal } from "../components/citaModal"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
 
-export interface Cita {
+export interface cita {
   id: string
   id_paciente: string
   id_usuario: string
@@ -23,7 +23,7 @@ export interface Cita {
   doctor_nombre?: string
 }
 
-export interface Paciente {
+export interface paciente {
   id: string
   nombres: string
   apellidos: string
@@ -39,9 +39,9 @@ export interface Paciente {
   fecha_registro?: string     
 }
 
-interface CitaConflict {
-  citaExistente: Cita
-  nuevaCita: Omit<Cita, "id">
+interface citaConflict {
+  citaExistente: cita
+  nuevacita: Omit<cita, "id">
   mensaje: string
 }
 
@@ -90,13 +90,13 @@ const cleanTimeFormat = (timeString: string): string => {
   return '09:00'
 }
 
-const transformBackendCita = (backendCita: any): Cita => {
+const transformBackendcita = (backendcita: any): cita => {
   
   let fecha = ''
   let hora = ''
   
-  if (backendCita.fecha_hora) {
-    const fechaHoraStr = backendCita.fecha_hora.toString()
+  if (backendcita.fecha_hora) {
+    const fechaHoraStr = backendcita.fecha_hora.toString()
     
     if (fechaHoraStr.includes(' ')) {
       const [datePart, timePart] = fechaHoraStr.split(' ')
@@ -108,81 +108,81 @@ const transformBackendCita = (backendCita: any): Cita => {
       fecha = formatDate(dateObj)
       hora = dateObj.toTimeString().slice(0, 5)
     }
-    else if (backendCita.fecha_hora instanceof Date) {
-      fecha = formatDate(backendCita.fecha_hora)
-      hora = backendCita.fecha_hora.toTimeString().slice(0, 5)
+    else if (backendcita.fecha_hora instanceof Date) {
+      fecha = formatDate(backendcita.fecha_hora)
+      hora = backendcita.fecha_hora.toTimeString().slice(0, 5)
     }
-  } else if (backendCita.fecha && backendCita.hora) {
-    fecha = backendCita.fecha
-    hora = formatTime(backendCita.hora)
+  } else if (backendcita.fecha && backendcita.hora) {
+    fecha = backendcita.fecha
+    hora = formatTime(backendcita.hora)
   }
   
   if (!fecha) {
     fecha = formatDate(new Date())
   }
 
-  let estado: Cita["estado"] = "pendiente"
-  if (backendCita.estado_id) {
-    switch(backendCita.estado_id) {
+  let estado: cita["estado"] = "pendiente"
+  if (backendcita.estado_id) {
+    switch(backendcita.estado_id) {
       case 1: estado = "cancelada"; break;
       case 2: estado = "confirmada"; break;
       case 3: estado = "completada"; break;
       case 4: estado = "pendiente"; break;
       default: estado = "pendiente";
     }
-  } else if (backendCita.estado_nombre) {
-    const estadoLower = backendCita.estado_nombre.toLowerCase()
+  } else if (backendcita.estado_nombre) {
+    const estadoLower = backendcita.estado_nombre.toLowerCase()
     if (estadoLower.includes('confirm')) estado = "confirmada"
     else if (estadoLower.includes('complet')) estado = "completada"
     else if (estadoLower.includes('cancel')) estado = "cancelada"
     else if (estadoLower.includes('pendient')) estado = "pendiente"
-  } else if (backendCita.estado) {
-    const estadoLower = backendCita.estado.toLowerCase()
+  } else if (backendcita.estado) {
+    const estadoLower = backendcita.estado.toLowerCase()
     if (estadoLower.includes('confirm')) estado = "confirmada"
     else if (estadoLower.includes('complet')) estado = "completada"
     else if (estadoLower.includes('cancel')) estado = "cancelada"
     else if (estadoLower.includes('pendient')) estado = "pendiente"
   }
 
-  let tipo_cita: Cita["tipo_cita"] = "consulta"
-  if (backendCita.tipo) {
-    const tipoLower = backendCita.tipo.toLowerCase()
+  let tipo_cita: cita["tipo_cita"] = "consulta"
+  if (backendcita.tipo) {
+    const tipoLower = backendcita.tipo.toLowerCase()
     if (tipoLower.includes('control')) tipo_cita = "control"
     else if (tipoLower.includes('valora')) tipo_cita = "valoracion"
     else if (tipoLower.includes('program') || tipoLower.includes('quirur')) tipo_cita = "programacion_quirurgica"
     else if (tipoLower.includes('consulta')) tipo_cita = "consulta"
   }
 
-  const cita: Cita = {
-    id: backendCita.id?.toString() || backendCita.cita_id?.toString() || Date.now().toString(),
-    id_paciente: backendCita.paciente_id?.toString() || backendCita.id_paciente?.toString() || '',
-    id_usuario: backendCita.usuario_id?.toString() || backendCita.id_usuario?.toString() || '1',
+  const cita: cita = {
+    id: backendcita.id?.toString() || backendcita.cita_id?.toString() || Date.now().toString(),
+    id_paciente: backendcita.paciente_id?.toString() || backendcita.id_paciente?.toString() || '',
+    id_usuario: backendcita.usuario_id?.toString() || backendcita.id_usuario?.toString() || '1',
     tipo_cita: tipo_cita,
     fecha: fecha,
     hora: hora,
-    duracion: backendCita.duracion || backendCita.duracion_minutos || 30,
+    duracion: backendcita.duracion || backendcita.duracion_minutos || 30,
     estado: estado,
-    observaciones: backendCita.observaciones || backendCita.notas || '',
-    paciente_nombre: backendCita.paciente_nombre || backendCita.nombres || backendCita.nombre || '',
-    paciente_apellido: backendCita.paciente_apellido || backendCita.apellidos || backendCita.apellido || '',
-    doctor_nombre: backendCita.doctor_nombre || backendCita.doctor || backendCita.usuario_nombre || 'Dr. No Especificado',
+    observaciones: backendcita.observaciones || backendcita.notas || '',
+    paciente_nombre: backendcita.paciente_nombre || backendcita.nombres || backendcita.nombre || '',
+    paciente_apellido: backendcita.paciente_apellido || backendcita.apellidos || backendcita.apellido || '',
+    doctor_nombre: backendcita.doctor_nombre || backendcita.doctor || backendcita.usuario_nombre || 'Dr. No Especificado',
   }
 
   return cita
 }
 
-const transformBackendPaciente = (backendPaciente: any): Paciente => {
+const transformBackendpaciente = (backendpaciente: any): paciente => {
   return {
-    id: backendPaciente.id?.toString() || '',
-    nombres: backendPaciente.nombres || backendPaciente.nombre || '',
-    apellidos: backendPaciente.apellidos || backendPaciente.apellido || '',
-    documento: backendPaciente.documento || backendPaciente.numero_documento || '',
-    telefono: backendPaciente.telefono || '',
-    email: backendPaciente.email || '',
+    id: backendpaciente.id?.toString() || '',
+    nombres: backendpaciente.nombres || backendpaciente.nombre || '',
+    apellidos: backendpaciente.apellidos || backendpaciente.apellido || '',
+    documento: backendpaciente.documento || backendpaciente.numero_documento || '',
+    telefono: backendpaciente.telefono || '',
+    email: backendpaciente.email || '',
   }
 }
 
-const ordenarCitasPorFechaHoraAscendente = (citasArray: Cita[]): Cita[] => {
+const ordenarcitasPorFechaHoraAscendente = (citasArray: cita[]): cita[] => {
   
   const citasOrdenadas = citasArray.sort((a, b) => {
     const fechaA = new Date(a.fecha).getTime()
@@ -219,7 +219,7 @@ function ConflictoHorarioModal({
   onCancel, 
   onOverride 
 }: { 
-  conflicto: CitaConflict
+  conflicto: citaConflict
   onCancel: () => void
   onOverride: () => void
 }) {
@@ -248,10 +248,10 @@ function ConflictoHorarioModal({
             </p>
             
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-              <h4 className="font-semibold text-amber-800 mb-2">Cita Existente:</h4>
+              <h4 className="font-semibold text-amber-800 mb-2">cita Existente:</h4>
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Paciente:</span>
+                  <span className="text-gray-600">paciente:</span>
                   <span className="font-medium">{pacienteExistente}</span>
                 </div>
                 <div className="flex justify-between">
@@ -282,21 +282,21 @@ function ConflictoHorarioModal({
             </div>
             
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-semibold text-blue-800 mb-2">Nueva Cita:</h4>
+              <h4 className="font-semibold text-blue-800 mb-2">Nueva cita:</h4>
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Fecha:</span>
-                  <span className="font-medium">{conflicto.nuevaCita.fecha}</span>
+                  <span className="font-medium">{conflicto.nuevacita.fecha}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Hora:</span>
                   <span className="font-medium">
-                    {conflicto.nuevaCita.hora} - {agregarMinutos(conflicto.nuevaCita.hora, conflicto.nuevaCita.duracion)}
+                    {conflicto.nuevacita.hora} - {agregarMinutos(conflicto.nuevacita.hora, conflicto.nuevacita.duracion)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Tipo:</span>
-                  <span className="font-medium">{tiposDeVisita[conflicto.nuevaCita.tipo_cita]?.label}</span>
+                  <span className="font-medium">{tiposDeVisita[conflicto.nuevacita.tipo_cita]?.label}</span>
                 </div>
               </div>
             </div>
@@ -327,19 +327,19 @@ function ConflictoHorarioModal({
 }
 
 export default function AgendaPage() {
-  const [citas, setCitas] = useState<Cita[]>([])
-  const [pacientes, setPacientes] = useState<Paciente[]>([])
+  const [citas, setcitas] = useState<cita[]>([])
+  const [pacientes, setpacientes] = useState<paciente[]>([])
   const [currentDate, setCurrentDate] = useState(new Date())
   const [showForm, setShowForm] = useState(false)
-  const [selectedCita, setSelectedCita] = useState<Cita | null>(null)
+  const [selectedcita, setSelectedcita] = useState<cita | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filterEstado, setFilterEstado] = useState<string>("todas")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [useMockData, setUseMockData] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
-  const [conflictoHorario, setConflictoHorario] = useState<CitaConflict | null>(null)
-  const [pendienteGuardar, setPendienteGuardar] = useState<Omit<Cita, "id"> | null>(null)
+  const [conflictoHorario, setConflictoHorario] = useState<citaConflict | null>(null)
+  const [pendienteGuardar, setPendienteGuardar] = useState<Omit<cita, "id"> | null>(null)
 
   useEffect(() => {
     loadData()
@@ -373,8 +373,8 @@ export default function AgendaPage() {
       const isBackendAvailable = await testBackendConnection()
       
       if (!isBackendAvailable) {
-        setCitas([])
-        setPacientes([])
+        setcitas([])
+        setpacientes([])
         setUseMockData(false)
         toast.error("El backend no está disponible. No se pueden cargar los datos.")
         return
@@ -383,7 +383,7 @@ export default function AgendaPage() {
       try {
         let citasResponse
         try {
-          citasResponse = await api.getCitas(100, 0)
+          citasResponse = await api.getcitas(100, 0)
         } catch (citaError: any) {
           throw new Error(`No se pudieron cargar las citas: ${handleApiError(citaError)}`)
         }
@@ -406,16 +406,16 @@ export default function AgendaPage() {
           }
         }
         
-        const transformedCitas = citasArray.map(transformBackendCita)
-        const citasOrdenadas = ordenarCitasPorFechaHoraAscendente(transformedCitas)
+        const transformedcitas = citasArray.map(transformBackendcita)
+        const citasOrdenadas = ordenarcitasPorFechaHoraAscendente(transformedcitas)
         
-        const validCitas = citasOrdenadas.filter(c => c.fecha && c.hora)
+        const validcitas = citasOrdenadas.filter(c => c.fecha && c.hora)
         
-        setCitas(validCitas)
+        setcitas(validcitas)
         
         let pacientesResponse
         try {
-          pacientesResponse = await api.getPacientes(100, 0)
+          pacientesResponse = await api.getpacientes(100, 0)
         } catch (pacienteError: any) {
           throw new Error(`No se pudieron cargar los pacientes: ${handleApiError(pacienteError)}`)
         }
@@ -438,21 +438,21 @@ export default function AgendaPage() {
           }
         }
         
-        const transformedPacientes = pacientesArray.map(transformBackendPaciente)
-        setPacientes(transformedPacientes)
+        const transformedpacientes = pacientesArray.map(transformBackendpaciente)
+        setpacientes(transformedpacientes)
         
         setUseMockData(false)
         
-        if (validCitas.length === 0) {
+        if (validcitas.length === 0) {
           toast.info("No hay citas programadas. ¡Crea tu primera cita!")
         }
-        if (transformedPacientes.length === 0) {
+        if (transformedpacientes.length === 0) {
           toast.warning("No hay pacientes registrados.")
         }
         
       } catch (apiError: any) {
-        setCitas([])
-        setPacientes([])
+        setcitas([])
+        setpacientes([])
         setUseMockData(false)
         setError(`Error cargando datos: ${apiError.message}`)
         
@@ -464,8 +464,8 @@ export default function AgendaPage() {
       setError(errorMsg)
       toast.error("Error al cargar los datos: " + errorMsg)
       
-      setCitas([])
-      setPacientes([])
+      setcitas([])
+      setpacientes([])
       setUseMockData(false)
     } finally {
       setLoading(false)
@@ -504,10 +504,10 @@ export default function AgendaPage() {
     return citasOrdenadas
   }
 
-  const verificarConflictoHorario = (nuevaCita: Omit<Cita, "id">, idExcluir?: string): CitaConflict | null => {
-    const nuevaFecha = formatDate(nuevaCita.fecha)
-    const nuevaHoraInicio = nuevaCita.hora
-    const nuevaHoraFin = agregarMinutos(nuevaCita.hora, nuevaCita.duracion)
+  const verificarConflictoHorario = (nuevacita: Omit<cita, "id">, idExcluir?: string): citaConflict | null => {
+    const nuevaFecha = formatDate(nuevacita.fecha)
+    const nuevaHoraInicio = nuevacita.hora
+    const nuevaHoraFin = agregarMinutos(nuevacita.hora, nuevacita.duracion)
     
     for (const cita of citas) {
       if (idExcluir && cita.id === idExcluir) continue
@@ -535,7 +535,7 @@ export default function AgendaPage() {
         
         return {
           citaExistente: cita,
-          nuevaCita: nuevaCita,
+          nuevacita: nuevacita,
           mensaje: mensaje
         }
       }
@@ -549,7 +549,7 @@ export default function AgendaPage() {
     return h * 60 + m
   }
 
-  const handleSaveCita = async (data: Omit<Cita, "id">) => {
+  const handleSavecita = async (data: Omit<cita, "id">) => {
     try {
       if (!data.id_paciente || !data.fecha || !data.hora || !data.id_usuario) {
         toast.error("Por favor completa todos los campos requeridos")
@@ -579,14 +579,14 @@ export default function AgendaPage() {
         return
       }
       
-      await guardarCitaSinConflicto(data)
+      await guardarcitaSinConflicto(data)
       
     } catch (error: any) {
       toast.error('Error al guardar la cita: ' + (error.message || "Error desconocido"))
     }
   }
 
-  const guardarCitaSinConflicto = async (data: Omit<Cita, "id">) => {
+  const guardarcitaSinConflicto = async (data: Omit<cita, "id">) => {
     try {
       const horaFormateada = cleanTimeFormat(data.hora)
       
@@ -601,16 +601,16 @@ export default function AgendaPage() {
       };
       
       if (editingId) {
-        await api.updateCita(parseInt(editingId), citaData)
+        await api.updatecita(parseInt(editingId), citaData)
         await loadData()
         
-        toast.success('Cita actualizada exitosamente')
+        toast.success('cita actualizada exitosamente')
         setEditingId(null)
       } else {
-        await api.createCita(citaData)
+        await api.createcita(citaData)
         await loadData()
         
-        toast.success('Cita creada exitosamente')
+        toast.success('cita creada exitosamente')
       }
       
       setShowForm(false)
@@ -625,12 +625,12 @@ export default function AgendaPage() {
   const handleOverrideConflicto = async () => {
     if (!pendienteGuardar) return
     
-    await guardarCitaSinConflicto(pendienteGuardar)
+    await guardarcitaSinConflicto(pendienteGuardar)
     
     setConflictoHorario(null)
     setPendienteGuardar(null)
     
-    toast.warning("Cita creada a pesar del conflicto de horario")
+    toast.warning("cita creada a pesar del conflicto de horario")
   }
 
   const handleCancelConflicto = () => {
@@ -639,9 +639,9 @@ export default function AgendaPage() {
     toast.info("Creación de cita cancelada por conflicto de horario")
   }
 
-  const handleEdit = (cita: Cita) => {
+  const handleEdit = (cita: cita) => {
     setEditingId(cita.id)
-    setSelectedCita(cita)
+    setSelectedcita(cita)
     setShowForm(true)
   }
 
@@ -654,7 +654,7 @@ export default function AgendaPage() {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
   const monthName = currentDate.toLocaleString("es-ES", { month: "long", year: "numeric" })
 
-  const getPacienteById = (id: string) => {
+  const getpacienteById = (id: string) => {
     return pacientes.find(p => p.id === id)
   }
 
@@ -665,7 +665,7 @@ export default function AgendaPage() {
     return days.map((day) => {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
       const dateStr = formatDate(date)
-      const daysCitas = citasDelDia(dateStr)
+      const dayscitas = citasDelDia(dateStr)
       const isToday = todayStr === dateStr
 
       return (
@@ -682,16 +682,16 @@ export default function AgendaPage() {
               <p className={`text-sm font-semibold ${isToday ? "text-[#1a6b32]" : "text-gray-700"}`}>
                 {day}
               </p>
-              {daysCitas.length > 0 && (
+              {dayscitas.length > 0 && (
                 <span className="text-xs bg-blue-100 text-blue-800 rounded-full px-2 py-0.5">
-                  {daysCitas.length}
+                  {dayscitas.length}
                 </span>
               )}
             </div>
-            {daysCitas.length > 0 && (
+            {dayscitas.length > 0 && (
               <div className="flex-1 mt-1 text-xs space-y-1 overflow-y-auto">
-                {daysCitas.slice(0, 3).map((cita) => {
-                  const paciente = getPacienteById(cita.id_paciente) || {
+                {dayscitas.slice(0, 3).map((cita) => {
+                  const paciente = getpacienteById(cita.id_paciente) || {
                     nombres: cita.paciente_nombre || '',
                     apellidos: cita.paciente_apellido || ''
                   }
@@ -714,7 +714,7 @@ export default function AgendaPage() {
                       key={cita.id}
                       onClick={(e) => {
                         e.stopPropagation()
-                        setSelectedCita(cita)
+                        setSelectedcita(cita)
                       }}
                       className={`p-1.5 rounded text-white text-xs cursor-pointer hover:opacity-90 transition ${estadoColor}`}
                       title={`${cita.hora} - ${paciente.nombres} ${paciente.apellidos} (${cita.estado}, ${tiposDeVisita[cita.tipo_cita]?.label || cita.tipo_cita})`}
@@ -734,9 +734,9 @@ export default function AgendaPage() {
                     </div>
                   )
                 })}
-                {daysCitas.length > 3 && (
+                {dayscitas.length > 3 && (
                   <p className="text-gray-500 text-xs pl-1 font-medium">
-                    +{daysCitas.length - 3} más
+                    +{dayscitas.length - 3} más
                   </p>
                 )}
               </div>
@@ -764,11 +764,11 @@ export default function AgendaPage() {
       <div className="p-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">Agenda y Citas</h1>
+            <h1 className="text-3xl font-bold text-gray-800">Agenda y citas</h1>
             <p className="text-gray-600 mt-2">Gestiona las citas de los pacientes</p>
             <div className="flex items-center space-x-4 mt-1 text-sm">
-              <span className="text-gray-700">Citas: {citas.length}</span>
-              <span className="text-gray-700">Pacientes: {pacientes.length}</span>
+              <span className="text-gray-700">citas: {citas.length}</span>
+              <span className="text-gray-700">pacientes: {pacientes.length}</span>
             </div>
           </div>
           <div className="flex items-center space-x-3">
@@ -784,7 +784,7 @@ export default function AgendaPage() {
               <button
                 onClick={() => {
                   setEditingId(null)
-                  setSelectedCita(null)
+                  setSelectedcita(null)
                   setShowForm(true)
                 }}
                 disabled={pacientes.length === 0}
@@ -795,7 +795,7 @@ export default function AgendaPage() {
                 }`}
               >
                 <Plus size={20} />
-                <span>Nueva Cita</span>
+                <span>Nueva cita</span>
               </button>
             </ProtectedRoute>
           </div>
@@ -834,7 +834,7 @@ export default function AgendaPage() {
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
             <p className="text-amber-800 font-medium">⚠️ Atención: No hay pacientes registrados</p>
             <p className="text-amber-700 text-sm mt-1">
-              Para crear citas, primero necesitas registrar pacientes en la sección de Pacientes.
+              Para crear citas, primero necesitas registrar pacientes en la sección de pacientes.
             </p>
           </div>
         )}
@@ -843,12 +843,12 @@ export default function AgendaPage() {
           <div className="mb-6 p-6 bg-blue-50 border border-blue-200 rounded-lg text-center">
             <Calendar className="w-12 h-12 text-blue-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-blue-800 mb-2">No hay citas programadas</h3>
-            <p className="text-blue-700 mb-4">Crea tu primera cita haciendo clic en "Nueva Cita"</p>
+            <p className="text-blue-700 mb-4">Crea tu primera cita haciendo clic en "Nueva cita"</p>
             <button
               onClick={() => setShowForm(true)}
               className="px-4 py-2 bg-[#1a6b32] text-white rounded-lg hover:bg-[#155529] transition"
             >
-              Crear Primera Cita
+              Crear Primera cita
             </button>
           </div>
         )}
@@ -861,7 +861,7 @@ export default function AgendaPage() {
                 <div className="text-sm text-gray-600">
                   <div className="flex items-center">
                     <Clock size={14} className="mr-1 text-gray-500" />
-                    <span>Citas ordenadas por hora (más temprana primero)</span>
+                    <span>citas ordenadas por hora (más temprana primero)</span>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -934,7 +934,7 @@ export default function AgendaPage() {
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-gray-800">Citas de Hoy</h3>
+                <h3 className="font-semibold text-gray-800">citas de Hoy</h3>
                 <span className="text-sm text-gray-500">{formatDate(new Date())}</span>
               </div>
               <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -945,7 +945,7 @@ export default function AgendaPage() {
                   </div>
                 ) : (
                   citasDelDia(formatDate(new Date())).map((cita) => {
-                    const paciente = getPacienteById(cita.id_paciente) || {
+                    const paciente = getpacienteById(cita.id_paciente) || {
                       nombres: cita.paciente_nombre || '',
                       apellidos: cita.paciente_apellido || ''
                     }
@@ -1005,25 +1005,25 @@ export default function AgendaPage() {
               <h3 className="font-semibold text-gray-800 mb-4">Estadísticas Rápidas</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="text-sm text-blue-700">Citas Confirmadas</p>
+                  <p className="text-sm text-blue-700">citas Confirmadas</p>
                   <p className="text-2xl font-bold text-blue-800">
                     {citas.filter(c => c.estado === 'confirmada').length}
                   </p>
                 </div>
                 <div className="bg-amber-50 p-3 rounded-lg">
-                  <p className="text-sm text-amber-700">Citas Pendientes</p>
+                  <p className="text-sm text-amber-700">citas Pendientes</p>
                   <p className="text-2xl font-bold text-amber-800">
                     {citas.filter(c => c.estado === 'pendiente').length}
                   </p>
                 </div>
                 <div className="bg-green-50 p-3 rounded-lg">
-                  <p className="text-sm text-green-700">Citas Completadas</p>
+                  <p className="text-sm text-green-700">citas Completadas</p>
                   <p className="text-2xl font-bold text-green-800">
                     {citas.filter(c => c.estado === 'completada').length}
                   </p>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-sm text-gray-700">Total Pacientes</p>
+                  <p className="text-sm text-gray-700">Total pacientes</p>
                   <p className="text-2xl font-bold text-gray-800">{pacientes.length}</p>
                 </div>
               </div>
@@ -1032,25 +1032,25 @@ export default function AgendaPage() {
         </div>
 
         {showForm && (
-          <CitaForm
-            cita={selectedCita || undefined}
+          <citaForm
+            cita={selectedcita || undefined}
             pacientes={pacientes}
-            onSave={handleSaveCita}
+            onSave={handleSavecita}
             onClose={() => {
               setShowForm(false)
               setEditingId(null)
-              setSelectedCita(null)
+              setSelectedcita(null)
             }}
           />
         )}
 
-        {selectedCita && !showForm && (
-          <CitaModal
-            cita={selectedCita}
-            paciente={getPacienteById(selectedCita.id_paciente) || {
-              id: selectedCita.id_paciente,
-              nombres: selectedCita.paciente_nombre || '',
-              apellidos: selectedCita.paciente_apellido || '',
+        {selectedcita && !showForm && (
+          <citaModal
+            cita={selectedcita}
+            paciente={getpacienteById(selectedcita.id_paciente) || {
+              id: selectedcita.id_paciente,
+              nombres: selectedcita.paciente_nombre || '',
+              apellidos: selectedcita.paciente_apellido || '',
               documento: '',
               telefono: '',
               email: '',
@@ -1062,10 +1062,10 @@ export default function AgendaPage() {
               estado_paciente: 'activo',
               fecha_registro: new Date().toISOString().split('T')[0]
             }}
-            onClose={() => setSelectedCita(null)}
-            onEdit={() => handleEdit(selectedCita)}
+            onClose={() => setSelectedcita(null)}
+            onEdit={() => handleEdit(selectedcita)}
             onDelete={() => {
-              console.log('Eliminar cita:', selectedCita.id);
+              console.log('Eliminar cita:', selectedcita.id);
             }}
           />
         )}

@@ -24,7 +24,7 @@ export interface HistoriaClinica {
   fotos: string
 }
 
-export interface PacienteFrontend {
+export interface pacienteFrontend {
   id: string
   nombres: string
   apellidos: string
@@ -42,8 +42,8 @@ export interface PacienteFrontend {
 
 export default function HistoriaClinicaPage() {
   const [historias, setHistorias] = useState<HistoriaClinica[]>([])
-  const [pacientes, setPacientes] = useState<PacienteFrontend[]>([])
-  const [selectedPacienteId, setSelectedPacienteId] = useState<string>("")
+  const [pacientes, setpacientes] = useState<pacienteFrontend[]>([])
+  const [selectedpacienteId, setSelectedpacienteId] = useState<string>("")
   const [selectedHistoria, setSelectedHistoria] = useState<HistoriaClinica | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -53,27 +53,27 @@ export default function HistoriaClinicaPage() {
   const isSavingRef = useRef(false)
 
   useEffect(() => {
-    loadPacientes()
+    loadpacientes()
   }, [])
 
   useEffect(() => {
-    if (selectedPacienteId) {
-      loadHistorias(parseInt(selectedPacienteId))
+    if (selectedpacienteId) {
+      loadHistorias(parseInt(selectedpacienteId))
     }
-  }, [selectedPacienteId])
+  }, [selectedpacienteId])
 
-  const loadPacientes = async () => {
+  const loadpacientes = async () => {
     try {
       setLoading(prev => ({ ...prev, pacientes: true }))
       setError(null)
       
-      const response = await api.getPacientes(100, 0)
+      const response = await api.getpacientes(100, 0)
       
       const pacientesTransformados = response.pacientes?.map((paciente: any) => 
         transformBackendToFrontend.paciente(paciente)
       ) || []
       
-      setPacientes(pacientesTransformados)
+      setpacientes(pacientesTransformados)
     } catch (error) {
       const errorMessage = handleApiError(error)
       setError(`Error cargando pacientes: ${errorMessage}`)
@@ -87,7 +87,7 @@ export default function HistoriaClinicaPage() {
       setLoading(prev => ({ ...prev, historias: true }))
       setError(null)
       
-      const response = await api.getHistoriasByPaciente(pacienteId)
+      const response = await api.getHistoriasBypaciente(pacienteId)
       
       let historiasTransformadas: HistoriaClinica[] = []
       
@@ -131,7 +131,7 @@ export default function HistoriaClinicaPage() {
       setLoading(prev => ({ ...prev, saving: true }))
       setError(null)
       
-      await loadHistorias(parseInt(selectedPacienteId))
+      await loadHistorias(parseInt(selectedpacienteId))
       
       setEditingId(null)
       setShowForm(false)
@@ -151,10 +151,10 @@ export default function HistoriaClinicaPage() {
     setShowForm(true)
   }
 
-  const paciente = pacientes.find((p) => p.id === selectedPacienteId)
-  const pacienteHistorias = historias.filter((h) => h.id_paciente === selectedPacienteId)
+  const paciente = pacientes.find((p) => p.id === selectedpacienteId)
+  const pacienteHistorias = historias.filter((h) => h.id_paciente === selectedpacienteId)
 
-  if (!selectedPacienteId) {
+  if (!selectedpacienteId) {
     return (
       <ProtectedRoute permissions={["ver_historia_clinica"]}>
         <div className="p-8">
@@ -168,7 +168,7 @@ export default function HistoriaClinicaPage() {
               <p className="text-red-600 font-medium">Error</p>
               <p className="text-red-500 text-sm mt-1">{error}</p>
               <button 
-                onClick={() => { setError(null); loadPacientes() }}
+                onClick={() => { setError(null); loadpacientes() }}
                 className="mt-2 text-sm text-red-600 hover:text-red-800"
                 type="button"
               >
@@ -185,7 +185,7 @@ export default function HistoriaClinicaPage() {
           ) : (
             <div className="mt-8">
               <label className="block text-sm font-semibold text-gray-700 mb-4">
-                Seleccionar Paciente ({pacientes.length} pacientes)
+                Seleccionar paciente ({pacientes.length} pacientes)
               </label>
               {pacientes.length === 0 ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
@@ -197,7 +197,7 @@ export default function HistoriaClinicaPage() {
                   {pacientes.map((p) => (
                     <button
                       key={p.id}
-                      onClick={() => setSelectedPacienteId(p.id)}
+                      onClick={() => setSelectedpacienteId(p.id)}
                       className="p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-[#1a6b32] transition text-left"
                       type="button"
                     >
@@ -230,7 +230,7 @@ export default function HistoriaClinicaPage() {
         <div className="flex items-center space-x-4 mb-8">
           <button
             onClick={() => {
-              setSelectedPacienteId("")
+              setSelectedpacienteId("")
               setSelectedHistoria(null)
               setHistorias([])
               setError(null)
@@ -260,7 +260,7 @@ export default function HistoriaClinicaPage() {
               <button 
                 onClick={() => { 
                   setError(null); 
-                  loadHistorias(parseInt(selectedPacienteId)) 
+                  loadHistorias(parseInt(selectedpacienteId)) 
                 }}
                 className="px-3 py-1 text-sm bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded"
                 type="button"
@@ -396,7 +396,7 @@ export default function HistoriaClinicaPage() {
         {showForm && (
           <HistoriaForm
             historia={selectedHistoria || undefined}
-            pacienteId={selectedPacienteId}
+            pacienteId={selectedpacienteId}
             onSave={handleSaveHistoria}
             onClose={() => {
               setShowForm(false)

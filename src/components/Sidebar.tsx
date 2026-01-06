@@ -24,7 +24,7 @@ const menuItemsByRole: Record<string, Array<{ icon: any; label: string; href: st
   admin: [
     { icon: Home, label: "Inicio", href: "home" },
     { icon: Users, label: "Usuarios", href: "usuarios" },
-    { icon: Users, label: "Pacientes", href: "pacientes" },
+    { icon: Users, label: "pacientes", href: "pacientes" },
     { icon: Calendar, label: "Agenda", href: "agenda" },
     { icon: Stethoscope, label: "Historia Clínica", href: "historia" },
     { icon: FileText, label: "Cotizaciones", href: "cotizaciones" },
@@ -34,7 +34,7 @@ const menuItemsByRole: Record<string, Array<{ icon: any; label: string; href: st
   ],
   secretaria: [
     { icon: Home, label: "Inicio", href: "home" },
-    { icon: Users, label: "Pacientes", href: "pacientes" },
+    { icon: Users, label: "pacientes", href: "pacientes" },
     { icon: Calendar, label: "Agenda", href: "agenda" },
     { icon: FileText, label: "Cotizaciones", href: "cotizaciones" },
     { icon: AlertCircle, label: "Sala de Espera", href: "sala-espera" },
@@ -43,7 +43,7 @@ const menuItemsByRole: Record<string, Array<{ icon: any; label: string; href: st
   ],
   doctor: [
     { icon: Home, label: "Inicio", href: "home" },
-    { icon: Users, label: "Pacientes", href: "pacientes" },
+    { icon: Users, label: "pacientes", href: "pacientes" },
     { icon: Calendar, label: "Agenda", href: "agenda" },
     { icon: Stethoscope, label: "Historia Clínica", href: "historia" },
     { icon: Scissors, label: "Plan Quirúrgico", href: "plan" },

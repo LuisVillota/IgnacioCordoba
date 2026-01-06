@@ -3,7 +3,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
-class Paciente(BaseModel):
+class paciente(BaseModel):
     __tablename__ = "paciente"
     
     documento = Column(String(20), unique=True, nullable=False)
@@ -18,11 +18,11 @@ class Paciente(BaseModel):
     fecha_registro = Column(DateTime, server_default=func.now())
     
     # Relaciones - COMENTA TEMPORALMENTE las relaciones circulares
-    # citas = relationship("Cita", back_populates="paciente", cascade="all, delete-orphan")
+    # citas = relationship("cita", back_populates="paciente", cascade="all, delete-orphan")
     historiales = relationship("HistorialClinico", back_populates="paciente", cascade="all, delete-orphan")
     # planes_quirurgicos = relationship("PlanQuirurgico", back_populates="paciente", cascade="all, delete-orphan")
     # cotizaciones = relationship("Cotizacion", back_populates="paciente", cascade="all, delete-orphan")
     # facturas = relationship("Factura", back_populates="paciente", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Paciente {self.nombre} {self.apellido}>"
+        return f"<paciente {self.nombre} {self.apellido}>"

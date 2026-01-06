@@ -441,7 +441,7 @@ export const PlanQuirurgicoPage: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="text-xl font-semibold text-[#1a6b32]">
-                        {plan.datos_paciente.nombre_completo || 'Paciente sin nombre'}
+                        {plan.datos_paciente.nombre_completo || 'paciente sin nombre'}
                       </h3>
                       <div className="flex flex-wrap gap-3 mt-2">
                         <div className="flex items-center gap-1 text-sm text-gray-600">
@@ -571,7 +571,7 @@ export const PlanQuirurgicoPage: React.FC = () => {
                 <div>
                   <h2 className="text-2xl font-bold mb-2">Plan Quirúrgico Completo</h2>
                   <p className="text-green-100">
-                    Paciente: {planParaVer.datos_paciente.nombre_completo}
+                    paciente: {planParaVer.datos_paciente.nombre_completo}
                   </p>
                   <p className="text-sm text-green-100">
                     Documento: {planParaVer.datos_paciente.identificacion}
@@ -589,11 +589,11 @@ export const PlanQuirurgicoPage: React.FC = () => {
             {/* Contenido - Con scroll */}
             <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto">
               
-              {/* DATOS DEL PACIENTE */}
+              {/* DATOS DEL paciente */}
               <section className="mb-6 p-4 bg-gray-50 rounded-lg border">
                 <h3 className="text-lg font-bold text-[#1a6b32] mb-4 flex items-center gap-2">
                   <User className="w-5 h-5" />
-                  Datos del Paciente
+                  Datos del paciente
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>

@@ -1,12 +1,12 @@
 "use client"
 
 import { X, Clock, Calendar, User, FileText } from "lucide-react"
-import type { Cita } from "../pages/AgendaPage"
-import type { Paciente } from "../pages/AgendaPage"
+import type { cita } from "../pages/AgendaPage"
+import type { paciente } from "../pages/AgendaPage"
 
-interface CitaModalProps {
-  cita: Cita
-  paciente?: Paciente
+interface citaModalProps {
+  cita: cita
+  paciente?: paciente
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
@@ -19,7 +19,7 @@ const tiposDeVisita: Record<string, string> = {
   programacion_quirurgica: "Programación Quirúrgica",
 }
 
-export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: CitaModalProps) {
+export function citaModal({ cita, paciente, onClose, onEdit, onDelete }: citaModalProps) {
   const estadoColors: Record<string, string> = {
     pendiente: "bg-[#669933]/20 text-[#1a6b32]",
     confirmada: "bg-[#99d6e8]/20 text-[#1a6b32]",
@@ -32,7 +32,7 @@ export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: CitaMod
       <div className="bg-white rounded-lg shadow-lg max-w-md w-full">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800">Detalles de la Cita</h2>
+          <h2 className="text-xl font-bold text-gray-800">Detalles de la cita</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
             <X size={20} />
           </button>
@@ -40,12 +40,12 @@ export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: CitaMod
 
         {/* Content */}
         <div className="p-6 space-y-4">
-          {/* Paciente */}
+          {/* paciente */}
           {paciente && (
             <div className="flex items-start space-x-3 pb-4 border-b border-gray-200">
               <User className="text-[#1a6b32] mt-1" size={20} />
               <div>
-                <p className="text-xs font-semibold text-gray-600 uppercase">Paciente</p>
+                <p className="text-xs font-semibold text-gray-600 uppercase">paciente</p>
                 <p className="font-medium text-gray-800">
                   {paciente.nombres} {paciente.apellidos}
                 </p>

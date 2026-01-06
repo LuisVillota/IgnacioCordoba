@@ -101,11 +101,11 @@ export function ProgramacionModal({ programacion, onClose, onEdit }: Programacio
             </span>
           </div>
 
-          {/* Paciente */}
+          {/* paciente */}
           <div className="bg-gray-50 rounded-lg p-4">
             <h4 className="font-medium text-gray-700 mb-2 flex items-center">
               <User size={16} className="mr-2" />
-              Paciente
+              paciente
             </h4>
             <p className="text-gray-800 font-medium">
               {programacion.paciente_nombre} {programacion.paciente_apellido}

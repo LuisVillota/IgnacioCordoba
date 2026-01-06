@@ -6,7 +6,7 @@ import { ProtectedRoute } from "../components/ProtectedRoute"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
 
-interface PacienteSalaEspera {
+interface pacienteSalaEspera {
   id: string
   nombres: string
   apellidos: string
@@ -37,7 +37,7 @@ interface EstadisticasSalaEspera {
 }
 
 export default function SalaEsperaPage() {
-  const [pacientes, setPacientes] = useState<PacienteSalaEspera[]>([])
+  const [pacientes, setpacientes] = useState<pacienteSalaEspera[]>([])
   const [estadisticas, setEstadisticas] = useState<EstadisticasSalaEspera>({
     total: 0,
     pendientes: 0,
@@ -80,7 +80,7 @@ export default function SalaEsperaPage() {
       
       if (response && response.success && response.pacientes) {
         // Mapear la respuesta del backend al formato esperado
-        const pacientesSala: PacienteSalaEspera[] = response.pacientes.map((paciente: any) => ({
+        const pacientesSala: pacienteSalaEspera[] = response.pacientes.map((paciente: any) => ({
           id: paciente.id.toString(),
           nombres: paciente.nombres || paciente.nombre || "",
           apellidos: paciente.apellidos || paciente.apellido || "",
@@ -96,8 +96,8 @@ export default function SalaEsperaPage() {
           sala_espera_id: paciente.sala_espera_id?.toString()
         }))
         
-        console.log(`🏥 Pacientes cargados: ${pacientesSala.length}`)
-        setPacientes(pacientesSala)
+        console.log(`🏥 pacientes cargados: ${pacientesSala.length}`)
+        setpacientes(pacientesSala)
         
         // Cargar estadísticas desde el backend
         await loadEstadisticas()
@@ -129,7 +129,7 @@ export default function SalaEsperaPage() {
       
       let citasHoy: any[] = []
       try {
-        const citasResponse = await api.getCitas(100, 0)
+        const citasResponse = await api.getcitas(100, 0)
         let citasArray: any[] = []
         
         if (Array.isArray(citasResponse)) {
@@ -143,15 +143,15 @@ export default function SalaEsperaPage() {
         citasHoy = citasArray.filter((cita: any) => {
           if (!cita.fecha_hora) return false
           const fechaHoraStr = cita.fecha_hora.toString()
-          let fechaCita = ""
+          let fechacita = ""
           
           if (fechaHoraStr.includes(' ')) {
-            fechaCita = fechaHoraStr.split(' ')[0]
+            fechacita = fechaHoraStr.split(' ')[0]
           } else if (fechaHoraStr.includes('T')) {
-            fechaCita = fechaHoraStr.split('T')[0]
+            fechacita = fechaHoraStr.split('T')[0]
           }
           
-          return fechaCita === hoy
+          return fechacita === hoy
         })
       } catch (error) {
         console.error("Error obteniendo citas:", error)
@@ -160,7 +160,7 @@ export default function SalaEsperaPage() {
       // Obtener pacientes
       let pacientesArray: any[] = []
       try {
-        const pacientesResponse = await api.getPacientes(100, 0)
+        const pacientesResponse = await api.getpacientes(100, 0)
         
         if (Array.isArray(pacientesResponse)) {
           pacientesArray = pacientesResponse
@@ -176,25 +176,25 @@ export default function SalaEsperaPage() {
       }
       
       // Crear lista combinada
-      const pacientesSala: PacienteSalaEspera[] = pacientesArray.map((paciente: any) => {
+      const pacientesSala: pacienteSalaEspera[] = pacientesArray.map((paciente: any) => {
         const citaHoy = citasHoy.find((cita: any) => cita.paciente_id == paciente.id)
         
-        let estadoSala: PacienteSalaEspera["estado_sala"] = "pendiente"
-        let horaCita = ""
-        let fechaCita = ""
-        let tieneCitaHoy = false
+        let estadoSala: pacienteSalaEspera["estado_sala"] = "pendiente"
+        let horacita = ""
+        let fechacita = ""
+        let tienecitaHoy = false
         
         if (citaHoy) {
-          tieneCitaHoy = true
+          tienecitaHoy = true
           
           if (citaHoy.fecha_hora) {
             const fechaHoraStr = citaHoy.fecha_hora.toString()
             if (fechaHoraStr.includes(' ')) {
-              horaCita = fechaHoraStr.split(' ')[1]?.substring(0, 5) || "09:00"
-              fechaCita = fechaHoraStr.split(' ')[0]
+              horacita = fechaHoraStr.split(' ')[1]?.substring(0, 5) || "09:00"
+              fechacita = fechaHoraStr.split(' ')[0]
             } else if (fechaHoraStr.includes('T')) {
-              horaCita = fechaHoraStr.split('T')[1]?.substring(0, 5) || "09:00"
-              fechaCita = fechaHoraStr.split('T')[0]
+              horacita = fechaHoraStr.split('T')[1]?.substring(0, 5) || "09:00"
+              fechacita = fechaHoraStr.split('T')[0]
             }
           }
           
@@ -211,15 +211,15 @@ export default function SalaEsperaPage() {
           telefono: paciente.telefono || "",
           email: paciente.email || "",
           cita_id: citaHoy?.id?.toString(),
-          hora_cita: horaCita,
-          fecha_cita: fechaCita,
+          hora_cita: horacita,
+          fecha_cita: fechacita,
           estado_sala: estadoSala,
           tiempo_espera: 0,
-          tiene_cita_hoy: tieneCitaHoy
+          tiene_cita_hoy: tienecitaHoy
         }
       })
       
-      setPacientes(pacientesSala)
+      setpacientes(pacientesSala)
       calcularEstadisticas(pacientesSala)
       
     } catch (error: any) {
@@ -260,7 +260,7 @@ export default function SalaEsperaPage() {
     }
   }
 
-  const calcularEstadisticas = (pacientesList: PacienteSalaEspera[]) => {
+  const calcularEstadisticas = (pacientesList: pacienteSalaEspera[]) => {
     const stats: EstadisticasSalaEspera = {
       total: pacientesList.length,
       pendientes: pacientesList.filter(p => p.estado_sala === "pendiente").length,
@@ -278,13 +278,13 @@ export default function SalaEsperaPage() {
     setEstadisticas(stats)
   }
 
-  const handleChangeEstado = (pacienteId: string, nuevoEstado: PacienteSalaEspera["estado_sala"]) => {
+  const handleChangeEstado = (pacienteId: string, nuevoEstado: pacienteSalaEspera["estado_sala"]) => {
     console.log(`🔄 Cambiando estado del paciente ${pacienteId} a: ${nuevoEstado}`)
     
     // Encontrar paciente para obtener cita_id
     const paciente = pacientes.find(p => p.id === pacienteId)
     if (!paciente) {
-      console.error(`❌ Paciente ${pacienteId} no encontrado`)
+      console.error(`❌ paciente ${pacienteId} no encontrado`)
       return
     }
     
@@ -295,7 +295,7 @@ export default function SalaEsperaPage() {
       p.id === pacienteId ? { ...p, estado_sala: nuevoEstado } : p
     )
     
-    setPacientes(pacientesActualizados)
+    setpacientes(pacientesActualizados)
     
     // Registrar cambio pendiente con cita_id
     setCambiosPendientes(prev => ({
@@ -413,7 +413,7 @@ export default function SalaEsperaPage() {
     }
   }
 
-  const estadosDisponibles: PacienteSalaEspera["estado_sala"][] = [
+  const estadosDisponibles: pacienteSalaEspera["estado_sala"][] = [
     "pendiente", "llegada", "confirmada", "en_consulta", "completada", "no_asistio"
   ]
 
@@ -494,7 +494,7 @@ export default function SalaEsperaPage() {
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                Todos los Pacientes ({estadisticas.total})
+                Todos los pacientes ({estadisticas.total})
               </button>
               <button
                 onClick={() => setMostrarTodos(false)}
@@ -504,7 +504,7 @@ export default function SalaEsperaPage() {
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                Con Cita Hoy ({estadisticas.con_cita_hoy})
+                Con cita Hoy ({estadisticas.con_cita_hoy})
               </button>
             </div>
           </div>
@@ -523,7 +523,7 @@ export default function SalaEsperaPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-4 text-center">
             <p className="text-3xl font-bold text-gray-800">{estadisticas.total}</p>
-            <p className="text-sm text-gray-600 mt-1">Total Pacientes</p>
+            <p className="text-sm text-gray-600 mt-1">Total pacientes</p>
           </div>
           <div className="bg-yellow-50 rounded-lg shadow-sm border border-yellow-200 p-4 text-center">
             <p className="text-3xl font-bold text-yellow-800">{estadisticas.llegadas}</p>
@@ -544,7 +544,7 @@ export default function SalaEsperaPage() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="flex items-center space-x-2 mb-3">
               <Calendar size={20} className="text-gray-500" />
-              <h3 className="font-semibold text-gray-800">Citas Hoy</h3>
+              <h3 className="font-semibold text-gray-800">citas Hoy</h3>
             </div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-600">Con cita hoy:</span>
@@ -635,7 +635,7 @@ export default function SalaEsperaPage() {
                         {paciente.tiene_cita_hoy && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 self-start md:self-auto">
                             <Calendar size={12} className="mr-1" />
-                            Cita Hoy
+                            cita Hoy
                           </span>
                         )}
                       </div>
@@ -644,7 +644,7 @@ export default function SalaEsperaPage() {
                       </p>
                       {paciente.hora_cita && (
                         <p className="text-xs text-gray-500 mt-1">
-                          Cita: {paciente.hora_cita} {paciente.fecha_cita && `(${paciente.fecha_cita})`} | ID Cita: {paciente.cita_id || "N/A"}
+                          cita: {paciente.hora_cita} {paciente.fecha_cita && `(${paciente.fecha_cita})`} | ID cita: {paciente.cita_id || "N/A"}
                         </p>
                       )}
                       {!paciente.tiene_cita_hoy && (
@@ -678,7 +678,7 @@ export default function SalaEsperaPage() {
                     <div className="flex items-center">
                       <select
                         value={paciente.estado_sala}
-                        onChange={(e) => handleChangeEstado(paciente.id, e.target.value as PacienteSalaEspera["estado_sala"])}
+                        onChange={(e) => handleChangeEstado(paciente.id, e.target.value as pacienteSalaEspera["estado_sala"])}
                         className={`px-4 py-2 rounded-lg text-sm font-semibold transition cursor-pointer ${getEstadoColor(paciente.estado_sala)} w-full md:w-auto`}
                       >
                         {estadosDisponibles.map((estado) => (

@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 from decimal import Decimal
 
 # Sub-schemas para estructura compleja
-class DatosPaciente(BaseModel):
+class Datospaciente(BaseModel):
     id: Optional[str] = None
     identificacion: Optional[str] = None
     edad: Optional[int] = None
@@ -101,7 +101,7 @@ class EsquemaMejorado(BaseModel):
 class PlanQuirurgicoCreate(BaseModel):
     id_paciente: Optional[str] = None
     id_usuario: str = "doctor_001"
-    datos_paciente: DatosPaciente
+    datos_paciente: Datospaciente
     historia_clinica: HistoriaClinica
     cirugias_previas: List[CirugiaPrevia] = []
     conducta_quirurgica: ConductaQuirurgica
@@ -112,7 +112,7 @@ class PlanQuirurgicoCreate(BaseModel):
     esquema_mejorado: Optional[EsquemaMejorado] = None
 
 class PlanQuirurgicoUpdate(BaseModel):
-    datos_paciente: Optional[DatosPaciente] = None
+    datos_paciente: Optional[Datospaciente] = None
     historia_clinica: Optional[HistoriaClinica] = None
     cirugias_previas: Optional[List[CirugiaPrevia]] = None
     conducta_quirurgica: Optional[ConductaQuirurgica] = None

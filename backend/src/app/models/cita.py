@@ -2,16 +2,16 @@ from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
-class EstadoCita(BaseModel):
+class Estadocita(BaseModel):
     __tablename__ = "estado_cita"
     
     nombre = Column(String(50), unique=True, nullable=False)
     color = Column(String(7))  # Código hex
     
     # Relaciones
-    citas = relationship("Cita", back_populates="estado")
+    citas = relationship("cita", back_populates="estado")
 
-class Cita(BaseModel):
+class cita(BaseModel):
     __tablename__ = "cita"
     
     paciente_id = Column(Integer, ForeignKey("paciente.id"), nullable=False)
@@ -23,6 +23,6 @@ class Cita(BaseModel):
     notas = Column(Text)
     
     # Relaciones
-    paciente = relationship("Paciente", back_populates="citas")
+    paciente = relationship("paciente", back_populates="citas")
     usuario = relationship("Usuario", back_populates="citas")
-    estado = relationship("EstadoCita", back_populates="citas")
+    estado = relationship("Estadocita", back_populates="citas")

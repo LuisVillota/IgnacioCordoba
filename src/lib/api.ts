@@ -221,26 +221,26 @@ export const api = {
   // ===== DEBUG =====
   debugUsuariosTabla: () => fetchAPI('/api/debug/usuarios-tabla'),
   
-  // ===== PACIENTES =====
-  getPacientes: (limit?: number, offset?: number) => 
+  // ===== pacienteS =====
+  getpacientes: (limit?: number, offset?: number) => 
     fetchAPI(`/api/pacientes?limit=${limit || 100}&offset=${offset || 0}`),
-  getPaciente: (id: number) => fetchAPI(`/api/pacientes/${id}`),
-  createPaciente: (data: any) => 
+  getpaciente: (id: number) => fetchAPI(`/api/pacientes/${id}`),
+  createpaciente: (data: any) => 
     fetchAPI('/api/pacientes', { 
       method: 'POST', 
       body: JSON.stringify(data) 
     }),
-  updatePaciente: (id: number, data: any) =>
+  updatepaciente: (id: number, data: any) =>
     fetchAPI(`/api/pacientes/${id}`, { 
       method: 'PUT', 
       body: JSON.stringify(data) 
     }),
-  deletePaciente: (id: number) =>
+  deletepaciente: (id: number) =>
     fetchAPI(`/api/pacientes/${id}`, { method: 'DELETE' }),
 
   // AGREGAR ESTO en la sección de pacientes del objeto api:
 
-  getTodosPacientes: async () => {
+  getTodospacientes: async () => {
     try {
       console.log("📥 Llamando a /api/pacientes para obtener todos los pacientes...");
       
@@ -259,22 +259,22 @@ export const api = {
         return [];
       }
     } catch (error) {
-      console.error("❌ Error en getTodosPacientes:", error);
+      console.error("❌ Error en getTodospacientes:", error);
       return [];
     }
   },
 
-  // Asegúrate de que también tengas la función buscarPacientes:
-  buscarPacientes: (query: string, limit: number = 10) =>
+  // Asegúrate de que también tengas la función buscarpacientes:
+  buscarpacientes: (query: string, limit: number = 10) =>
     fetchAPI(`/api/pacientes/buscar?q=${encodeURIComponent(query)}&limit=${limit}`),
 
-  // ===== CITAS =====
-  getCitas: (limit?: number, offset?: number) =>
+  // ===== citaS =====
+  getcitas: (limit?: number, offset?: number) =>
     fetchAPI(`/api/citas?limit=${limit || 100}&offset=${offset || 0}`),
-  getCita: (id: number) => fetchAPI(`/api/citas/${id}`),
-  createCita: (data: any) => fetchAPI('/api/citas', { method: 'POST', body: JSON.stringify(data) }),
-  updateCita: (id: number, data: any) => fetchAPI(`/api/citas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteCita: (id: number) => fetchAPI(`/api/citas/${id}`, { method: 'DELETE' }),
+  getcita: (id: number) => fetchAPI(`/api/citas/${id}`),
+  createcita: (data: any) => fetchAPI('/api/citas', { method: 'POST', body: JSON.stringify(data) }),
+  updatecita: (id: number, data: any) => fetchAPI(`/api/citas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletecita: (id: number) => fetchAPI(`/api/citas/${id}`, { method: 'DELETE' }),
   
   // ===== AGENDA DE PROCEDIMIENTOS =====
   getAgendaProcedimientos: (
@@ -598,7 +598,7 @@ export const api = {
   getHistoriasClinicas: (limit?: number, offset?: number) =>
     fetchAPI(`/api/historias-clinicas?limit=${limit || 100}&offset=${offset || 0}`),
   
-  getHistoriasByPaciente: async (pacienteId: number) => {
+  getHistoriasBypaciente: async (pacienteId: number) => {
     console.log(`📋 Obteniendo historias para paciente ${pacienteId}...`);
     
     try {
@@ -800,7 +800,7 @@ export const api = {
   },
   
   // ===== ESTADOS =====
-  getEstadosCitas: () => fetchAPI('/api/estados/citas'),
+  getEstadoscitas: () => fetchAPI('/api/estados/citas'),
   getEstadosQuirurgicos: () => fetchAPI('/api/estados/quirurgicos'),
   
   // ===== PROCEDIMIENTOS =====
@@ -903,11 +903,11 @@ export const api = {
   async getDashboardStats() {
     try {
       const [pacientesResponse, citasResponse] = await Promise.all([
-        this.getPacientes(10000),
-        this.getCitas(1000)
+        this.getpacientes(10000),
+        this.getcitas(1000)
       ]);
       
-      const totalPacientes = pacientesResponse.pacientes?.length || 0;
+      const totalpacientes = pacientesResponse.pacientes?.length || 0;
       const today = new Date().toISOString().split('T')[0];
       let citasHoy = 0;
       
@@ -927,7 +927,7 @@ export const api = {
       }
       
       return {
-        totalPacientes,
+        totalpacientes,
         citasHoy,
         totalCotizaciones: 0,
         ingresosMes: "$0"
@@ -935,7 +935,7 @@ export const api = {
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
       return {
-        totalPacientes: 0,
+        totalpacientes: 0,
         citasHoy: 0,
         totalCotizaciones: 0,
         ingresosMes: "$0"
@@ -1130,7 +1130,7 @@ export const api = {
     }
   },
 
-  agregarPacienteSalaEspera: async (pacienteId: string, citaId?: string): Promise<any> => {
+  agregarpacienteSalaEspera: async (pacienteId: string, citaId?: string): Promise<any> => {
     try {
       console.log("➕ Agregando paciente a sala de espera:", { pacienteId, citaId });
       
@@ -1168,7 +1168,7 @@ export const api = {
       }
       
       const data = await response.json();
-      console.log("✅ Paciente agregado a sala de espera:", data);
+      console.log("✅ paciente agregado a sala de espera:", data);
       return data;
     } catch (error) {
       console.error('❌ Error agregando paciente:', error);
@@ -1643,13 +1643,13 @@ export const api = {
         
         // Si result ya tiene error, devolverlo
         if (result.error === true) {
-          // 🔴 CORRECCIÓN ESPECÍFICA PARA "Paciente no encontrado"
-          if (result.message && result.message.includes("Paciente no encontrado")) {
-            console.error("🔴 Error específico: Paciente con ID", backendData.paciente_id, "no encontrado en la BD");
+          // 🔴 CORRECCIÓN ESPECÍFICA PARA "paciente no encontrado"
+          if (result.message && result.message.includes("paciente no encontrado")) {
+            console.error("🔴 Error específico: paciente con ID", backendData.paciente_id, "no encontrado en la BD");
             
             // Verificar si el paciente existe realmente
             try {
-              const pacienteCheck = await api.getPaciente(backendData.paciente_id);
+              const pacienteCheck = await api.getpaciente(backendData.paciente_id);
               console.log("🔍 Verificación de paciente:", pacienteCheck);
               
               if (pacienteCheck && pacienteCheck.id) {
@@ -1724,13 +1724,13 @@ export const api = {
         });
         
         if (result && result.error === true) {
-          // 🔴 CORRECCIÓN ESPECÍFICA PARA "Paciente no encontrado"
-          if (result.message && result.message.includes("Paciente no encontrado")) {
-            console.error("🔴 Error específico: Paciente con ID", backendData.paciente_id, "no encontrado en la BD");
+          // 🔴 CORRECCIÓN ESPECÍFICA PARA "paciente no encontrado"
+          if (result.message && result.message.includes("paciente no encontrado")) {
+            console.error("🔴 Error específico: paciente con ID", backendData.paciente_id, "no encontrado en la BD");
             
             // Verificar si el paciente existe realmente
             try {
-              const pacienteCheck = await api.getPaciente(backendData.paciente_id);
+              const pacienteCheck = await api.getpaciente(backendData.paciente_id);
               console.log("🔍 Verificación de paciente:", pacienteCheck);
               
               if (pacienteCheck && pacienteCheck.id) {
@@ -1763,8 +1763,8 @@ export const api = {
     });
   },
 
-  // 🔴 AGREGAR ESTA FUNCIÓN PARA VERIFICAR PACIENTE:
-  verificarPaciente: async (pacienteId: string | number) => {
+  // 🔴 AGREGAR ESTA FUNCIÓN PARA VERIFICAR paciente:
+  verificarpaciente: async (pacienteId: string | number) => {
     try {
       const pacienteIdNum = typeof pacienteId === 'string' ? parseInt(pacienteId) : pacienteId;
       
@@ -1776,7 +1776,7 @@ export const api = {
         };
       }
       
-      const paciente = await api.getPaciente(pacienteIdNum);
+      const paciente = await api.getpaciente(pacienteIdNum);
       
       if (paciente && paciente.id) {
         return {
@@ -1788,7 +1788,7 @@ export const api = {
         return {
           success: false,
           existe: false,
-          message: "Paciente no encontrado"
+          message: "paciente no encontrado"
         };
       }
     } catch (error) {
@@ -1829,29 +1829,29 @@ export const api = {
   },
 
   // ===== Obtener datos completos de un paciente para pre-llenar formulario =====
-  getPacienteCompleto: async (pacienteId: string) => {
+  getpacienteCompleto: async (pacienteId: string) => {
     try {
-      const paciente = await api.getPaciente(parseInt(pacienteId));
+      const paciente = await api.getpaciente(parseInt(pacienteId));
       
       // Obtener historias clínicas del paciente
-      const historias = await api.getHistoriasByPaciente(parseInt(pacienteId));
+      const historias = await api.getHistoriasBypaciente(parseInt(pacienteId));
       
       // Obtener la última cita del paciente
-      const citasResponse = await api.getCitas(100, 0);
-      const citasPaciente = citasResponse.citas?.filter((cita: any) => 
+      const citasResponse = await api.getcitas(100, 0);
+      const citaspaciente = citasResponse.citas?.filter((cita: any) => 
         cita.paciente_id === parseInt(pacienteId)
       ) || [];
       
-      const ultimaCita = citasPaciente.length > 0 ? citasPaciente[0] : null;
+      const ultimacita = citaspaciente.length > 0 ? citaspaciente[0] : null;
       
       return {
         paciente: paciente,
         ultimaHistoria: historias.length > 0 ? historias[0] : null,
-        ultimaCita: ultimaCita
+        ultimacita: ultimacita
       };
     } catch (error) {
       console.error("Error obteniendo datos del paciente:", error);
-      return { paciente: null, ultimaHistoria: null, ultimaCita: null };
+      return { paciente: null, ultimaHistoria: null, ultimacita: null };
     }
   },
 
@@ -1932,29 +1932,29 @@ export const transformBackendToFrontend = {
   }),
 
   // Transformar paciente del backend al formato del frontend
-  paciente: (backendPaciente: any) => ({
-    id: backendPaciente.id?.toString() || '',
-    nombres: backendPaciente.nombre || '',
-    apellidos: backendPaciente.apellido || '',
-    tipo_documento: backendPaciente.tipo_documento || 'CC',
-    documento: backendPaciente.numero_documento || '',
-    fecha_nacimiento: backendPaciente.fecha_nacimiento || '',
-    genero: backendPaciente.genero || '',
-    telefono: backendPaciente.telefono || '',
-    email: backendPaciente.email || '',
-    direccion: backendPaciente.direccion || '',
-    ciudad: backendPaciente.ciudad || 'No especificada',
+  paciente: (backendpaciente: any) => ({
+    id: backendpaciente.id?.toString() || '',
+    nombres: backendpaciente.nombre || '',
+    apellidos: backendpaciente.apellido || '',
+    tipo_documento: backendpaciente.tipo_documento || 'CC',
+    documento: backendpaciente.numero_documento || '',
+    fecha_nacimiento: backendpaciente.fecha_nacimiento || '',
+    genero: backendpaciente.genero || '',
+    telefono: backendpaciente.telefono || '',
+    email: backendpaciente.email || '',
+    direccion: backendpaciente.direccion || '',
+    ciudad: backendpaciente.ciudad || 'No especificada',
     estado_paciente: 'activo',
-    fecha_registro: backendPaciente.fecha_registro || new Date().toISOString(),
+    fecha_registro: backendpaciente.fecha_registro || new Date().toISOString(),
   }),
   
   // Transformar cita del backend al formato del frontend
-  cita: (backendCita: any) => {
+  cita: (backendcita: any) => {
     let fecha = '';
     let hora = '';
     
-    if (backendCita.fecha_hora) {
-      const fechaHoraStr = backendCita.fecha_hora.toString();
+    if (backendcita.fecha_hora) {
+      const fechaHoraStr = backendcita.fecha_hora.toString();
       
       if (fechaHoraStr.includes(' ')) {
         const [datePart, timePart] = fechaHoraStr.split(' ');
@@ -1968,30 +1968,30 @@ export const transformBackendToFrontend = {
     }
     
     let tipoCompleto = "consulta";
-    if (backendCita.tipo === "program_quir") tipoCompleto = "programacion_quirurgica";
-    else if (backendCita.tipo === "consulta") tipoCompleto = "consulta";
-    else if (backendCita.tipo === "control") tipoCompleto = "control";
-    else if (backendCita.tipo === "valoracion") tipoCompleto = "valoracion";
+    if (backendcita.tipo === "program_quir") tipoCompleto = "programacion_quirurgica";
+    else if (backendcita.tipo === "consulta") tipoCompleto = "consulta";
+    else if (backendcita.tipo === "control") tipoCompleto = "control";
+    else if (backendcita.tipo === "valoracion") tipoCompleto = "valoracion";
     
     let estadoNombre = "pendiente";
-    if (backendCita.estado_id === 1) estadoNombre = "pendiente";
-    else if (backendCita.estado_id === 2) estadoNombre = "confirmada";
-    else if (backendCita.estado_id === 3) estadoNombre = "completada";
-    else if (backendCita.estado_id === 4) estadoNombre = "cancelada";
+    if (backendcita.estado_id === 1) estadoNombre = "pendiente";
+    else if (backendcita.estado_id === 2) estadoNombre = "confirmada";
+    else if (backendcita.estado_id === 3) estadoNombre = "completada";
+    else if (backendcita.estado_id === 4) estadoNombre = "cancelada";
     
     return {
-      id: backendCita.id?.toString() || '',
-      id_paciente: backendCita.paciente_id?.toString() || '',
-      id_usuario: backendCita.usuario_id?.toString() || '',
+      id: backendcita.id?.toString() || '',
+      id_paciente: backendcita.paciente_id?.toString() || '',
+      id_usuario: backendcita.usuario_id?.toString() || '',
       tipo_cita: tipoCompleto as "consulta" | "control" | "valoracion" | "programacion_quirurgica",
       fecha: fecha || '',
       hora: hora || '09:00',
-      duracion: backendCita.duracion_minutos || 30,
+      duracion: backendcita.duracion_minutos || 30,
       estado: estadoNombre as "pendiente" | "confirmada" | "completada" | "cancelada",
-      observaciones: backendCita.notas || '',
-      paciente_nombre: backendCita.paciente_nombre || '',
-      paciente_apellido: backendCita.paciente_apellido || '',
-      doctor_nombre: backendCita.doctor_nombre || '',
+      observaciones: backendcita.notas || '',
+      paciente_nombre: backendcita.paciente_nombre || '',
+      paciente_apellido: backendcita.paciente_apellido || '',
+      doctor_nombre: backendcita.doctor_nombre || '',
     };
   },
   
@@ -2178,20 +2178,20 @@ export const transformBackendToFrontend = {
   }),
 
   // Transformar paciente de sala de espera del backend al formato del frontend
-  pacienteSalaEspera: (backendPaciente: any) => ({
-    id: backendPaciente.id?.toString() || '',
-    nombres: backendPaciente.nombres || backendPaciente.nombre || '',
-    apellidos: backendPaciente.apellidos || backendPaciente.apellido || '',
-    documento: backendPaciente.documento || backendPaciente.numero_documento || '',
-    telefono: backendPaciente.telefono || '',
-    email: backendPaciente.email || '',
-    cita_id: backendPaciente.cita_id?.toString(),
-    hora_cita: backendPaciente.hora_cita || '',
-    fecha_cita: backendPaciente.fecha_cita || '',
-    estado_sala: backendPaciente.estado_sala || 'pendiente',
-    tiempo_espera: backendPaciente.tiempo_espera || 0,
-    tiene_cita_hoy: backendPaciente.tiene_cita_hoy || false,
-    sala_espera_id: backendPaciente.sala_espera_id?.toString()
+  pacienteSalaEspera: (backendpaciente: any) => ({
+    id: backendpaciente.id?.toString() || '',
+    nombres: backendpaciente.nombres || backendpaciente.nombre || '',
+    apellidos: backendpaciente.apellidos || backendpaciente.apellido || '',
+    documento: backendpaciente.documento || backendpaciente.numero_documento || '',
+    telefono: backendpaciente.telefono || '',
+    email: backendpaciente.email || '',
+    cita_id: backendpaciente.cita_id?.toString(),
+    hora_cita: backendpaciente.hora_cita || '',
+    fecha_cita: backendpaciente.fecha_cita || '',
+    estado_sala: backendpaciente.estado_sala || 'pendiente',
+    tiempo_espera: backendpaciente.tiempo_espera || 0,
+    tiene_cita_hoy: backendpaciente.tiene_cita_hoy || false,
+    sala_espera_id: backendpaciente.sala_espera_id?.toString()
   }),
   
   // Función completa para transformBackendToFrontend.planQuirurgico
@@ -2235,10 +2235,10 @@ export const transformBackendToFrontend = {
     const paciente_id = backendPlan.paciente_id ? String(backendPlan.paciente_id) : '';
     const usuario_id = backendPlan.usuario_id ? String(backendPlan.usuario_id) : '1';
     
-    // 🔴 DATOS PERSONALES - PRIORIZAR JOIN CON PACIENTE
+    // 🔴 DATOS PERSONALES - PRIORIZAR JOIN CON paciente
     const nombre_completo = backendPlan.nombre_completo_paciente || 
                           backendPlan.nombre_completo || 
-                          'Paciente no identificado';
+                          'paciente no identificado';
     
     const identificacion = backendPlan.paciente_documento || 
                           backendPlan.identificacion || 
@@ -2380,7 +2380,7 @@ export const transformBackendToFrontend = {
       fecha_creacion: backendPlan.fecha_creacion || new Date().toISOString(),
       fecha_modificacion: backendPlan.fecha_modificacion || backendPlan.fecha_creacion || '',
       
-      // DATOS PACIENTE
+      // DATOS paciente
       datos_paciente: {
         id: paciente_id,
         identificacion: identificacion,
@@ -2574,9 +2574,9 @@ export const transformBackendToFrontend = {
     return backendData;
   },
 
-  // Transformación inversa - Paciente
-  pacienteToBackend: (frontendPaciente: any) => {
-    let genero = frontendPaciente.genero;
+  // Transformación inversa - paciente
+  pacienteToBackend: (frontendpaciente: any) => {
+    let genero = frontendpaciente.genero;
     if (genero) {
       const lowerGenero = genero.toLowerCase();
       if (lowerGenero.includes('masc') || lowerGenero === 'm' || lowerGenero === 'masculino') {
@@ -2591,16 +2591,16 @@ export const transformBackendToFrontend = {
     }
 
     return {
-      numero_documento: frontendPaciente.documento,
-      tipo_documento: frontendPaciente.tipo_documento,
-      nombre: frontendPaciente.nombres,
-      apellido: frontendPaciente.apellidos,
-      fecha_nacimiento: frontendPaciente.fecha_nacimiento,
+      numero_documento: frontendpaciente.documento,
+      tipo_documento: frontendpaciente.tipo_documento,
+      nombre: frontendpaciente.nombres,
+      apellido: frontendpaciente.apellidos,
+      fecha_nacimiento: frontendpaciente.fecha_nacimiento,
       genero: genero,
-      telefono: frontendPaciente.telefono,
-      email: frontendPaciente.email,
-      direccion: frontendPaciente.direccion,
-      ciudad: frontendPaciente.ciudad,
+      telefono: frontendpaciente.telefono,
+      email: frontendpaciente.email,
+      direccion: frontendpaciente.direccion,
+      ciudad: frontendpaciente.ciudad,
     };
   },
   
@@ -2786,7 +2786,7 @@ export const transformBackendToFrontend = {
       numero_items: items.length,
       numero_servicios: servicios_incluidos.length
     });
-    console.log("🚫 Campos EXPLÍCITAMENTE excluidos: 'total', 'id' (en body)");
+    console.log("🚫 Campos EXPLÍcitaMENTE excluidos: 'total', 'id' (en body)");
     
     return data;
   },
@@ -2809,11 +2809,11 @@ export const transformBackendToFrontend = {
   },
 
   // Transformación inversa - Sala de Espera
-  salaEsperaToBackend: (frontendPaciente: any) => {
+  salaEsperaToBackend: (frontendpaciente: any) => {
     return {
-      paciente_id: parseInt(frontendPaciente.id),
-      estado: frontendPaciente.estado_sala,
-      cita_id: frontendPaciente.cita_id ? parseInt(frontendPaciente.cita_id) : undefined
+      paciente_id: parseInt(frontendpaciente.id),
+      estado: frontendpaciente.estado_sala,
+      cita_id: frontendpaciente.cita_id ? parseInt(frontendpaciente.cita_id) : undefined
     };
   },
 

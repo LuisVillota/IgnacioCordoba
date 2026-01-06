@@ -31,5 +31,5 @@ class AgendaProcedimientos(Base):
     observaciones = Column(Text)
     
     # Relaciones (si necesitas acceder a los datos relacionados)
-    paciente = relationship("Paciente", back_populates="procedimientos_agendados")
+    paciente = relationship("paciente", back_populates="procedimientos_agendados")
     procedimiento = relationship("Procedimiento", back_populates="agendas")

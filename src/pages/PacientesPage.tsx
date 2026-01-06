@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react"
 import { Search, Plus, Edit2, Eye, Loader2, RefreshCw } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
-import { PacienteForm } from "../components/PacienteForm"
-import { PacienteModal } from "../components/PacienteModal"
+import { pacienteForm } from "../components/pacienteForm"
+import { pacienteModal } from "../components/pacienteModal"
 import { useAuth } from "../hooks/useAuth"
 import { hasAnyPermission } from "../types/permissions"
 import { api, transformBackendToFrontend, handleApiError } from "../lib/api"
 
-export interface Paciente {
+export interface paciente {
   id: string
   nombres: string
   apellidos: string
@@ -26,11 +26,11 @@ export interface Paciente {
 }
 
 // Función de transformación local para asegurar el tipo correcto
-const transformPacienteLocal = (backendPaciente: any): Paciente => {
+const transformpacienteLocal = (backendpaciente: any): paciente => {
   // Determinar el estado del paciente
   let estado_paciente: "activo" | "inactivo" = "activo";
-  if (backendPaciente.estado !== undefined) {
-    const estado = String(backendPaciente.estado).toLowerCase();
+  if (backendpaciente.estado !== undefined) {
+    const estado = String(backendpaciente.estado).toLowerCase();
     if (estado === "inactivo" || estado === "0" || estado === "false") {
       estado_paciente = "inactivo";
     } else {
@@ -39,55 +39,55 @@ const transformPacienteLocal = (backendPaciente: any): Paciente => {
   }
   
   return {
-    id: backendPaciente.id?.toString() || '',
-    nombres: backendPaciente.nombre || backendPaciente.nombres || '',
-    apellidos: backendPaciente.apellido || backendPaciente.apellidos || '',
-    tipo_documento: backendPaciente.tipo_documento || 'CC',
-    documento: backendPaciente.numero_documento || backendPaciente.documento || '',
-    fecha_nacimiento: backendPaciente.fecha_nacimiento || '',
-    genero: backendPaciente.genero || '',
-    telefono: backendPaciente.telefono || '',
-    email: backendPaciente.email || '',
-    direccion: backendPaciente.direccion || '',
-    ciudad: backendPaciente.ciudad || 'No especificada',
+    id: backendpaciente.id?.toString() || '',
+    nombres: backendpaciente.nombre || backendpaciente.nombres || '',
+    apellidos: backendpaciente.apellido || backendpaciente.apellidos || '',
+    tipo_documento: backendpaciente.tipo_documento || 'CC',
+    documento: backendpaciente.numero_documento || backendpaciente.documento || '',
+    fecha_nacimiento: backendpaciente.fecha_nacimiento || '',
+    genero: backendpaciente.genero || '',
+    telefono: backendpaciente.telefono || '',
+    email: backendpaciente.email || '',
+    direccion: backendpaciente.direccion || '',
+    ciudad: backendpaciente.ciudad || 'No especificada',
     estado_paciente: estado_paciente,
-    fecha_registro: backendPaciente.fecha_registro || backendPaciente.created_at || new Date().toISOString(),
+    fecha_registro: backendpaciente.fecha_registro || backendpaciente.created_at || new Date().toISOString(),
   };
 }
 
-export default function PacientesPage() {
+export default function pacientesPage() {
   const { user } = useAuth()
-  const [pacientes, setPacientes] = useState<Paciente[]>([])
+  const [pacientes, setpacientes] = useState<paciente[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [showForm, setShowForm] = useState(false)
-  const [selectedPaciente, setSelectedPaciente] = useState<Paciente | null>(null)
+  const [selectedpaciente, setSelectedpaciente] = useState<paciente | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
-    fetchPacientes()
+    fetchpacientes()
   }, [])
 
   useEffect(() => {
-    if (selectedPaciente) {
-      const pacienteActualizado = pacientes.find(p => p.id === selectedPaciente.id)
-      if (pacienteActualizado && JSON.stringify(pacienteActualizado) !== JSON.stringify(selectedPaciente)) {
-        setSelectedPaciente(pacienteActualizado)
+    if (selectedpaciente) {
+      const pacienteActualizado = pacientes.find(p => p.id === selectedpaciente.id)
+      if (pacienteActualizado && JSON.stringify(pacienteActualizado) !== JSON.stringify(selectedpaciente)) {
+        setSelectedpaciente(pacienteActualizado)
       }
     }
-  }, [pacientes, selectedPaciente])
+  }, [pacientes, selectedpaciente])
 
-  const fetchPacientes = async () => {
+  const fetchpacientes = async () => {
     try {
       setLoading(true)
       setError(null)
-      const response = await api.getPacientes(100)
+      const response = await api.getpacientes(100)
       
       // Usar la transformación local en lugar de la de api.ts
-      const transformedPacientes = response.pacientes.map(transformPacienteLocal)
-      setPacientes(transformedPacientes)
+      const transformedpacientes = response.pacientes.map(transformpacienteLocal)
+      setpacientes(transformedpacientes)
     } catch (err: any) {
       setError(handleApiError(err))
     } finally {
@@ -96,14 +96,14 @@ export default function PacientesPage() {
     }
   }
 
-  const filteredPacientes = pacientes.filter(
+  const filteredpacientes = pacientes.filter(
     (p) =>
       p.nombres.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.apellidos.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.documento.includes(searchTerm),
   )
 
-  const handleSavePaciente = async (data: Omit<Paciente, "id" | "fecha_registro">) => {
+  const handleSavepaciente = async (data: Omit<paciente, "id" | "fecha_registro">) => {
     try {
       const backendData = {
         numero_documento: data.documento,
@@ -119,33 +119,33 @@ export default function PacientesPage() {
       }
 
       if (editingId) {
-        await api.updatePaciente(parseInt(editingId), backendData)
+        await api.updatepaciente(parseInt(editingId), backendData)
         
-        const pacienteActualizado: Paciente = {
+        const pacienteActualizado: paciente = {
           ...data,
           id: editingId,
           fecha_registro: pacientes.find(p => p.id === editingId)?.fecha_registro || "",
           estado_paciente: data.estado_paciente // Asegurar que mantiene el tipo correcto
         }
 
-        const nuevosPacientes = pacientes.map(p => 
+        const nuevospacientes = pacientes.map(p => 
           p.id === editingId ? pacienteActualizado : p
         )
-        setPacientes(nuevosPacientes)
+        setpacientes(nuevospacientes)
 
-        if (selectedPaciente && selectedPaciente.id === editingId) {
-          setSelectedPaciente(pacienteActualizado)
+        if (selectedpaciente && selectedpaciente.id === editingId) {
+          setSelectedpaciente(pacienteActualizado)
         }
         
         setEditingId(null)
       } else {
-        const response = await api.createPaciente(backendData)
+        const response = await api.createpaciente(backendData)
         
         if (response.success) {
-          const newPacienteResponse = await api.getPaciente(response.paciente_id)
-          const newPaciente = transformPacienteLocal(newPacienteResponse)
+          const newpacienteResponse = await api.getpaciente(response.paciente_id)
+          const newpaciente = transformpacienteLocal(newpacienteResponse)
           
-          setPacientes([newPaciente, ...pacientes])
+          setpacientes([newpaciente, ...pacientes])
         }
       }
       setShowForm(false)
@@ -154,15 +154,15 @@ export default function PacientesPage() {
     }
   }
 
-  const handleEdit = (paciente: Paciente) => {
+  const handleEdit = (paciente: paciente) => {
     setEditingId(paciente.id)
-    setSelectedPaciente(paciente)
+    setSelectedpaciente(paciente)
     setShowForm(true)
   }
 
   const handleRefresh = () => {
     setRefreshing(true)
-    fetchPacientes()
+    fetchpacientes()
   }
 
   if (!user || !hasAnyPermission(user.rol, ["ver_pacientes"])) {
@@ -173,7 +173,7 @@ export default function PacientesPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Gestión de Pacientes</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Gestión de pacientes</h1>
           <p className="text-gray-600 mt-2">
             {loading ? "Cargando..." : `${pacientes.length} pacientes registrados`}
           </p>
@@ -193,13 +193,13 @@ export default function PacientesPage() {
             <button
               onClick={() => {
                 setEditingId(null)
-                setSelectedPaciente(null)
+                setSelectedpaciente(null)
                 setShowForm(true)
               }}
               className="flex items-center space-x-2 bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg transition"
             >
               <Plus size={20} />
-              <span>Nuevo Paciente</span>
+              <span>Nuevo paciente</span>
             </button>
           </ProtectedRoute>
         </div>
@@ -209,7 +209,7 @@ export default function PacientesPage() {
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-600">Error: {error}</p>
           <button 
-            onClick={fetchPacientes}
+            onClick={fetchpacientes}
             className="mt-2 text-sm text-red-700 underline"
           >
             Intentar nuevamente
@@ -254,14 +254,14 @@ export default function PacientesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredPacientes.length === 0 ? (
+                {filteredpacientes.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                       {searchTerm ? "No se encontraron pacientes con ese criterio" : "No hay pacientes registrados"}
                     </td>
                   </tr>
                 ) : (
-                  filteredPacientes.map((paciente) => (
+                  filteredpacientes.map((paciente) => (
                     <tr key={paciente.id} className="hover:bg-gray-50 transition">
                       <td className="px-6 py-4 text-sm">
                         <p className="font-medium text-gray-800">
@@ -290,7 +290,7 @@ export default function PacientesPage() {
                       <td className="px-6 py-4 text-sm">
                         <div className="flex items-center justify-center space-x-2">
                           <button
-                            onClick={() => setSelectedPaciente(paciente)}
+                            onClick={() => setSelectedpaciente(paciente)}
                             className="p-2 text-[#1a6b32] hover:bg-blue-50 rounded-lg transition"
                             title="Ver detalles"
                           >
@@ -317,9 +317,9 @@ export default function PacientesPage() {
       )}
 
       {showForm && (
-        <PacienteForm
-          paciente={selectedPaciente || undefined}
-          onSave={handleSavePaciente}
+        <pacienteForm
+          paciente={selectedpaciente || undefined}
+          onSave={handleSavepaciente}
           onClose={() => {
             setShowForm(false)
             setEditingId(null)
@@ -327,8 +327,8 @@ export default function PacientesPage() {
         />
       )}
 
-      {selectedPaciente && !showForm && (
-        <PacienteModal paciente={selectedPaciente} onClose={() => setSelectedPaciente(null)} />
+      {selectedpaciente && !showForm && (
+        <pacienteModal paciente={selectedpaciente} onClose={() => setSelectedpaciente(null)} />
       )}
     </div>
   )

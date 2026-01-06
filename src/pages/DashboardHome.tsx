@@ -12,19 +12,19 @@ interface DashboardHomeProps {
 }
 
 interface DashboardStats {
-  totalPacientes: number
+  totalpacientes: number
   citasHoy: number
 }
 
 export default function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
   const [stats, setStats] = useState<DashboardStats>({
-    totalPacientes: 0,
+    totalpacientes: 0,
     citasHoy: 0
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [citasRecientes, setCitasRecientes] = useState<any[]>([])
+  const [citasRecientes, setcitasRecientes] = useState<any[]>([])
 
   useEffect(() => {
     fetchDashboardStats()
@@ -35,14 +35,14 @@ export default function DashboardHome({ user, hasPermission }: DashboardHomeProp
       if (!refreshing) setLoading(true)
       setError(null)
       
-      const pacientesResponse = await api.getPacientes(10000)
-      const totalPacientes = pacientesResponse.pacientes?.length || 0
+      const pacientesResponse = await api.getpacientes(10000)
+      const totalpacientes = pacientesResponse.pacientes?.length || 0
       
       let citasHoy = 0
       let citasData: any[] = []
       
       try {
-        const citasResponse = await api.getCitas(1000)
+        const citasResponse = await api.getcitas(1000)
         
         if (Array.isArray(citasResponse)) {
           citasData = citasResponse
@@ -79,14 +79,14 @@ export default function DashboardHome({ user, hasPermission }: DashboardHomeProp
             })
             .slice(0, 3)
         
-          setCitasRecientes(citasRecientesFiltradas)
+          setcitasRecientes(citasRecientesFiltradas)
         }
       } catch (citasError) {
         citasHoy = 0
       }
       
       setStats({
-        totalPacientes,
+        totalpacientes,
         citasHoy
       })
       
@@ -94,7 +94,7 @@ export default function DashboardHome({ user, hasPermission }: DashboardHomeProp
       setError('Error al cargar las estadísticas del dashboard')
       
       setStats({
-        totalPacientes: 0,
+        totalpacientes: 0,
         citasHoy: 0
       })
     } finally {
@@ -111,14 +111,14 @@ export default function DashboardHome({ user, hasPermission }: DashboardHomeProp
   const statCards = [
     { 
       icon: Users, 
-      label: "Total Pacientes", 
-      value: stats.totalPacientes.toString(), 
+      label: "Total pacientes", 
+      value: stats.totalpacientes.toString(), 
       color: "bg-[#99d6e8]", 
       permission: "ver_pacientes" as Permission
     },
     { 
       icon: Calendar, 
-      label: "Citas Hoy", 
+      label: "citas Hoy", 
       value: stats.citasHoy.toString(), 
       color: "bg-[#669933]", 
       permission: "ver_agenda" as Permission
@@ -192,7 +192,7 @@ export default function DashboardHome({ user, hasPermission }: DashboardHomeProp
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
           <h2 className="text-base md:text-lg font-bold text-gray-800 mb-4 flex items-center">
             <Calendar className="mr-2 text-[#669933]" size={18} />
-            Citas Recientes
+            citas Recientes
           </h2>
           <div className="space-y-3">
             {citasRecientes.length > 0 ? (

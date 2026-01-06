@@ -29,7 +29,7 @@ interface AdicionalCatalogo {
   precio: number;
 }
 
-interface Paciente {
+interface paciente {
   id: number;
   nombre: string;
   apellido: string;
@@ -69,8 +69,8 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
   const [procedimientos, setProcedimientos] = useState<ProcedimientoCatalogo[]>([])
   const [adicionales, setAdicionales] = useState<AdicionalCatalogo[]>([])
   const [otrosAdicionales, setOtrosAdicionales] = useState<AdicionalCatalogo[]>([])
-  const [pacientes, setPacientes] = useState<Paciente[]>([])
-  const [pacienteSeleccionado, setPacienteSeleccionado] = useState<Paciente | null>(null)
+  const [pacientes, setpacientes] = useState<paciente[]>([])
+  const [pacienteSeleccionado, setpacienteSeleccionado] = useState<paciente | null>(null)
   const [loading, setLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -147,15 +147,15 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
       const paciente = pacientes.find(p => p.id.toString() === pacienteIdToSearch);
       
       if (paciente) {
-        setPacienteSeleccionado(paciente);
+        setpacienteSeleccionado(paciente);
         // IMPORTANTE: Actualizar el formData con el paciente_id correcto
         setFormData(prev => ({
           ...prev,
           paciente_id: pacienteIdToSearch
         }));
-        console.log("✅ Paciente cargado para edición:", paciente);
+        console.log("✅ paciente cargado para edición:", paciente);
       } else {
-        console.warn("⚠️ Paciente no encontrado en la lista:", {
+        console.warn("⚠️ paciente no encontrado en la lista:", {
           pacienteIdBuscado: pacienteIdToSearch,
           pacientesDisponibles: pacientes.map(p => ({ id: p.id, nombre: p.nombre }))
         });
@@ -178,8 +178,8 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
       const oaRes = await api.getOtrosAdicionales()
       setOtrosAdicionales(oaRes.otros_adicionales || [])
       
-      const pacRes = await api.getPacientes(100)
-      setPacientes(pacRes.pacientes || [])
+      const pacRes = await api.getpacientes(100)
+      setpacientes(pacRes.pacientes || [])
       
     } catch (error) {
       console.error("Error cargando datos:", error)
@@ -279,25 +279,25 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
     })
   }
 
-  const handlePacienteChange = (pacienteId: string) => {
+  const handlepacienteChange = (pacienteId: string) => {
     setFormData(prev => ({ ...prev, paciente_id: pacienteId }));
     
     if (pacienteId) {
       const paciente = pacientes.find(p => p.id.toString() === pacienteId);
-      setPacienteSeleccionado(paciente || null);
+      setpacienteSeleccionado(paciente || null);
       // Limpiar error al seleccionar paciente
       if (errors.paciente_id) {
         setErrors(prev => ({ ...prev, paciente_id: "" }));
       }
     } else {
-      setPacienteSeleccionado(null);
+      setpacienteSeleccionado(null);
     }
   }
 
-  const handleCambiarPaciente = () => {
+  const handleCambiarpaciente = () => {
     setFormData(prev => ({ ...prev, paciente_id: "" }));
-    setPacienteSeleccionado(null);
-    console.log("🔄 Paciente reseteado para selección nueva");
+    setpacienteSeleccionado(null);
+    console.log("🔄 paciente reseteado para selección nueva");
   };
 
   // CORRECCIÓN: Validación mejorada para edición
@@ -473,7 +473,7 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
   const itemsAdicionales = formData.items.filter(item => item.tipo === "adicional")
   const itemsOtrosAdicionales = formData.items.filter(item => item.tipo === "otroAdicional")
 
-  const mostrarInfoPaciente = pacienteSeleccionado || 
+  const mostrarInfopaciente = pacienteSeleccionado || 
     (cotizacion?.paciente_id && pacientes.find(p => p.id.toString() === cotizacion.paciente_id.toString()));
 
   if (loading && !cotizacion) {
@@ -492,11 +492,11 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
           <div>
             <h2 className="text-xl font-bold text-gray-800">{cotizacion ? "Editar Cotización" : "Nueva Cotización"}</h2>
-            {mostrarInfoPaciente && (
+            {mostrarInfopaciente && (
               <p className="text-sm text-gray-600 mt-1">
-                Paciente: <span className="font-semibold">{mostrarInfoPaciente.nombre} {mostrarInfoPaciente.apellido}</span>
-                {mostrarInfoPaciente.numero_documento && (
-                  <span className="ml-2">(Documento: {mostrarInfoPaciente.numero_documento})</span>
+                paciente: <span className="font-semibold">{mostrarInfopaciente.nombre} {mostrarInfopaciente.apellido}</span>
+                {mostrarInfopaciente.numero_documento && (
+                  <span className="ml-2">(Documento: {mostrarInfopaciente.numero_documento})</span>
                 )}
               </p>
             )}
@@ -513,13 +513,13 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
 
         <form ref={formRef} onSubmit={handleSubmit} className="p-6 space-y-6">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Paciente *</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">paciente *</label>
             
             {/* Siempre mostrar selector, pero en modo edición mostrar info adicional */}
             <div className="space-y-2">
               <select
                 value={formData.paciente_id}
-                onChange={(e) => handlePacienteChange(e.target.value)}
+                onChange={(e) => handlepacienteChange(e.target.value)}
                 disabled={loading || isSubmitting}
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${
                   errors.paciente_id ? "border-red-500" : "border-gray-300"
@@ -553,7 +553,7 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
                     {cotizacion?.id && (
                       <button
                         type="button"
-                        onClick={handleCambiarPaciente}
+                        onClick={handleCambiarpaciente}
                         className="text-sm text-red-600 hover:text-red-800"
                         title="Cambiar paciente"
                       >

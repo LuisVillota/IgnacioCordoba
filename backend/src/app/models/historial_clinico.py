@@ -21,7 +21,7 @@ class HistorialClinico(BaseModel):
     fotos = Column(Text)  # URLs separadas por comas
     
     # Relación con paciente
-    paciente = relationship("Paciente", back_populates="historiales")
+    paciente = relationship("paciente", back_populates="historiales")
     
     def __repr__(self):
-        return f"<HistorialClinico {self.id} - Paciente {self.paciente_id}>"
+        return f"<HistorialClinico {self.id} - paciente {self.paciente_id}>"
