@@ -3,7 +3,7 @@
 import type React from "react";
 import { useState } from "react";
 import { X } from "lucide-react";
-import type { cita } from "../pages/AgendaPage";
+import type { Cita } from "../types/cita";
 import DatePickerColombia from "../components/DatePickerColombia";
 
 interface paciente {
@@ -14,9 +14,9 @@ interface paciente {
 }
 
 interface citaFormProps {
-  cita?: cita;
+  cita?: Cita;
   pacientes?: paciente[];
-  onSave: (data: Omit<cita, "id">) => void;
+  onSave: (data: Omit<Cita, "id">) => void;
   onClose: () => void;
 }
 
