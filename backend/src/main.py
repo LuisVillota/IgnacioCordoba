@@ -36,8 +36,8 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_DIR, "historias"), exist_ok=True)
 
-FRONTEND_URL = "http://localhost:3000"
-BACKEND_URL = "http://localhost:8000"
+FRONTEND_URL = "https://drhernanignaciocordoba.me"
+BACKEND_URL = "https://ignaciocordoba-backend.onrender.com"
 PROJECT_NAME = "Consultorio Dr. Ignacio Córdoba"
 VERSION = "1.0.0"
 API_V1_STR = "/api"

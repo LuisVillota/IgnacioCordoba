@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = "https://ignaciocordoba-backend.onrender.com/api";
 
 // Variable global para rastrear llamadas en progreso y prevenir duplicados
 const callsInProgress = new Set<string>();
