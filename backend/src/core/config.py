@@ -4,23 +4,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings:
-    # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "mysql+pymysql://root:@localhost:3306/u997398721_consultorio_db")
-    
-    # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "2416c33e23e7f87b2feb10bcdb4213824622dcf0bfb97168397ad1d9e365b8b4")
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_HOST = os.getenv("DB_HOST")
+    DB_PORT = os.getenv("DB_PORT")
+    DB_NAME = os.getenv("DB_NAME")
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL",
+        f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
+    SECRET_KEY: str = os.getenv("SECRET_KEY")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-    
-    # Application
     PROJECT_NAME: str = "Consultorio Dr. Ignacio Córdoba"
     VERSION: str = "1.0.0"
-    DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
+    DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
     API_V1_STR: str = "/api/v1"
-    
-    # CORS
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL")
+    BACKEND_URL: str = os.getenv("BACKEND_URL")
 
 settings = Settings()
-
