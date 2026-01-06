@@ -104,9 +104,8 @@ export function CitaForm({ cita, pacientes = [], onSave, onClose }: citaFormProp
         fecha: formatDateForDB(formData.fecha),
         hora: formData.hora + ":00",
         duracion: Number(formData.duracion),
-        observaciones: formData.observaciones || "", // ✅ nunca undefined
+        observaciones: formData.observaciones || "", 
       };
-
       onSave(dataToSend);
     }
   };
