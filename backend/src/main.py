@@ -13,6 +13,10 @@ from typing import Union
 from pydantic import validator
 import json 
 
+if os.getenv("ENV") != "production":
+    from dotenv import load_dotenv
+    load_dotenv()
+
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_DIR, "historias"), exist_ok=True)
@@ -31,7 +35,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL, "http://localhost:3000", "http://localhost:3001"],
+    allow_origins=[
+        "https://drhernanignaciocordoba.me",
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -469,13 +476,14 @@ def debug_endpoints():
 @app.get("/api/test-frontend")
 def test_frontend():
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -575,13 +583,14 @@ def create_usuario(usuario: UsuarioCreate):
         import hashlib
         password_hash = hashlib.sha256(usuario.password.encode()).hexdigest()
         
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -629,13 +638,14 @@ def update_usuario(usuario_id: int, usuario: UsuarioUpdate):
     try:
         import hashlib
         
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -702,13 +712,14 @@ def update_usuario(usuario_id: int, usuario: UsuarioUpdate):
 @app.delete("/api/usuarios/{usuario_id}", response_model=dict)
 def delete_usuario(usuario_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -750,13 +761,14 @@ def delete_usuario(usuario_id: int):
 @app.get("/api/usuarios")
 def get_usuarios():
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -774,13 +786,14 @@ def get_usuarios():
 @app.get("/api/usuarios/{usuario_id}")
 def get_usuario(usuario_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -805,13 +818,14 @@ def login(username: str, password: str):
         import hashlib
         password_hash = hashlib.sha256(password.encode()).hexdigest()
         
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -842,13 +856,14 @@ def login(username: str, password: str):
 @app.get("/api/pacientes", response_model=dict)
 def get_pacientes(limit: int = 100, offset: int = 0):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -874,13 +889,14 @@ def get_pacientes(limit: int = 100, offset: int = 0):
 @app.get("/api/pacientes/{paciente_id}", response_model=dict)
 def get_paciente(paciente_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -897,11 +913,11 @@ def get_paciente(paciente_id: int):
 @app.post("/api/pacientes", response_model=dict)
 def create_paciente(paciente: PacienteCreate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -950,11 +966,11 @@ def create_paciente(paciente: PacienteCreate):
 @app.put("/api/pacientes/{paciente_id}", response_model=dict)
 def update_paciente(paciente_id: int, paciente: PacienteUpdate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -1014,13 +1030,14 @@ def update_paciente(paciente_id: int, paciente: PacienteUpdate):
 @app.delete("/api/pacientes/{paciente_id}", response_model=dict)
 def delete_paciente(paciente_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1063,13 +1080,14 @@ def delete_paciente(paciente_id: int):
 @app.get("/api/citas")
 def get_citas(limit: int = 50, offset: int = 0):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1095,13 +1113,14 @@ def get_citas(limit: int = 50, offset: int = 0):
 @app.get("/api/citas/{cita_id}")
 def get_cita(cita_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1136,11 +1155,11 @@ def create_cita(cita: CitaCreate):
             fecha_hora_limpia += ":00"
         fecha_parseada = datetime.fromisoformat(fecha_hora_limpia)
         
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -1217,13 +1236,14 @@ def create_cita(cita: CitaCreate):
 @app.put("/api/citas/{cita_id}", response_model=dict)
 def update_cita(cita_id: int, cita: CitaUpdate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1266,11 +1286,11 @@ def update_cita(cita_id: int, cita: CitaUpdate):
 @app.delete("/api/citas/{cita_id}", response_model=MessageResponse)
 def delete_cita(cita_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -1299,13 +1319,14 @@ def delete_cita(cita_id: int):
 @app.get("/api/estados/citas")
 def get_estados_citas():
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1318,13 +1339,14 @@ def get_estados_citas():
 @app.get("/api/estados/quirurgicos")
 def get_estados_quirurgicos():
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1337,13 +1359,14 @@ def get_estados_quirurgicos():
 @app.get("/api/estados/cotizaciones")
 def get_estados_cotizaciones():
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1363,13 +1386,14 @@ def get_estados_cotizaciones():
 @app.get("/api/procedimientos", response_model=dict)
 def get_procedimientos():
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1391,13 +1415,14 @@ def get_procedimientos():
         error_msg = str(e)
         if "procedimiento" in error_msg.lower() or "tarifa" in error_msg.lower():
             try:
-                conn = pymysql.connect(
-                    host='localhost',
-                    user='root',
-                    password='root',
-                    database='u997398721_consultorio_db',
-                    port=3306,
-                    cursorclass=pymysql.cursors.DictCursor
+                conn = get_connection(
+                    host=os.getenv("DB_HOST"),
+                    user=os.getenv("DB_USER"),
+                    password=os.getenv("DB_PASSWORD"),
+                    database=os.getenv("DB_NAME"),
+                    port=int(os.getenv("DB_PORT", 3306)),
+                    cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
                 )
                 with conn:
                     with conn.cursor() as cursor:
@@ -1421,13 +1446,14 @@ def get_procedimientos():
 @app.get("/api/procedimientos/{procedimiento_id}", response_model=dict)
 def get_procedimiento(procedimiento_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1456,11 +1482,11 @@ def get_procedimiento(procedimiento_id: int):
 @app.post("/api/procedimientos", response_model=dict)
 def create_procedimiento(procedimiento: ProcedimientoCreate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -1503,11 +1529,11 @@ def create_procedimiento(procedimiento: ProcedimientoCreate):
 @app.put("/api/procedimientos/{procedimiento_id}", response_model=dict)
 def update_procedimiento(procedimiento_id: int, procedimiento: ProcedimientoUpdate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -1569,11 +1595,11 @@ def update_procedimiento(procedimiento_id: int, procedimiento: ProcedimientoUpda
 @app.delete("/api/procedimientos/{procedimiento_id}", response_model=dict)
 def delete_procedimiento(procedimiento_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -1605,13 +1631,14 @@ def delete_procedimiento(procedimiento_id: int):
 @app.get("/api/adicionales", response_model=dict)
 def get_adicionales():
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1639,13 +1666,14 @@ def get_adicionales():
 @app.get("/api/adicionales/{adicional_id}", response_model=dict)
 def get_adicional(adicional_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1674,11 +1702,11 @@ def get_adicional(adicional_id: int):
 @app.post("/api/adicionales", response_model=dict)
 def create_adicional(adicional: AdicionalCreate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -1721,11 +1749,11 @@ def create_adicional(adicional: AdicionalCreate):
 @app.put("/api/adicionales/{adicional_id}", response_model=dict)
 def update_adicional(adicional_id: int, adicional: AdicionalUpdate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -1787,11 +1815,11 @@ def update_adicional(adicional_id: int, adicional: AdicionalUpdate):
 @app.delete("/api/adicionales/{adicional_id}", response_model=dict)
 def delete_adicional(adicional_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -1823,13 +1851,14 @@ def delete_adicional(adicional_id: int):
 @app.get("/api/otros-adicionales", response_model=dict)
 def get_otros_adicionales():
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1857,13 +1886,14 @@ def get_otros_adicionales():
 @app.get("/api/otros-adicionales/{otro_adicional_id}", response_model=dict)
 def get_otro_adicional(otro_adicional_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -1892,11 +1922,11 @@ def get_otro_adicional(otro_adicional_id: int):
 @app.post("/api/otros-adicionales", response_model=dict)
 def create_otro_adicional(otro_adicional: AdicionalCreate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -1939,11 +1969,11 @@ def create_otro_adicional(otro_adicional: AdicionalCreate):
 @app.put("/api/otros-adicionales/{otro_adicional_id}", response_model=dict)
 def update_otro_adicional(otro_adicional_id: int, otro_adicional: AdicionalUpdate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -2005,11 +2035,11 @@ def update_otro_adicional(otro_adicional_id: int, otro_adicional: AdicionalUpdat
 @app.delete("/api/otros-adicionales/{otro_adicional_id}", response_model=dict)
 def delete_otro_adicional(otro_adicional_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -2041,13 +2071,14 @@ def delete_otro_adicional(otro_adicional_id: int):
 @app.get("/api/historias-clinicas")
 def get_historias_clinicas(limit: int = 100, offset: int = 0):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -2066,13 +2097,14 @@ def get_historias_clinicas(limit: int = 100, offset: int = 0):
 @app.get("/api/historias-clinicas/paciente/{paciente_id}")
 def get_historias_by_paciente(paciente_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -2097,13 +2129,14 @@ def get_historias_by_paciente(paciente_id: int):
 @app.get("/api/historias-clinicas/{historia_id}")
 def get_historia_clinica(historia_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -2122,11 +2155,11 @@ def get_historia_clinica(historia_id: int):
 @app.post("/api/historias-clinicas", response_model=dict)
 def create_historia_clinica(historia: HistorialClinicoCreate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -2174,11 +2207,11 @@ def create_historia_clinica(historia: HistorialClinicoCreate):
 @app.put("/api/historias-clinicas/{historia_id}", response_model=dict)
 def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -2234,11 +2267,11 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
 @app.delete("/api/historias-clinicas/{historia_id}", response_model=MessageResponse)
 def delete_historia_clinica(historia_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         with conn:
@@ -2269,11 +2302,11 @@ async def upload_historia_foto(
     try:
         conn = None
         try:
-            conn = pymysql.connect(
-                host='localhost',
-                user='root',
-                password='root',
-                database='u997398721_consultorio_db',
+            conn = get_connection(
+                host=os.getenv("DB_HOST"),
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD"),
+                database=os.getenv("DB_NAME"),
                 port=3306
             )
             with conn.cursor() as cursor:
@@ -2321,10 +2354,10 @@ async def upload_historia_foto(
         conn2 = None
         try:
             conn2 = pymysql.connect(
-                host='localhost',
-                user='root',
-                password='root',
-                database='u997398721_consultorio_db',
+                host=os.getenv("DB_HOST"),
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD"),
+                database=os.getenv("DB_NAME"),
                 port=3306
             )
             with conn2.cursor() as cursor:
@@ -2369,13 +2402,14 @@ async def upload_historia_foto(
 @app.get("/api/sala-espera")
 def get_sala_espera(mostrarTodos: bool = True):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -2564,13 +2598,14 @@ def get_sala_espera(mostrarTodos: bool = True):
 @app.post("/api/sala-espera", response_model=dict)
 def crear_registro_sala_espera(registro: SalaEsperaCreate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -2655,13 +2690,14 @@ def crear_registro_sala_espera(registro: SalaEsperaCreate):
 @app.put("/api/sala-espera/{paciente_id}/estado", response_model=dict)
 def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -2781,13 +2817,14 @@ def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
 @app.put("/api/sala-espera/bulk-estados", response_model=dict)
 def bulk_update_estados_sala_espera(request: BulkUpdateEstadosRequest):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -2926,13 +2963,14 @@ def bulk_update_estados_sala_espera(request: BulkUpdateEstadosRequest):
 @app.get("/api/sala-espera/estadisticas")
 def get_estadisticas_sala_espera():
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -3046,13 +3084,14 @@ def verificar_disponibilidad(
     """
     try:
         from datetime import datetime, timedelta
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -3150,13 +3189,14 @@ def get_agenda_procedimientos(
     fecha_fin: Optional[str] = None
 ):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -3236,13 +3276,14 @@ def get_agenda_procedimientos(
 @app.get("/api/agenda-procedimientos/{procedimiento_id}", response_model=dict)
 def get_agenda_procedimiento(procedimiento_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -3285,13 +3326,14 @@ def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
         print(f"   duracion: {procedimiento.duracion}")
         print(f"   estado: {procedimiento.estado}")
         
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -3408,13 +3450,14 @@ def update_agenda_procedimiento(procedimiento_id: int, procedimiento: AgendaProc
     try:
         from datetime import datetime, timedelta
         
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -3525,13 +3568,14 @@ def update_agenda_procedimiento(procedimiento_id: int, procedimiento: AgendaProc
 @app.delete("/api/agenda-procedimientos/{procedimiento_id}", response_model=dict)
 def delete_agenda_procedimiento(procedimiento_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -3602,13 +3646,14 @@ def get_estados_procedimiento():
 @app.get("/api/agenda-procedimientos/calendario/{year}/{month}")
 def get_calendario_procedimientos(year: int, month: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -3669,13 +3714,14 @@ def get_calendario_procedimientos(year: int, month: int):
 @app.get("/api/cotizaciones", response_model=dict)
 def get_cotizaciones(limit: int = 50, offset: int = 0):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -3790,13 +3836,14 @@ def get_cotizaciones(limit: int = 50, offset: int = 0):
 @app.get("/api/cotizaciones/{cotizacion_id}", response_model=dict)
 def get_cotizacion(cotizacion_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -3906,13 +3953,14 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
     print(f"📦 Datos recibidos: {cotizacion}")
     
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -4060,13 +4108,14 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
 @app.post("/api/cotizaciones", response_model=dict)
 def create_cotizacion(cotizacion: CotizacionCreate):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         
         with conn:
@@ -4175,13 +4224,14 @@ def create_cotizacion(cotizacion: CotizacionCreate):
 @app.delete("/api/cotizaciones/{cotizacion_id}", response_model=dict)
 def delete_cotizacion(cotizacion_id: int):
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -4249,13 +4299,14 @@ def debug_upload_dir():
 @app.get("/api/debug/sala-espera")
 def debug_sala_espera():
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -4312,13 +4363,14 @@ def debug_sala_espera():
 @app.get("/api/planes-quirurgicos", response_model=dict)
 def get_planes_quirurgicos(limit: int = 50, offset: int = 0):
     try:
-        conn = pymysql.connect(
+        conn = get_connection(
             host="localhost",
             user="hicadministracion@hotmail.com",
             password="Hic12969991",
             database="u997398721_consultorio_db",
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
 
         with conn:
@@ -4363,13 +4415,14 @@ def get_plan_quirurgico(plan_id: str):
         plan_id_num = plan_id.replace('plan_', '')
         print(f"🔍 ID numérico: {plan_id_num}")
         
-        conn = pymysql.connect(
+        conn = get_connection(
             host="localhost",
             user="hicadministracion@hotmail.com",
             password="Hic12969991",
             database="u997398721_consultorio_db",
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         
         with conn:
@@ -4406,13 +4459,14 @@ def get_todos_pacientes():
     Obtiene todos los pacientes para selección en formularios
     """
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -4466,13 +4520,14 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
                 return v[:8]
             return v
 
-        conn = pymysql.connect(
+        conn = get_connection(
             host="localhost",
             user="hicadministracion@hotmail.com",
             password="Hic12969991",
             database="u997398721_consultorio_db",
-            port=3306,
+            port=int(os.getenv("DB_PORT", 3306)),
             cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10,
             autocommit=False
         )
 
@@ -4580,13 +4635,14 @@ def update_plan_quirurgico(plan_id: str, plan_update: PlanQuirurgicoUpdate):
         # Extraer ID numérico
         plan_id_num = plan_id.replace('plan_', '')
         
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -4826,13 +4882,14 @@ async def descargar_archivo_plan(plan_id: int, data: dict):
         
         print(f"📥 Solicitando descarga del archivo: {nombre_archivo}, para plan: {plan_id}")
         
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         
         with conn:
@@ -5039,13 +5096,14 @@ def delete_plan_quirurgico(plan_id: str):
         # Extraer ID numérico
         plan_id_num = plan_id.replace('plan_', '')
         
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:
@@ -5085,13 +5143,14 @@ def buscar_pacientes(
     Busca pacientes para autocompletar en formularios
     """
     try:
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         with conn:
             with conn.cursor() as cursor:

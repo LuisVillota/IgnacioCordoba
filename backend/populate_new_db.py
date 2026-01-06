@@ -9,14 +9,15 @@ from datetime import datetime
 def create_initial_data():
     try:
         # Conexión a MySQL
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
-            port=3306,
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
             charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         
         print("✅ Conectado a MySQL")

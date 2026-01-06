@@ -12,11 +12,11 @@ def test_database():
     try:
         # 1. Probar conexión
         print("\n1. 🔌 Probando conexión a MySQL...")
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='u997398721_consultorio_db',
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
             port=3306
         )
         print("   ✅ Conexión exitosa")
