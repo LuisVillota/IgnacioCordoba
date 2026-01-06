@@ -808,9 +808,6 @@ export default function AgendaPage() {
               <div className="flex-1">
                 <p className="text-amber-800 font-medium">⚠️ Error cargando datos</p>
                 <p className="text-amber-700 text-sm mt-1">{error}</p>
-                <p className="text-amber-600 text-xs mt-2">
-                  Asegúrate de que el backend esté corriendo en http://localhost:8000
-                </p>
                 <div className="flex space-x-2 mt-3">
                   <button
                     onClick={loadData}

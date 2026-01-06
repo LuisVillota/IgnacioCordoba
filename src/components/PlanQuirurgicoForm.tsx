@@ -359,7 +359,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       let errorMessage = "Error al cargar los pacientes";
       if (error instanceof Error) {
         if (error.message.includes("Failed to fetch") || error.message.includes("Network")) {
-          errorMessage = "No se pudo conectar con el servidor. Verifica que el backend esté corriendo en http://localhost:8000";
+          errorMessage = "No se pudo conectar con el servidor.";
         } else {
           errorMessage = `Error: ${error.message}`;
         }
