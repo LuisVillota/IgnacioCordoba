@@ -3552,7 +3552,6 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
                 # 1. Verificar que la cotización existe
                 cursor.execute("SELECT id FROM cotizacion WHERE id = %s", (cotizacion_id,))
                 if not cursor.fetchone():
-                    print(f"❌ Cotización {cotizacion_id} no encontrada")
                     raise HTTPException(status_code=404, detail="Cotización no encontrada")
                 
                 # 2. Preparar campos a actualizar - SIN 'total'
@@ -3612,18 +3611,11 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
                 if update_fields:
                     values.append(cotizacion_id)
                     query = f"UPDATE cotizacion SET {', '.join(update_fields)} WHERE id = %s"
-                    print(f"📝 Query SQL: {query}")
-                    print(f"📝 Valores: {values}")
-                    
                     cursor.execute(query, values)
                     conn.commit()
-                    
-                    print(f"✅ Cotización {cotizacion_id} actualizada")
-                
+
                 # 4. Actualizar items si se proporcionan
                 if cotizacion.items is not None:
-                    print(f"📦 Actualizando {len(cotizacion.items)} items...")
-                    
                     # Eliminar items existentes
                     cursor.execute("DELETE FROM cotizacion_item WHERE cotizacion_id = %s", (cotizacion_id,))
                     
@@ -3645,12 +3637,9 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
                         ))
                     
                     conn.commit()
-                    print(f"✅ Items actualizados para cotización {cotizacion_id}")
-                
+
                 # 5. Actualizar servicios incluidos si se proporcionan
                 if cotizacion.servicios_incluidos is not None:
-                    print(f"🔧 Actualizando {len(cotizacion.servicios_incluidos)} servicios incluidos...")
-                    
                     try:
                         # Eliminar servicios existentes
                         cursor.execute("DELETE FROM cotizacion_servicio_incluido WHERE cotizacion_id = %s", (cotizacion_id,))
@@ -3668,8 +3657,6 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
                             ))
                         
                         conn.commit()
-                        print(f"✅ Servicios incluidos actualizados para cotización {cotizacion_id}")
-                        
                     except Exception as table_error:
                         print(f"⚠️ Tabla de servicios no disponible: {table_error}")
                 
