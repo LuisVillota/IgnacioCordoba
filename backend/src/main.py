@@ -748,7 +748,7 @@ def get_usuarios():
                 cursor.execute("""
                     SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
                     FROM usuario u 
-                    JOIN Rol r ON u.rol_id = r.id
+                    JOIN rol r ON u.rol_id = r.id
                     ORDER BY u.id
                 """)
                 usuarios = cursor.fetchall()
@@ -765,7 +765,7 @@ def get_usuario(usuario_id: int):
                 cursor.execute("""
                     SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
                     FROM usuario u 
-                    JOIN Rol r ON u.rol_id = r.id
+                    JOIN rol r ON u.rol_id = r.id
                     WHERE u.id = %s
                 """, (usuario_id,))
                 usuario = cursor.fetchone()
@@ -789,7 +789,7 @@ def login(username: str, password: str):
                 cursor.execute("""
                     SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
                     FROM usuario u 
-                    JOIN Rol r ON u.rol_id = r.id
+                    JOIN rol r ON u.rol_id = r.id
                     WHERE u.username = %s AND u.password = %s AND u.activo = 1
                 """, (username, password_hash))
                 
