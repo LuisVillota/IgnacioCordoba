@@ -30,9 +30,19 @@ export interface Cotizacion {
   fecha_creacion: string;
   fecha_vencimiento: string;
   validez_dias: number;
-  // Campos adicionales para mostrar
   paciente_nombre?: string;
   paciente_apellido?: string;
   usuario_nombre?: string;
   paciente_documento?: string;
+  id_paciente?: string; 
+  serviciosIncluidos?: CotizacionServicioIncluido[];  
+  subtotalProcedimientos?: number; 
+  subtotalAdicionales?: number;     
+  subtotalOtrosAdicionales?: number; 
 }
+
+export type CotizacionFormData = Omit<Cotizacion, 'id' | 'fecha_creacion'> & {
+  _isEditing?: boolean;
+  _cotizacionId?: string;
+  _backendData?: any;
+};

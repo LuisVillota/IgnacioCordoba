@@ -5,10 +5,10 @@ load_dotenv()
 
 class Settings:
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "mysql+pymysql://root:@localhost:3306/prueba_consultorio_db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "mysql+pymysql://root:@localhost:3306/u997398721_consultorio_db")
     
     # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "clave_secreta_para_desarrollo_cambiar_en_produccion")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "2416c33e23e7f87b2feb10bcdb4213824622dcf0bfb97168397ad1d9e365b8b4")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     

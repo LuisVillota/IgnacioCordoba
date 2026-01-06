@@ -4,7 +4,11 @@ import type React from "react"
 import { useState, useEffect, useMemo, useRef } from "react"
 import { X, Plus, Trash2 } from "lucide-react"
 import { cotizacionHelpers } from "../lib/api"
-import type { Cotizacion, CotizacionItemBase, CotizacionServicioIncluido } from "../types"
+import type {
+  Cotizacion,
+  CotizacionItemBase,
+  CotizacionServicioIncluido
+} from "../types/cotizacion"
 
 interface CotizacionFormProps {
   cotizacion?: Cotizacion
@@ -47,18 +51,18 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
   console.log("🏁 CotizacionForm inicializado:", {
     cotizacion_recibida: cotizacion,
     paciente_id_en_cotizacion: cotizacion?.paciente_id,
-    id_paciente_en_cotizacion: cotizacion?.id_paciente,
     es_edicion: !!cotizacion?.id
   });
 
   // Cambiar el estado por defecto a "pendiente" siempre
   const [formData, setFormData] = useState({
-    paciente_id: cotizacion?.paciente_id?.toString() || cotizacion?.id_paciente?.toString() || "",
+    paciente_id: cotizacion?.paciente_id?.toString() || "",
     usuario_id: "1",
     // Mantener el estado existente si es edición, sino usar "pendiente"
     estado: cotizacion?.estado || "pendiente",
     items: cotizacion?.items || [],
-    servicios_incluidos: cotizacion?.servicios_incluidos || cotizacion?.serviciosIncluidos || serviciosIncluidosFijos,
+    // CORRECCIÓN: Usar solo servicios_incluidos, no serviciosIncluidos
+    servicios_incluidos: cotizacion?.servicios_incluidos ?? serviciosIncluidosFijos,
     observaciones: cotizacion?.observaciones || "",
   })
 
@@ -127,19 +131,16 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
     console.log("🔍 Buscando paciente para edición:", {
       cotizacionId: cotizacion?.id,
       pacienteIdEnCotizacion: cotizacion?.paciente_id,
-      idPacienteEnCotizacion: cotizacion?.id_paciente,
       pacientesCargados: pacientes.length
     });
 
     if (pacientes.length === 0) return;
 
-    // Intentar encontrar el paciente de varias maneras
+    // Intentar encontrar el paciente
     let pacienteIdToSearch = null;
     
     if (cotizacion?.paciente_id) {
       pacienteIdToSearch = cotizacion.paciente_id.toString();
-    } else if (cotizacion?.id_paciente) {
-      pacienteIdToSearch = cotizacion.id_paciente.toString();
     }
     
     if (pacienteIdToSearch) {
@@ -473,8 +474,7 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
   const itemsOtrosAdicionales = formData.items.filter(item => item.tipo === "otroAdicional")
 
   const mostrarInfoPaciente = pacienteSeleccionado || 
-    (cotizacion?.paciente_id && pacientes.find(p => p.id.toString() === cotizacion.paciente_id.toString())) ||
-    (cotizacion?.id_paciente && pacientes.find(p => p.id.toString() === cotizacion.id_paciente.toString()));
+    (cotizacion?.paciente_id && pacientes.find(p => p.id.toString() === cotizacion.paciente_id.toString()));
 
   if (loading && !cotizacion) {
     return (
@@ -896,3 +896,5 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
     </div>
   )
 }
+
+export default CotizacionForm

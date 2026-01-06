@@ -2,7 +2,7 @@
 
 import { X, Clock, Calendar, User, FileText } from "lucide-react"
 import type { Cita } from "../pages/AgendaPage"
-import type { Paciente } from "../pages/PacientesPage"
+import type { Paciente } from "../pages/AgendaPage"
 
 interface CitaModalProps {
   cita: Cita

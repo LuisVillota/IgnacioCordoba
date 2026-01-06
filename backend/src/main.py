@@ -473,7 +473,7 @@ def test_frontend():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -544,7 +544,7 @@ def test_frontend():
             "message": "Backend funcionando correctamente",
             "frontend_url": FRONTEND_URL,
             "backend_url": BACKEND_URL,
-            "database": "MySQL - prueba_consultorio_db",
+            "database": "MySQL - u997398721_consultorio_db",
             "timestamp": datetime.now().isoformat(),
             "counts": {
                 "pacientes": pacientes_count,
@@ -579,7 +579,7 @@ def create_usuario(usuario: UsuarioCreate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -633,7 +633,7 @@ def update_usuario(usuario_id: int, usuario: UsuarioUpdate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -706,7 +706,7 @@ def delete_usuario(usuario_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -754,7 +754,7 @@ def get_usuarios():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -778,7 +778,7 @@ def get_usuario(usuario_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -809,7 +809,7 @@ def login(username: str, password: str):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -846,7 +846,7 @@ def get_pacientes(limit: int = 100, offset: int = 0):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -878,7 +878,7 @@ def get_paciente(paciente_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -901,7 +901,7 @@ def create_paciente(paciente: PacienteCreate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -954,7 +954,7 @@ def update_paciente(paciente_id: int, paciente: PacienteUpdate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -1018,7 +1018,7 @@ def delete_paciente(paciente_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1067,7 +1067,7 @@ def get_citas(limit: int = 50, offset: int = 0):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1099,7 +1099,7 @@ def get_cita(cita_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1140,7 +1140,7 @@ def create_cita(cita: CitaCreate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -1221,7 +1221,7 @@ def update_cita(cita_id: int, cita: CitaUpdate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1270,7 +1270,7 @@ def delete_cita(cita_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -1303,7 +1303,7 @@ def get_estados_citas():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1322,7 +1322,7 @@ def get_estados_quirurgicos():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1341,7 +1341,7 @@ def get_estados_cotizaciones():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1367,7 +1367,7 @@ def get_procedimientos():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1395,7 +1395,7 @@ def get_procedimientos():
                     host='localhost',
                     user='root',
                     password='root',
-                    database='prueba_consultorio_db',
+                    database='u997398721_consultorio_db',
                     port=3306,
                     cursorclass=pymysql.cursors.DictCursor
                 )
@@ -1425,7 +1425,7 @@ def get_procedimiento(procedimiento_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1460,7 +1460,7 @@ def create_procedimiento(procedimiento: ProcedimientoCreate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -1507,7 +1507,7 @@ def update_procedimiento(procedimiento_id: int, procedimiento: ProcedimientoUpda
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -1573,7 +1573,7 @@ def delete_procedimiento(procedimiento_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -1609,7 +1609,7 @@ def get_adicionales():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1643,7 +1643,7 @@ def get_adicional(adicional_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1678,7 +1678,7 @@ def create_adicional(adicional: AdicionalCreate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -1725,7 +1725,7 @@ def update_adicional(adicional_id: int, adicional: AdicionalUpdate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -1791,7 +1791,7 @@ def delete_adicional(adicional_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -1827,7 +1827,7 @@ def get_otros_adicionales():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1861,7 +1861,7 @@ def get_otro_adicional(otro_adicional_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -1896,7 +1896,7 @@ def create_otro_adicional(otro_adicional: AdicionalCreate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -1943,7 +1943,7 @@ def update_otro_adicional(otro_adicional_id: int, otro_adicional: AdicionalUpdat
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -2009,7 +2009,7 @@ def delete_otro_adicional(otro_adicional_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -2045,7 +2045,7 @@ def get_historias_clinicas(limit: int = 100, offset: int = 0):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -2059,7 +2059,7 @@ def get_historias_clinicas(limit: int = 100, offset: int = 0):
                 historias = cursor.fetchall()
                 return {"historias": historias}
     except Exception as e:
-        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
             return {"historias": []}
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2070,7 +2070,7 @@ def get_historias_by_paciente(paciente_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -2090,7 +2090,7 @@ def get_historias_by_paciente(paciente_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
             return []
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2101,7 +2101,7 @@ def get_historia_clinica(historia_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -2115,7 +2115,7 @@ def get_historia_clinica(historia_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
             raise HTTPException(status_code=404, detail="Historia clinica no encontrada")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2126,7 +2126,7 @@ def create_historia_clinica(historia: HistorialClinicoCreate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -2167,7 +2167,7 @@ def create_historia_clinica(historia: HistorialClinicoCreate):
     except HTTPException:
         raise
     except Exception as e:
-        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
             raise HTTPException(status_code=500, detail="Tabla de historias clinicas no existe.")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2178,7 +2178,7 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -2227,7 +2227,7 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
     except HTTPException:
         raise
     except Exception as e:
-        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
             raise HTTPException(status_code=404, detail="Historia clinica no encontrada")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2238,7 +2238,7 @@ def delete_historia_clinica(historia_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         with conn:
@@ -2255,7 +2255,7 @@ def delete_historia_clinica(historia_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        if "Table 'prueba_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
             raise HTTPException(status_code=404, detail="Historia clinica no encontrada")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2273,7 +2273,7 @@ async def upload_historia_foto(
                 host='localhost',
                 user='root',
                 password='root',
-                database='prueba_consultorio_db',
+                database='u997398721_consultorio_db',
                 port=3306
             )
             with conn.cursor() as cursor:
@@ -2324,7 +2324,7 @@ async def upload_historia_foto(
                 host='localhost',
                 user='root',
                 password='root',
-                database='prueba_consultorio_db',
+                database='u997398721_consultorio_db',
                 port=3306
             )
             with conn2.cursor() as cursor:
@@ -2373,7 +2373,7 @@ def get_sala_espera(mostrarTodos: bool = True):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -2568,7 +2568,7 @@ def crear_registro_sala_espera(registro: SalaEsperaCreate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -2659,7 +2659,7 @@ def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -2785,7 +2785,7 @@ def bulk_update_estados_sala_espera(request: BulkUpdateEstadosRequest):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -2930,7 +2930,7 @@ def get_estadisticas_sala_espera():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -3050,7 +3050,7 @@ def verificar_disponibilidad(
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -3154,7 +3154,7 @@ def get_agenda_procedimientos(
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -3240,7 +3240,7 @@ def get_agenda_procedimiento(procedimiento_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -3289,7 +3289,7 @@ def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -3412,7 +3412,7 @@ def update_agenda_procedimiento(procedimiento_id: int, procedimiento: AgendaProc
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -3529,7 +3529,7 @@ def delete_agenda_procedimiento(procedimiento_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -3606,7 +3606,7 @@ def get_calendario_procedimientos(year: int, month: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -3673,7 +3673,7 @@ def get_cotizaciones(limit: int = 50, offset: int = 0):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -3794,7 +3794,7 @@ def get_cotizacion(cotizacion_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -3910,7 +3910,7 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -4064,7 +4064,7 @@ def create_cotizacion(cotizacion: CotizacionCreate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -4179,7 +4179,7 @@ def delete_cotizacion(cotizacion_id: int):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -4253,7 +4253,7 @@ def debug_sala_espera():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -4297,7 +4297,7 @@ def debug_sala_espera():
                 estructura = cursor.fetchall()
                 
                 return {
-                    "tablas_disponibles": [tabla[f"Tables_in_prueba_consultorio_db (%sala%)"] for tabla in tablas_sala],
+                    "tablas_disponibles": [tabla[f"Tables_in_u997398721_consultorio_db (%sala%)"] for tabla in tablas_sala],
                     "registros_hoy": registros_hoy['total'],
                     "estados_disponibles": estados,
                     "ultimos_registros": ultimos_registros,
@@ -4314,9 +4314,9 @@ def get_planes_quirurgicos(limit: int = 50, offset: int = 0):
     try:
         conn = pymysql.connect(
             host="localhost",
-            user="root",
-            password="root",
-            database="prueba_consultorio_db",
+            user="hicadministracion@hotmail.com",
+            password="Hic12969991",
+            database="u997398721_consultorio_db",
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -4365,9 +4365,9 @@ def get_plan_quirurgico(plan_id: str):
         
         conn = pymysql.connect(
             host="localhost",
-            user="root",
-            password="root",
-            database="prueba_consultorio_db",
+            user="hicadministracion@hotmail.com",
+            password="Hic12969991",
+            database="u997398721_consultorio_db",
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -4410,7 +4410,7 @@ def get_todos_pacientes():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -4468,9 +4468,9 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
 
         conn = pymysql.connect(
             host="localhost",
-            user="root",
-            password="root",
-            database="prueba_consultorio_db",
+            user="hicadministracion@hotmail.com",
+            password="Hic12969991",
+            database="u997398721_consultorio_db",
             port=3306,
             cursorclass=pymysql.cursors.DictCursor,
             autocommit=False
@@ -4584,7 +4584,7 @@ def update_plan_quirurgico(plan_id: str, plan_update: PlanQuirurgicoUpdate):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -4830,7 +4830,7 @@ async def descargar_archivo_plan(plan_id: int, data: dict):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -5043,7 +5043,7 @@ def delete_plan_quirurgico(plan_id: str):
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )
@@ -5089,7 +5089,7 @@ def buscar_pacientes(
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             cursorclass=pymysql.cursors.DictCursor
         )

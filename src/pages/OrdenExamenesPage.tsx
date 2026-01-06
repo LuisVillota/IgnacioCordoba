@@ -10,18 +10,19 @@ interface Paciente {
   id: string
   nombres: string
   apellidos: string
+  tipo_documento: string
   documento: string
-  telefono?: string
-  email?: string
-  fecha_nacimiento?: string
-  genero?: string
-  direccion?: string
-  ciudad?: string
-  estado_paciente?: string
-  fecha_registro?: string
+  telefono: string  
+  email: string    
+  fecha_nacimiento: string  
+  genero: string   
+  direccion: string 
+  ciudad: string   
+  estado_paciente: "activo" | "inactivo" 
+  fecha_registro: string
 }
 
-export function OrdenExamenesPage() {
+export default function OrdenExamenesPage() {
   const [selectedPaciente, setSelectedPaciente] = useState<Paciente | null>(null)
   const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,6 +64,7 @@ export function OrdenExamenesPage() {
       id: backendPaciente.id?.toString() || '',
       nombres: backendPaciente.nombre || backendPaciente.nombres || '',
       apellidos: backendPaciente.apellido || backendPaciente.apellidos || '',
+      tipo_documento: backendPaciente.tipo_documento || 'CC',
       documento: backendPaciente.numero_documento || backendPaciente.documento || '',
       telefono: backendPaciente.telefono || '',
       email: backendPaciente.email || '',
@@ -81,8 +83,8 @@ export function OrdenExamenesPage() {
       paciente.nombres.toLowerCase().includes(searchLower) ||
       paciente.apellidos.toLowerCase().includes(searchLower) ||
       paciente.documento.toLowerCase().includes(searchLower) ||
-      paciente.telefono?.toLowerCase().includes(searchLower) ||
-      paciente.email?.toLowerCase().includes(searchLower)
+      paciente.telefono.toLowerCase().includes(searchLower) ||
+      paciente.email.toLowerCase().includes(searchLower)
     
     const matchesEstado = filterEstado === "todos" || paciente.estado_paciente === filterEstado
     
@@ -169,7 +171,9 @@ export function OrdenExamenesPage() {
                               {paciente.nombres} {paciente.apellidos}
                             </h3>
                             <p className="text-sm text-gray-600 mt-1 flex items-center">
-                              <span className="font-mono bg-gray-100 px-1 rounded">{paciente.documento}</span>
+                              <span className="font-mono bg-gray-100 px-1 rounded">
+                                {paciente.tipo_documento}: {paciente.documento}
+                              </span>
                             </p>
                             <div className="flex flex-wrap gap-2 mt-2">
                               {paciente.telefono && (
@@ -229,7 +233,9 @@ export function OrdenExamenesPage() {
                         Orden de Exámenes para {selectedPaciente.nombres} {selectedPaciente.apellidos}
                       </h2>
                       <div className="flex flex-wrap gap-4 mt-2">
-                        <span className="text-sm text-gray-600">Documento: {selectedPaciente.documento}</span>
+                        <span className="text-sm text-gray-600">
+                          {selectedPaciente.tipo_documento}: {selectedPaciente.documento}
+                        </span>
                         {selectedPaciente.telefono && (
                           <span className="text-sm text-gray-600">Teléfono: {selectedPaciente.telefono}</span>
                         )}

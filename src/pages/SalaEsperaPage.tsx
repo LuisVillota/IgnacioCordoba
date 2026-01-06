@@ -36,7 +36,7 @@ interface EstadisticasSalaEspera {
   tiempo_promedio_consulta?: number
 }
 
-export function SalaEsperaPage() {
+export default function SalaEsperaPage() {
   const [pacientes, setPacientes] = useState<PacienteSalaEspera[]>([])
   const [estadisticas, setEstadisticas] = useState<EstadisticasSalaEspera>({
     total: 0,

@@ -15,7 +15,7 @@ interface ZoneMarkingsSVG {
     [zoneId: string]: ProcedureTypeSVG;
 }
 type Tool = "select" | "pencil";
-const ALL_PROCEDURES: ProcedureTypeSVG[] = ['lipo', 'lipotras', 'musculo', 'incision'];
+const ALL_PROCEDURES: ProcedureType[] = ['lipo', 'lipotras', 'musculo', 'incision'];
 
 // --- PROPS DEL MODAL ---
 interface EsquemaModalProps {
@@ -124,7 +124,8 @@ function drawIncision(ctx: CanvasRenderingContext2D, x: number, y: number, tama�
 const renderSVGContent = (
     zoneMarkings: ZoneMarkingsSVG,
     selectedSVGZone: string | null,
-    handleZoneClick: (zoneId: ZoneID) => void
+    handleZoneClick: (zoneId: ZoneID) => void,
+    setSelectedSVGZone: (zoneId: string | null) => void
 ) => {
     // ESTOS SON LOS PATHS REALES QUE DEBES REEMPLAZAR CON TUS D-PATHS COMPLETOS Y ASIGNAR ID SEMÁNTICOS
     const SELECTABLE_ZONES = [
@@ -136,6 +137,14 @@ const renderSVGContent = (
     const D_PATH_CONTORNO_FRONTAL = "m 142.17646,2.1524385 c 1.48866,0.3688125 3.01254,0.487146 4.54228,0.487146 ... (Añade el path completo aquí)";
     const D_PATH_CONTORNO_TRASERO = "m 170.19067,2.1524385 c 1.48866,0.3688125 3.01254,0.487146 4.29828,-0.301548 ... (Añade el path completo aquí)";
 
+    // CORRECCIÓN: Separamos los tipos para que null no sea una clave
+    type NonNullProcedureType = Exclude<ProcedureTypeSVG, null>;
+    const patternMap: Record<NonNullProcedureType, string> = {
+        lipo: 'url(#patron-lipo)',
+        lipotras: 'url(#patron-lipotras)',
+        musculo: 'url(#patron-musculo)',
+        incision: 'url(#patron-incision)',
+    };
 
     return (
         <svg
@@ -172,13 +181,6 @@ const renderSVGContent = (
                 {/* Zonas Seleccionables */}
                 {SELECTABLE_ZONES.map(({ id, d }) => {
                     const marking = zoneMarkings[id];
-                    const patternMap: { [key in ProcedureTypeSVG]: string } = {
-                        lipo: 'url(#patron-lipo)',
-                        lipotras: 'url(#patron-lipotras)',
-                        musculo: 'url(#patron-musculo)',
-                        incision: 'url(#patron-incision)',
-                        null: 'transparent'
-                    };
                     const isHovered = id === selectedSVGZone;
 
                     return (
@@ -186,7 +188,7 @@ const renderSVGContent = (
                             key={id}
                             id={id}
                             d={d}
-                            fill={marking ? patternMap[marking] : 'transparent'}
+                            fill={marking ? patternMap[marking as NonNullProcedureType] : 'transparent'}
                             stroke={isHovered ? 'blue' : 'black'}
                             strokeWidth={isHovered ? 2 : 1}
                             cursor="pointer"
@@ -470,7 +472,7 @@ const EsquemaModal: React.FC<EsquemaModalProps> = ({ isOpen, onClose, initialDra
                                 {ALL_PROCEDURES.map((proc) => (
                                     <button 
                                         key={proc}
-                                        onClick={() => setHerramientaPencil(proc as ProcedureType)} 
+                                        onClick={() => setHerramientaPencil(proc)} 
                                         style={{ background: herramientaPencil === proc ? '#059669' : '#a7f3d0', color: 'white', padding: '6px 10px', borderRadius: '4px' }}
                                     >
                                         {proc.charAt(0).toUpperCase() + proc.slice(1)}
@@ -529,7 +531,7 @@ const EsquemaModal: React.FC<EsquemaModalProps> = ({ isOpen, onClose, initialDra
                                 width: '100%', 
                                 height: '100%' 
                             }}>
-                                {renderSVGContent(zoneMarkings, selectedSVGZone, handleZoneClick)}
+                                {renderSVGContent(zoneMarkings, selectedSVGZone, handleZoneClick, setSelectedSVGZone)}
                             </div>
 
                             {/* CAPA CANVAS: Dibuja las marcas a mano alzada */}

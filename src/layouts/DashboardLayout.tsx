@@ -3,18 +3,18 @@
 import { useContext, useState, useEffect } from "react"
 import { AuthContext } from "../context/AuthContext"
 import { Sidebar } from "../components/Sidebar"
-import { DashboardHome } from "../pages/DashboardHome"
-import { PacientesPage } from "../pages/PacientesPage"
-import { AgendaPage } from "../pages/AgendaPage"
-import { HistoriaClinicaPage } from "../pages/HistoriaClinicaPage"
-import { CotizacionesPage } from "../pages/CotizacionesPage"
-import { SalaEsperaPage } from "../pages/SalaEsperaPage"
-import { ProgramacionQuirurgicaPage } from "../pages/ProgramacionQuirurgicaPage"
-import { PlanQuirurgicoPage } from "../pages/PlanQuirurgicoPage"
-import { OrdenExamenesPage } from "../pages/OrdenExamenesPage"
-import { ProcedimientosPage } from "../pages/ProcedimientosPage"
-import { UsuariosPage } from "../pages/UsuarioPage"
-import { Menu, LogOut } from "lucide-react"
+import { Menu, LogOut } from "lucide-react" 
+import DashboardHome from "../pages/DashboardHome"
+import PacientesPage from "../pages/PacientesPage"
+import AgendaPage from "../pages/AgendaPage"
+import HistoriaClinicaPage from "../pages/HistoriaClinicaPage"
+import CotizacionesPage from "../pages/CotizacionesPage"
+import SalaEsperaPage from "../pages/SalaEsperaPage"
+import ProgramacionQuirurgicaPage from "../pages/ProgramacionQuirurgicaPage"
+import PlanQuirurgicoPage from "../pages/PlanQuirurgicoPage"
+import OrdenExamenesPage from "../pages/OrdenExamenesPage"
+import ProcedimientosPage from "../pages/ProcedimientosPage"
+import UsuariosPage from "../pages/UsuarioPage"
 
 type CurrentPage =
   | "home"
@@ -65,6 +65,7 @@ export function DashboardLayout() {
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar - Oculto en móviles por defecto */}
       <div className={`
+        h-screen
         ${isMobile ? 'fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out' : 'relative'}
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         ${!isMobile ? 'translate-x-0' : ''}

@@ -48,7 +48,7 @@ export interface Programacion {
   procedimiento_precio?: number
 }
 
-export function ProgramacionQuirurgicaPage() {
+export default function ProgramacionQuirurgicaPage() {
   const [programaciones, setProgramaciones] = useState<Programacion[]>([])
   const [showForm, setShowForm] = useState(false)
   const [selectedProgramacion, setSelectedProgramacion] = useState<Programacion | null>(null)
@@ -977,15 +977,6 @@ export function ProgramacionQuirurgicaPage() {
                               title="Editar"
                             >
                               <Edit2 size={18} />
-                            </button>
-                          </ProtectedRoute>
-                          <ProtectedRoute permissions={["cancelar_programacion"]}>
-                            <button
-                              onClick={() => handleDelete(prog.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Cancelar"
-                            >
-                              <Trash2 size={18} />
                             </button>
                           </ProtectedRoute>
                         </div>

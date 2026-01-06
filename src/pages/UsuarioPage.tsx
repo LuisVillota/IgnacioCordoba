@@ -19,7 +19,7 @@ export interface Usuario {
   fecha_registro: string
 }
 
-export function UsuariosPage() {
+export default function UsuariosPage() {
   const { user } = useAuth()
 
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
@@ -333,7 +333,11 @@ export function UsuariosPage() {
 
       {showForm && (
         <UsuarioForm
-          usuario={selectedUsuario || undefined}
+          usuario={selectedUsuario ? {
+            ...selectedUsuario,
+            estado: selectedUsuario.estado_usuario,  
+            rol: selectedUsuario.rol  
+          } : undefined}
           onSave={handleSaveUsuario}
           onClose={() => {
             setShowForm(false)
@@ -344,9 +348,12 @@ export function UsuariosPage() {
 
       {selectedUsuario && !showForm && (
         <UsuarioModal
-          usuario={selectedUsuario}
-          onClose={() => setSelectedUsuario(null)}
-        />
+        usuario={{
+          ...selectedUsuario,
+          activo: selectedUsuario.estado_usuario  
+        }}
+        onClose={() => setSelectedUsuario(null)}
+      />
       )}
     </div>
   )

@@ -30,6 +30,13 @@ export interface Paciente {
   documento: string
   telefono?: string
   email?: string
+  tipo_documento?: string      
+  fecha_nacimiento?: string   
+  genero?: string              
+  direccion?: string          
+  ciudad?: string             
+  estado_paciente?: string     
+  fecha_registro?: string     
 }
 
 interface CitaConflict {
@@ -319,7 +326,7 @@ function ConflictoHorarioModal({
   )
 }
 
-export function AgendaPage() {
+export default function AgendaPage() {
   const [citas, setCitas] = useState<Cita[]>([])
   const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -1041,11 +1048,25 @@ export function AgendaPage() {
           <CitaModal
             cita={selectedCita}
             paciente={getPacienteById(selectedCita.id_paciente) || {
+              id: selectedCita.id_paciente,
               nombres: selectedCita.paciente_nombre || '',
-              apellidos: selectedCita.paciente_apellido || ''
+              apellidos: selectedCita.paciente_apellido || '',
+              documento: '',
+              telefono: '',
+              email: '',
+              tipo_documento: 'CC',
+              fecha_nacimiento: '',
+              genero: '',
+              direccion: '',
+              ciudad: '',
+              estado_paciente: 'activo',
+              fecha_registro: new Date().toISOString().split('T')[0]
             }}
             onClose={() => setSelectedCita(null)}
             onEdit={() => handleEdit(selectedCita)}
+            onDelete={() => {
+              console.log('Eliminar cita:', selectedCita.id);
+            }}
           />
         )}
 

@@ -1,49 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Edit2, Eye, Loader2 } from "lucide-react" // ⬅️ Eliminar Download de las importaciones
+import { Plus, Edit2, Eye, Loader2 } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
 import { CotizacionForm } from "../components/CotizacionForm"
 import { CotizacionModal } from "../components/CotizacionModal"
 import { api, transformBackendToFrontend } from "../lib/api"
-
-export interface ServicioIncluido {
-  id: string
-  nombre: string
-  requiere: boolean
-}
-
-export interface CotizacionItem {
-  id: string
-  nombre: string
-  descripcion: string
-  cantidad: number
-  precio_unitario: number
-  subtotal: number
-  tipo?: string
-  item_id?: number
-}
-
-export interface Cotizacion {
-  id: string
-  id_paciente: string
-  fecha_creacion: string
-  estado: "pendiente" | "aceptada" | "rechazada" | "facturada"
-  items: CotizacionItem[]
-  serviciosIncluidos: ServicioIncluido[]
-  total: number
-  subtotalProcedimientos: number
-  subtotalAdicionales: number
-  subtotalOtrosAdicionales: number
-  observaciones: string
-  validez_dias: number
-  fecha_vencimiento: string
-  paciente_nombre?: string
-  paciente_apellido?: string
-  paciente_documento?: string
-  usuario_nombre?: string
-  paciente_id?: string
-}
+import type { Cotizacion } from "../types/cotizacion"
 
 export interface Paciente {
   id: string
@@ -56,16 +19,12 @@ export interface Paciente {
 
 type ModalType = 'none' | 'form' | 'view'
 
-export function CotizacionesPage() {
+export default function CotizacionesPage() {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
-  // ⬇️ ELIMINAR ESTA VARIABLE DE ESTADO ⬇️
-  // const [descargandoPDF, setDescargandoPDF] = useState<string | null>(null)
-  
   const [activeModal, setActiveModal] = useState<ModalType>('none')
   const [selectedCotizacion, setSelectedCotizacion] = useState<Cotizacion | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -187,145 +146,22 @@ export function CotizacionesPage() {
   }
 
   const handleEdit = (cotizacion: Cotizacion) => {
-    const cotizacionParaEditar = {
+    // Asegurar compatibilidad con la interfaz
+    const cotizacionParaEditar: Cotizacion = {
       ...cotizacion,
-      paciente_id: cotizacion.id_paciente
+      // Asegurar que tenga los campos requeridos
+      paciente_id: cotizacion.paciente_id || cotizacion.id_paciente || '',
+      usuario_id: cotizacion.usuario_id || '1',
+      servicios_incluidos: cotizacion.servicios_incluidos || cotizacion.serviciosIncluidos || [],
+      subtotal_procedimientos: cotizacion.subtotal_procedimientos || cotizacion.subtotalProcedimientos || 0,
+      subtotal_adicionales: cotizacion.subtotal_adicionales || cotizacion.subtotalAdicionales || 0,
+      subtotal_otros_adicionales: cotizacion.subtotal_otros_adicionales || cotizacion.subtotalOtrosAdicionales || 0
     };
     
     setSelectedCotizacion(cotizacionParaEditar);
     setEditingId(cotizacion.id);
     setActiveModal('form');
   }
-
-  // ⬇️ ELIMINAR LA FUNCIÓN handleDescargarPDF COMPLETA ⬇️
-  /*
-  const handleDescargarPDF = async (cotizacion: Cotizacion) => {
-    try {
-      setDescargandoPDF(cotizacion.id);
-      
-      let pacienteData: any = null;
-      
-      if (cotizacion.paciente_nombre && cotizacion.paciente_apellido) {
-        pacienteData = {
-          id: cotizacion.id_paciente,
-          nombres: cotizacion.paciente_nombre,
-          apellidos: cotizacion.paciente_apellido,
-          documento: cotizacion.paciente_documento || ''
-        };
-      } else {
-        const paciente = pacientes.find((p) => p.id === cotizacion.id_paciente);
-        if (paciente) {
-          pacienteData = paciente;
-        } else {
-          try {
-            const pacienteResponse = await api.getPaciente(parseInt(cotizacion.id_paciente));
-            pacienteData = transformBackendToFrontend.paciente(pacienteResponse);
-          } catch {
-            alert("No se pudo obtener información del paciente para generar el PDF");
-            return;
-          }
-        }
-      }
-
-      if (!pacienteData) {
-        alert("No se encontró información del paciente");
-        return;
-      }
-
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alert("No se pudo abrir la ventana de impresión. Por favor, permite las ventanas emergentes.");
-        return;
-      }
-
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Cotización CZ-${cotizacion.id}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 40px; }
-              .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1a6b32; padding-bottom: 20px; }
-              .title { color: #1a6b32; font-size: 24px; font-weight: bold; }
-              .subtitle { color: #666; font-size: 14px; margin-top: 5px; }
-              .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-              .table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-              .table th { background: #f8f9fa; text-align: left; padding: 10px; border-bottom: 2px solid #dee2e6; font-weight: bold; }
-              .table td { padding: 10px; border-bottom: 1px solid #dee2e6; }
-              .total-section { background: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0; }
-              @media print {
-                body { margin: 20px; }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <div class="title">COTIZACIÓN MÉDICA</div>
-              <div class="subtitle">Consultorio Dr. Ignacio Córdoba</div>
-            </div>
-            
-            <div class="info-grid">
-              <div>
-                <p><strong>N° COTIZACIÓN:</strong> CZ-${cotizacion.id}</p>
-                <p><strong>FECHA EMISIÓN:</strong> ${cotizacion.fecha_creacion}</p>
-                <p><strong>VÁLIDO HASTA:</strong> ${cotizacion.fecha_vencimiento}</p>
-              </div>
-              <div>
-                <p><strong>PACIENTE:</strong> ${pacienteData.nombres} ${pacienteData.apellidos}</p>
-                <p><strong>DOCUMENTO:</strong> ${pacienteData.documento || 'No especificado'}</p>
-                <p><strong>ESTADO:</strong> ${cotizacion.estado.toUpperCase()}</p>
-              </div>
-            </div>
-            
-            <h3>PROCEDIMIENTOS</h3>
-            ${cotizacion.items.filter(item => item.tipo === 'procedimiento').length > 0 ? `
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Descripción</th>
-                    <th>Cant.</th>
-                    <th>Valor Unitario</th>
-                    <th>Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${cotizacion.items.filter(item => item.tipo === 'procedimiento').map(item => `
-                    <tr>
-                      <td>${item.nombre}</td>
-                      <td>${item.cantidad}</td>
-                      <td>$${item.precio_unitario.toLocaleString('es-CO')}</td>
-                      <td>$${item.subtotal.toLocaleString('es-CO')}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            ` : '<p>No hay procedimientos</p>'}
-            
-            <div class="total-section">
-              <p><strong>TOTAL:</strong> $${cotizacion.total.toLocaleString('es-CO')}</p>
-            </div>
-            
-            <script>
-              window.onload = function() {
-                window.print();
-                setTimeout(function() {
-                  window.close();
-                }, 1000);
-              }
-            </script>
-          </body>
-        </html>
-      `);
-
-      printWindow.document.close();
-      
-    } catch (err: any) {
-      console.error("Error descargando PDF:", err);
-      alert("Error al generar el PDF: " + err.message);
-    } finally {
-      setDescargandoPDF(null);
-    }
-  }
-  */
 
   const openNewForm = () => {
     setEditingId(null);
@@ -454,17 +290,6 @@ export function CotizacionesPage() {
                           </td>
                           <td className="px-6 py-4 text-sm">
                             <div className="flex items-center justify-center space-x-2">
-                              {/* ⬇️ ELIMINAR EL BOTÓN DE DESCARGAR ⬇️ */}
-                              {/*
-                              <button
-                                onClick={() => handleDescargarPDF(cot)}
-                                disabled={descargandoPDF === cot.id || refreshing}
-                                className="p-2 text-[#1a6b32] hover:bg-blue-50 rounded-lg transition disabled:opacity-50"
-                                title="Descargar PDF"
-                              >
-                                <Download size={18} />
-                              </button>
-                              */}
                               <button
                                 onClick={() => handleView(cot)}
                                 disabled={refreshing}
@@ -522,7 +347,7 @@ export function CotizacionesPage() {
         {activeModal === 'view' && selectedCotizacion && (
           <CotizacionModal
             cotizacion={selectedCotizacion}
-            paciente={pacientes.find((p) => p.id === selectedCotizacion.id_paciente)}
+            paciente={pacientes.find((p) => p.id === (selectedCotizacion.paciente_id || selectedCotizacion.id_paciente))}
             onClose={handleCloseAllModals}
             onEdit={handleEditFromModal}
           />

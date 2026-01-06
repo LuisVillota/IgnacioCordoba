@@ -24,7 +24,7 @@ export interface HistoriaClinica {
   fotos: string
 }
 
-interface PacienteFrontend {
+export interface PacienteFrontend {
   id: string
   nombres: string
   apellidos: string
@@ -40,7 +40,7 @@ interface PacienteFrontend {
   fecha_registro: string
 }
 
-export function HistoriaClinicaPage() {
+export default function HistoriaClinicaPage() {
   const [historias, setHistorias] = useState<HistoriaClinica[]>([])
   const [pacientes, setPacientes] = useState<PacienteFrontend[]>([])
   const [selectedPacienteId, setSelectedPacienteId] = useState<string>("")
@@ -156,7 +156,7 @@ export function HistoriaClinicaPage() {
 
   if (!selectedPacienteId) {
     return (
-      <ProtectedRoute allowedRoles={["admin", "doctor", "recepcionista"]}>
+      <ProtectedRoute permissions={["ver_historia_clinica"]}>
         <div className="p-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Historia Clínica</h1>
@@ -225,7 +225,7 @@ export function HistoriaClinicaPage() {
   }
 
   return (
-    <ProtectedRoute allowedRoles={["admin", "doctor", "recepcionista"]}>
+    <ProtectedRoute permissions={["ver_historia_clinica"]}>
       <div className="p-8">
         <div className="flex items-center space-x-4 mb-8">
           <button
@@ -294,7 +294,7 @@ export function HistoriaClinicaPage() {
               </div>
             )}
           </div>
-          <ProtectedRoute allowedRoles={["admin", "doctor"]}>
+          <ProtectedRoute permissions={["crear_historia_clinica"]}>
             <button
               onClick={() => {
                 setEditingId(null)
@@ -319,7 +319,7 @@ export function HistoriaClinicaPage() {
         ) : pacienteHistorias.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
             <p className="text-gray-600 mb-4">No hay registros de historia clínica</p>
-            <ProtectedRoute allowedRoles={["admin", "doctor"]}>
+            <ProtectedRoute permissions={["crear_historia_clinica"]}>
               <button
                 onClick={() => {
                   setEditingId(null)
@@ -357,7 +357,7 @@ export function HistoriaClinicaPage() {
                     >
                       <Eye size={18} />
                     </button>
-                    <ProtectedRoute allowedRoles={["admin", "doctor"]}>
+                    <ProtectedRoute permissions={["editar_historia_clinica"]}>
                       <button
                         onClick={() => handleEdit(historia)}
                         className="p-2 text-[#669933] hover:bg-green-50 rounded-lg transition"

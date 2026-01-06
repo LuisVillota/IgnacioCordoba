@@ -13,7 +13,7 @@ def create_initial_data():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306,
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor
@@ -199,7 +199,7 @@ def create_initial_data():
 if __name__ == "__main__":
     print("🚀 Iniciando creación de datos iniciales...")
     print(f"📁 Directorio actual: {os.getcwd()}")
-    print(f"🔗 Base de datos: prueba_consultorio_db")
+    print(f"🔗 Base de datos: u997398721_consultorio_db")
     print(f"👤 Usuario MySQL: root")
     print("=" * 50)
     

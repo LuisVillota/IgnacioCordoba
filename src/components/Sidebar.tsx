@@ -20,7 +20,7 @@ interface SidebarProps {
   currentPage: string
 }
 
-const menuItemsByRole = {
+const menuItemsByRole: Record<string, Array<{ icon: any; label: string; href: string }>> = {
   admin: [
     { icon: Home, label: "Inicio", href: "home" },
     { icon: Users, label: "Usuarios", href: "usuarios" },
@@ -60,7 +60,7 @@ export function Sidebar({ user, onNavigate, currentPage }: SidebarProps) {
   const menuItems = menuItemsByRole[user.rol] || []
 
   return (
-    <aside className="w-64 bg-[#1a6b32] text-white shadow-lg flex flex-col">
+    <aside className="w-64 h-full bg-[#1a6b32] text-white shadow-lg flex flex-col">
       {/* Logo Section */}
       <div className="p-6 border-b border-[#155529]">
         <div className="flex items-center space-x-3">

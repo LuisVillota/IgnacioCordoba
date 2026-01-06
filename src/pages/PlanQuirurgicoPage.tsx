@@ -70,7 +70,7 @@ export const PlanQuirurgicoPage: React.FC = () => {
         
         // Debug: mostrar primeros 2 planes
         if (response.planes.length > 0) {
-          console.log("📋 Primeros planes:", response.planes.slice(0, 2).map(p => ({
+            console.log("📋 Primeros planes:", response.planes.slice(0, 2).map((p: PlanQuirurgico) => ({
             id: p.id,
             nombre: p.datos_paciente?.nombre_completo,
             identificacion: p.datos_paciente?.identificacion,
@@ -430,8 +430,8 @@ export const PlanQuirurgicoPage: React.FC = () => {
             // Calcular IMC si no está en los datos
             const imcData = plan.datos_paciente.imc ? 
               { imc: plan.datos_paciente.imc, categoria: plan.datos_paciente.categoriaIMC } :
-              calcularIMC(plan.datos_paciente.peso, plan.datos_paciente.altura)
-            
+              calcularIMC(Number(plan.datos_paciente.peso), Number(plan.datos_paciente.altura))
+
             return (
               <div key={plan.id} className="border rounded-xl p-5 hover:shadow-lg transition-shadow bg-white">
                 <div className="flex justify-between items-start mb-4">
@@ -739,37 +739,69 @@ export const PlanQuirurgicoPage: React.FC = () => {
                     <div className="mb-4">
                       <h4 className="font-semibold text-gray-700 mb-2">Antecedentes</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {Object.entries(planParaVer.historia_clinica.antecedentes).map(([key, value]) => 
-                          value && value !== 'no' ? (
+                        {Object.entries(planParaVer.historia_clinica.antecedentes).map(([key, value]) => {
+                          const getDisplayValue = (val: any): React.ReactNode => {
+                            if (val === null || val === undefined || val === '') {
+                              return null;
+                            }
+                            
+                            if (typeof val === 'boolean') {
+                              return val ? 'Sí' : 'No';
+                            }
+                            
+                            if (typeof val === 'string') {
+                              return val === 'no' ? null : val;
+                            }
+                            
+                            if (typeof val === 'object') {
+                              if (Object.keys(val).length === 0) {
+                                return null;
+                              }
+                              return Object.entries(val)
+                                .filter(([_, subVal]) => subVal !== null && subVal !== undefined && subVal !== '')
+                                .map(([subKey, subVal]) => `${subKey}: ${subVal}`)
+                                .join(', ') || null;
+                            }
+                            return String(val);
+                          };
+                          const displayValue = getDisplayValue(value);
+                          if (displayValue === null || displayValue === undefined) {
+                            return null;
+                          }
+                          return (
                             <div key={key} className="bg-white p-2 rounded border">
                               <label className="text-sm font-semibold text-gray-600 capitalize">
                                 {key.replace(/_/g, ' ')}:
                               </label>
                               <p className="text-gray-800 text-sm mt-1">
-                                {typeof value === 'boolean' ? (value ? 'Sí' : 'No') : value}
+                                {displayValue}
                               </p>
                             </div>
-                          ) : null
-                        )}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
-                  {/* Examen Físico */}
+                 {/* Examen Físico */}
                   {planParaVer.historia_clinica.notas_corporales && (
                     <div className="mb-4">
                       <h4 className="font-semibold text-gray-700 mb-2">Examen Físico</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {Object.entries(planParaVer.historia_clinica.notas_corporales).map(([key, value]) => 
-                          value ? (
+                        {Object.entries(planParaVer.historia_clinica.notas_corporales).map(([key, value]) => {
+                          if (typeof value !== 'string' || !value.trim()) {
+                            return null;
+                          }
+                          
+                          return (
                             <div key={key} className="bg-white p-2 rounded border">
                               <label className="text-sm font-semibold text-gray-600 capitalize">
                                 {key.replace(/_/g, ' ')}:
                               </label>
                               <p className="text-gray-800 text-sm mt-1 whitespace-pre-wrap">{value}</p>
                             </div>
-                          ) : null
-                        )}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -964,3 +996,5 @@ export const PlanQuirurgicoPage: React.FC = () => {
     </div>
   )
 }
+
+export default PlanQuirurgicoPage
