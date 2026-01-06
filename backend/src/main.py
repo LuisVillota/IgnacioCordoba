@@ -25,7 +25,10 @@ def get_connection():
         database=os.getenv("DB_NAME"),
         port=int(os.getenv("DB_PORT", 3306)),
         cursorclass=pymysql.cursors.DictCursor,
-        connect_timeout=10
+        connect_timeout=10,
+        ssl={
+            "ca": os.path.join(os.path.dirname(__file__), "ca.pem") 
+        }
     )
 
 UPLOAD_DIR = "uploads"
