@@ -3,27 +3,12 @@
 import { useState, useEffect } from "react"
 import { Search, Plus, Edit2, Eye, Loader2, RefreshCw } from "lucide-react"
 import { ProtectedRoute } from "../components/ProtectedRoute"
-import { pacienteForm } from "../components/pacienteForm"
-import { pacienteModal } from "../components/pacienteModal"
+import { PacienteForm } from "../components/PacienteForm"
+import { PacienteModal } from "../components/PacienteModal"
 import { useAuth } from "../hooks/useAuth"
 import { hasAnyPermission } from "../types/permissions"
 import { api, transformBackendToFrontend, handleApiError } from "../lib/api"
-
-export interface paciente {
-  id: string
-  nombres: string
-  apellidos: string
-  tipo_documento: string
-  documento: string
-  fecha_nacimiento: string
-  genero?: string
-  telefono: string
-  email: string
-  direccion: string
-  ciudad: string
-  estado_paciente: "activo" | "inactivo"
-  fecha_registro: string
-}
+import type { paciente } from "../types/paciente"
 
 // Función de transformación local para asegurar el tipo correcto
 const transformpacienteLocal = (backendpaciente: any): paciente => {
@@ -317,7 +302,7 @@ export default function pacientesPage() {
       )}
 
       {showForm && (
-        <pacienteForm
+        <PacienteForm
           paciente={selectedpaciente || undefined}
           onSave={handleSavepaciente}
           onClose={() => {
@@ -328,7 +313,7 @@ export default function pacientesPage() {
       )}
 
       {selectedpaciente && !showForm && (
-        <pacienteModal paciente={selectedpaciente} onClose={() => setSelectedpaciente(null)} />
+        <PacienteModal paciente={selectedpaciente} onClose={() => setSelectedpaciente(null)} />
       )}
     </div>
   )

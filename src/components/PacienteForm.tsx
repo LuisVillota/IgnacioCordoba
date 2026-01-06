@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import { X } from "lucide-react"
-import type { paciente } from "../pages/pacientesPage"
+import type { paciente } from "../types/paciente"
 
 interface pacienteFormProps {
   paciente?: paciente
@@ -12,7 +12,7 @@ interface pacienteFormProps {
   onClose: () => void
 }
 
-export function pacienteForm({ paciente, onSave, onClose }: pacienteFormProps) {
+export function PacienteForm({ paciente, onSave, onClose }: pacienteFormProps) {
   const [formData, setFormData] = useState({
     nombres: paciente?.nombres || "",
     apellidos: paciente?.apellidos || "",
