@@ -7,14 +7,6 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  turbopack: {
-    resolveAlias: {
-      "@": path.resolve(__dirname, "src"),
-      "@/lib": path.resolve(__dirname, "src/lib"),
-      "@/context": path.resolve(__dirname, "src/context"),
-      "@/components": path.resolve(__dirname, "src/components"),
-    },
-  },
   webpack: (config) => {
     if (config.resolve) {
       config.resolve.alias = {
