@@ -2753,9 +2753,6 @@ def verificar_disponibilidad(
                 procedimiento_id = None
         except ValueError:
             procedimiento_id = None
-
-    print("🧪 procedimiento_id final:", procedimiento_id, type(procedimiento_id))
-
     """
     Verifica disponibilidad de horario para procedimientos.
     """
@@ -2767,9 +2764,7 @@ def verificar_disponibilidad(
                 # Asegurar formato de hora
                 hora_inicio = hora
                 if hora_inicio.count(":") == 1:
-                    hora_inicio += ":00"
-                    print(f"   🕐 Hora formateada: {hora_inicio}")
-                
+                    hora_inicio += ":00"  
                 hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') + 
                            timedelta(minutes=duracion)).strftime('%H:%M:%S')
                 
@@ -2818,10 +2813,6 @@ def verificar_disponibilidad(
                     ORDER BY ap.hora
                 """
                 params.extend([hora_inicio, hora_inicio, hora_inicio, hora_fin])
-                
-                print(f"📝 Query SQL: {query}")
-                print(f"📝 Parámetros: {params}")
-                
                 cursor.execute(query, params)
                 conflictos = cursor.fetchall()
                 
@@ -2836,7 +2827,6 @@ def verificar_disponibilidad(
                 }
                 
     except Exception as e:
-        print(f"❌ ERROR CRÍTICO en verificar_disponibilidad: {str(e)}")
         import traceback
         traceback.print_exc()
         return {
@@ -2981,7 +2971,6 @@ def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
                 
                 paciente = cursor.fetchone()
                 if not paciente:
-                    print(f"❌ paciente no encontrado: {procedimiento.numero_documento}")
                     raise HTTPException(
                         status_code=404, 
                         detail=f"paciente con documento {procedimiento.numero_documento} no encontrado"
@@ -2994,7 +2983,6 @@ def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
                 
                 proc = cursor.fetchone()
                 if not proc:
-                    print(f"❌ Procedimiento no encontrado: {procedimiento.procedimiento_id}")
                     raise HTTPException(
                         status_code=404, 
                         detail=f"Procedimiento con ID {procedimiento.procedimiento_id} no encontrado"
@@ -3005,13 +2993,7 @@ def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
                 hora_inicio = procedimiento.hora
                 hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') + 
                            timedelta(minutes=duracion)).strftime('%H:%M:%S')
-                
-                print(f"🔍 Verificando conflictos:")
-                print(f"   Fecha: {procedimiento.fecha}")
-                print(f"   Hora inicio: {hora_inicio}")
-                print(f"   Hora fin: {hora_fin}")
-                print(f"   Duración: {duracion} minutos")
-                
+
                 cursor.execute("""
                     SELECT id, fecha, hora, duracion, estado 
                     FROM agenda_procedimientos 
