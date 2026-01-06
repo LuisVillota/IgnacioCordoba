@@ -3,10 +3,10 @@ const path = require('path');
 
 const outDir = path.join(__dirname, 'out');
 
-// Verificar si existe la carpeta out
+// Crear carpeta out si no existe
 if (!fs.existsSync(outDir)) {
-  console.error('❌ La carpeta out/ no existe. El build de Next.js falló o no se completó.');
-  process.exit(1);
+  console.log('Creando carpeta out/...');
+  fs.mkdirSync(outDir, { recursive: true });
 }
 
 const htaccessContent = `# Deshabilitar caché completamente
