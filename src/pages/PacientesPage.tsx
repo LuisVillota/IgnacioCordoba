@@ -25,7 +25,37 @@ export interface Paciente {
   fecha_registro: string
 }
 
-export function PacientesPage() {
+// Función de transformación local para asegurar el tipo correcto
+const transformPacienteLocal = (backendPaciente: any): Paciente => {
+  // Determinar el estado del paciente
+  let estado_paciente: "activo" | "inactivo" = "activo";
+  if (backendPaciente.estado !== undefined) {
+    const estado = String(backendPaciente.estado).toLowerCase();
+    if (estado === "inactivo" || estado === "0" || estado === "false") {
+      estado_paciente = "inactivo";
+    } else {
+      estado_paciente = "activo";
+    }
+  }
+  
+  return {
+    id: backendPaciente.id?.toString() || '',
+    nombres: backendPaciente.nombre || backendPaciente.nombres || '',
+    apellidos: backendPaciente.apellido || backendPaciente.apellidos || '',
+    tipo_documento: backendPaciente.tipo_documento || 'CC',
+    documento: backendPaciente.numero_documento || backendPaciente.documento || '',
+    fecha_nacimiento: backendPaciente.fecha_nacimiento || '',
+    genero: backendPaciente.genero || '',
+    telefono: backendPaciente.telefono || '',
+    email: backendPaciente.email || '',
+    direccion: backendPaciente.direccion || '',
+    ciudad: backendPaciente.ciudad || 'No especificada',
+    estado_paciente: estado_paciente,
+    fecha_registro: backendPaciente.fecha_registro || backendPaciente.created_at || new Date().toISOString(),
+  };
+}
+
+export default function PacientesPage() {
   const { user } = useAuth()
   const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,7 +84,9 @@ export function PacientesPage() {
       setLoading(true)
       setError(null)
       const response = await api.getPacientes(100)
-      const transformedPacientes = response.pacientes.map(transformBackendToFrontend.paciente)
+      
+      // Usar la transformación local en lugar de la de api.ts
+      const transformedPacientes = response.pacientes.map(transformPacienteLocal)
       setPacientes(transformedPacientes)
     } catch (err: any) {
       setError(handleApiError(err))
@@ -89,10 +121,11 @@ export function PacientesPage() {
       if (editingId) {
         await api.updatePaciente(parseInt(editingId), backendData)
         
-        const pacienteActualizado = {
+        const pacienteActualizado: Paciente = {
           ...data,
           id: editingId,
-          fecha_registro: pacientes.find(p => p.id === editingId)?.fecha_registro || ""
+          fecha_registro: pacientes.find(p => p.id === editingId)?.fecha_registro || "",
+          estado_paciente: data.estado_paciente // Asegurar que mantiene el tipo correcto
         }
 
         const nuevosPacientes = pacientes.map(p => 
@@ -110,7 +143,7 @@ export function PacientesPage() {
         
         if (response.success) {
           const newPacienteResponse = await api.getPaciente(response.paciente_id)
-          const newPaciente = transformBackendToFrontend.paciente(newPacienteResponse)
+          const newPaciente = transformPacienteLocal(newPacienteResponse)
           
           setPacientes([newPaciente, ...pacientes])
         }

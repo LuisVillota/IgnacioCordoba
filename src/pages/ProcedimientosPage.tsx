@@ -19,7 +19,7 @@ export interface ItemBase {
 
 type Tab = "procedimientos" | "adicionales" | "otros"
 
-export function ProcedimientosPage() {
+export default function ProcedimientosPage() {
   const [tab, setTab] = useState<Tab>("procedimientos")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)

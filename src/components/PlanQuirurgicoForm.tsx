@@ -6,7 +6,7 @@ import { Search } from "lucide-react"
 import { api } from "../lib/api"
 import { EsquemaViewer } from "../components/EsquemaViewer"
 
-type ProcedureType = 'lipo' | 'lipotras' | 'musculo' | 'incision';
+type ProcedureType = 'liposuction' | 'lipotransfer';
 
 interface Props {
   plan?: PlanQuirurgico
@@ -140,7 +140,18 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   };
 
   const [historiaClinica, setHistoriaClinica] = useState(getSafeHistoriaClinica())
-  const defaultConductaQuirurgica = {
+  
+  interface ConductaQuirurgica {
+    duracion_estimada: string | number;
+    tipo_anestesia: string;
+    requiere_hospitalizacion: boolean;
+    tiempo_hospitalizacion: string;
+    reseccion_estimada: string;
+    firma_cirujano: string;
+    firma_paciente: string;
+  }
+
+  const defaultConductaQuirurgica: ConductaQuirurgica = {
     duracion_estimada: "",
     tipo_anestesia: "ninguna",
     requiere_hospitalizacion: false,
@@ -150,14 +161,14 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     firma_paciente: "",
   }
 
-  const getSafeConductaQuirurgica = () => {
+  const getSafeConductaQuirurgica = (): ConductaQuirurgica => {
     if (!plan?.conducta_quirurgica) {
       return defaultConductaQuirurgica;
     }
     return { ...defaultConductaQuirurgica, ...plan.conducta_quirurgica };
   }
 
-  const [conductaQuirurgica, setConductaQuirurgica] = useState(getSafeConductaQuirurgica())
+  const [conductaQuirurgica, setConductaQuirurgica] = useState<ConductaQuirurgica>(getSafeConductaQuirurgica())
   const [notasDoctor, setNotasDoctor] = useState(plan?.notas_doctor ?? "")
   const [imagenesAdjuntas, setImagenesAdjuntas] = useState<string[]>(plan?.imagenes_adjuntas ?? [])
   const [selectionHistory, setSelectionHistory] = useState<Array<any>>([]);
@@ -192,8 +203,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // Inicializar el historial de selección si hay datos en el plan
   useEffect(() => {
     if (plan?.esquema_mejorado?.selectedProcedure) {
-      setSelectedProcedure(plan.esquema_mejorado.selectedProcedure);
-      selectedProcedureRef.current = plan.esquema_mejorado.selectedProcedure;
+      const procedure = plan.esquema_mejorado.selectedProcedure;
+      if (procedure === 'liposuction' || procedure === 'lipotransfer') {
+        setSelectedProcedure(procedure);
+        selectedProcedureRef.current = procedure;
+      }
     }
     if (plan?.esquema_mejorado?.currentStrokeWidth) {
       setCurrentStrokeWidth(plan.esquema_mejorado.currentStrokeWidth);
@@ -450,7 +464,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       }));
       
       // Actualizar también la historia clínica con datos básicos
-      setHistoriaClinica(prev => ({
+      setHistoriaClinica((prev: typeof historiaClinica) => ({
         ...prev,
         nombre_completo: paciente.nombre_completo || `${paciente.nombre} ${paciente.apellido}`.trim(),
         identificacion: paciente.numero_documento || paciente.documento || '',
@@ -481,7 +495,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
 
     if (!p || !h || isNaN(p) || isNaN(h)) {
       setDatosPaciente(prev => ({ ...prev, imc: 0, categoriaIMC: "" }))
-      setHistoriaClinica(prev => ({ ...prev, peso: datosPaciente.peso, altura: datosPaciente.altura, imc: 0 }))
+      setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, peso: datosPaciente.peso, altura: datosPaciente.altura, imc: 0 }))
       return
     }
 
@@ -494,7 +508,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     else categoria = "Obesidad"
 
     setDatosPaciente(prev => ({ ...prev, imc: rounded, categoriaIMC: categoria }))
-    setHistoriaClinica(prev => ({ ...prev, peso: datosPaciente.peso, altura: datosPaciente.altura, imc: rounded }))
+    setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, peso: datosPaciente.peso, altura: datosPaciente.altura, imc: rounded }))
   }, [datosPaciente.peso, datosPaciente.altura])
 
   // ===========================
@@ -720,9 +734,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   };
 
   const getSVGPoint = (e: MouseEvent, svgDoc: Document) => {
-    const svg = svgDoc.documentElement;
+    // CORRECCIÓN: Usar type assertion a unknown primero, luego a SVGSVGElement
+    const svg = svgDoc.documentElement as unknown as SVGSVGElement;
     const pt = svg.createSVGPoint();
-    
+
     pt.x = e.clientX;
     pt.y = e.clientY;
     
@@ -909,7 +924,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       // Crear patrones
       createPatterns(svgDoc);
 
-      const svgElement = svgDoc.documentElement;
+      // CORRECCIÓN: Usar type assertion a unknown primero, luego a SVGSVGElement
+      const svgElement = svgDoc.documentElement as unknown as SVGSVGElement;
       
       svgElement.style.userSelect = 'none';
       svgElement.style.webkitUserSelect = 'none';
@@ -1024,7 +1040,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // Actualizar clases cuando cambian los modos
   useEffect(() => {
     svgDocuments.forEach(doc => {
-      const svgElement = doc.documentElement;
+      const svgElement = doc.documentElement as unknown as SVGSVGElement;
       if (isDrawingMode) {
         svgElement.classList.add('drawing-mode');
         svgElement.classList.remove('text-mode');
@@ -1083,7 +1099,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     if (!dob) return
     const diff = Date.now() - new Date(dob).getTime()
     const age = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25))
-    setHistoriaClinica(prev => ({ ...prev, edad_calculada: age }))
+    setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, edad_calculada: age }))
     setDatosPaciente(prev => ({ ...prev, edad: age }))
   }, [historiaClinica.fecha_nacimiento])
 
@@ -1466,7 +1482,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               type="date" 
               placeholder="Fecha de nacimiento"
               value={historiaClinica.fecha_nacimiento}
-              onChange={e => setHistoriaClinica(prev => ({ ...prev, fecha_nacimiento: e.target.value }))}
+              onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, fecha_nacimiento: e.target.value }))}
             />
           </div>
           
@@ -1503,8 +1519,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           planId={plan?.id}
         />
       )}
-
-
 
       {/* NOTAS Y ARCHIVOS ADJUNTOS */}
       <section className="p-4 border rounded bg-white">
@@ -1586,14 +1600,14 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               type="number" 
               placeholder="Ej: 120" 
               value={conductaQuirurgica.duracion_estimada} 
-              onChange={e => setConductaQuirurgica(prev => ({...prev, duracion_estimada: e.target.value}))} 
+              onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, duracion_estimada: e.target.value}))} 
               min="0"
             />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de anestesia</label>
-            <select className="w-full border p-2 rounded" value={conductaQuirurgica.tipo_anestesia} onChange={e => setConductaQuirurgica(prev => ({...prev, tipo_anestesia: e.target.value as any}))}>
+            <select className="w-full border p-2 rounded" value={conductaQuirurgica.tipo_anestesia} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tipo_anestesia: e.target.value}))}>
               <option value="general">General</option>
               <option value="peridural">Peridural</option>
               <option value="sedacion">Sedación</option>
@@ -1607,7 +1621,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               <input 
                 type="checkbox" 
                 checked={conductaQuirurgica.requiere_hospitalizacion} 
-                onChange={e => setConductaQuirurgica(prev => ({...prev, requiere_hospitalizacion: e.target.checked}))} 
+                onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, requiere_hospitalizacion: e.target.checked}))} 
               /> 
               Requiere hospitalización
             </label>
@@ -1620,7 +1634,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                 className="w-full border p-2 rounded" 
                 placeholder="Tiempo hospitalización" 
                 value={conductaQuirurgica.tiempo_hospitalizacion} 
-                onChange={e => setConductaQuirurgica(prev => ({...prev, tiempo_hospitalizacion: e.target.value}))} 
+                onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tiempo_hospitalizacion: e.target.value}))} 
               />
             </div>
           )}
@@ -1631,7 +1645,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               className="w-full border p-2 rounded" 
               placeholder="Resección estimada" 
               value={conductaQuirurgica.reseccion_estimada} 
-              onChange={e => setConductaQuirurgica(prev => ({...prev, reseccion_estimada: e.target.value}))} 
+              onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, reseccion_estimada: e.target.value}))} 
             />
           </div>
           
@@ -1641,7 +1655,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               className="w-full border p-2 rounded" 
               placeholder="Firma cirujano (dataURL opcional)" 
               value={conductaQuirurgica.firma_cirujano} 
-              onChange={e => setConductaQuirurgica(prev => ({...prev, firma_cirujano: e.target.value}))} 
+              onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, firma_cirujano: e.target.value}))} 
             />
           </div>
           
@@ -1651,7 +1665,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               className="w-full border p-2 rounded" 
               placeholder="Firma paciente (dataURL opcional)" 
               value={conductaQuirurgica.firma_paciente} 
-              onChange={e => setConductaQuirurgica(prev => ({...prev, firma_paciente: e.target.value}))} 
+              onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, firma_paciente: e.target.value}))} 
             />
           </div>
         </div>
@@ -1664,37 +1678,37 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Ocupación</label>
-            <input className="w-full border p-2 rounded" placeholder="Ocupación" value={historiaClinica.ocupacion} onChange={e => setHistoriaClinica(prev => ({...prev, ocupacion: e.target.value}))} />
+            <input className="w-full border p-2 rounded" placeholder="Ocupación" value={historiaClinica.ocupacion} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, ocupacion: e.target.value}))} />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Entidad</label>
-            <input className="w-full border p-2 rounded" placeholder="Entidad" value={historiaClinica.entidad} onChange={e => setHistoriaClinica(prev => ({...prev, entidad: e.target.value}))} />
+            <input className="w-full border p-2 rounded" placeholder="Entidad" value={historiaClinica.entidad} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, entidad: e.target.value}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
-            <input className="w-full border p-2 rounded" type="date" placeholder="Fecha de nacimiento" value={historiaClinica.fecha_nacimiento} onChange={e => setHistoriaClinica(prev => ({...prev, fecha_nacimiento: e.target.value}))} />
+            <input className="w-full border p-2 rounded" type="date" placeholder="Fecha de nacimiento" value={historiaClinica.fecha_nacimiento} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, fecha_nacimiento: e.target.value}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-            <input className="w-full border p-2 rounded" placeholder="Teléfono" value={historiaClinica.telefono} onChange={e => setHistoriaClinica(prev => ({...prev, telefono: e.target.value}))} />
+            <input className="w-full border p-2 rounded" placeholder="Teléfono" value={historiaClinica.telefono} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, telefono: e.target.value}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Celular</label>
-            <input className="w-full border p-2 rounded" placeholder="Celular" value={historiaClinica.celular} onChange={e => setHistoriaClinica(prev => ({...prev, celular: e.target.value}))} />
+            <input className="w-full border p-2 rounded" placeholder="Celular" value={historiaClinica.celular} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, celular: e.target.value}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
-            <input className="w-full border p-2 rounded" placeholder="Dirección" value={historiaClinica.direccion} onChange={e => setHistoriaClinica(prev => ({...prev, direccion: e.target.value}))} />
+            <input className="w-full border p-2 rounded" placeholder="Dirección" value={historiaClinica.direccion} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, direccion: e.target.value}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input className="w-full border p-2 rounded" placeholder="Email" value={historiaClinica.email} onChange={e => setHistoriaClinica(prev => ({...prev, email: e.target.value}))} />
+            <input className="w-full border p-2 rounded" placeholder="Email" value={historiaClinica.email} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, email: e.target.value}))} />
           </div>
         </div>
 
@@ -1705,7 +1719,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             rows={3}
             placeholder="Motivo de consulta" 
             value={historiaClinica.motivo_consulta} 
-            onChange={e => setHistoriaClinica(prev => ({...prev, motivo_consulta: e.target.value}))} 
+            onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, motivo_consulta: e.target.value}))} 
           />
         </div>
 
@@ -1716,7 +1730,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               <input 
                 type="checkbox" 
                 checked={(historiaClinica.enfermedad_actual as any)[k]} 
-                onChange={e => setHistoriaClinica(prev => ({
+                onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({
                   ...prev, 
                   enfermedad_actual: {
                     ...prev.enfermedad_actual, 
@@ -1733,37 +1747,37 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Farmacológicos</label>
-            <input className="w-full border p-2 rounded" placeholder="Farmacológicos" value={historiaClinica.antecedentes.farmacologicos} onChange={e => setHistoriaClinica(prev => ({...prev, antecedentes: {...prev.antecedentes, farmacologicos: e.target.value}}))} />
+            <input className="w-full border p-2 rounded" placeholder="Farmacológicos" value={historiaClinica.antecedentes.farmacologicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, farmacologicos: e.target.value}}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Traumáticos</label>
-            <input className="w-full border p-2 rounded" placeholder="Traumáticos" value={historiaClinica.antecedentes.traumaticos} onChange={e => setHistoriaClinica(prev => ({...prev, antecedentes: {...prev.antecedentes, traumaticos: e.target.value}}))} />
+            <input className="w-full border p-2 rounded" placeholder="Traumáticos" value={historiaClinica.antecedentes.traumaticos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, traumaticos: e.target.value}}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Quirúrgicos</label>
-            <input className="w-full border p-2 rounded" placeholder="Quirúrgicos" value={historiaClinica.antecedentes.quirurgicos} onChange={e => setHistoriaClinica(prev => ({...prev, antecedentes: {...prev.antecedentes, quirurgicos: e.target.value}}))} />
+            <input className="w-full border p-2 rounded" placeholder="Quirúrgicos" value={historiaClinica.antecedentes.quirurgicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, quirurgicos: e.target.value}}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Alérgicos</label>
-            <input className="w-full border p-2 rounded" placeholder="Alérgicos" value={historiaClinica.antecedentes.alergicos} onChange={e => setHistoriaClinica(prev => ({...prev, antecedentes: {...prev.antecedentes, alergicos: e.target.value}}))} />
+            <input className="w-full border p-2 rounded" placeholder="Alérgicos" value={historiaClinica.antecedentes.alergicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, alergicos: e.target.value}}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tóxicos</label>
-            <input className="w-full border p-2 rounded" placeholder="Tóxicos" value={historiaClinica.antecedentes.toxicos} onChange={e => setHistoriaClinica(prev => ({...prev, antecedentes: {...prev.antecedentes, toxicos: e.target.value}}))} />
+            <input className="w-full border p-2 rounded" placeholder="Tóxicos" value={historiaClinica.antecedentes.toxicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, toxicos: e.target.value}}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Hábitos</label>
-            <input className="w-full border p-2 rounded" placeholder="Hábitos" value={historiaClinica.antecedentes.habitos} onChange={e => setHistoriaClinica(prev => ({...prev, antecedentes: {...prev.antecedentes, habitos: e.target.value}}))} />
+            <input className="w-full border p-2 rounded" placeholder="Hábitos" value={historiaClinica.antecedentes.habitos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, habitos: e.target.value}}))} />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Ginecológicos</label>
-            <input className="w-full border p-2 rounded" placeholder="Ginecológicos" value={historiaClinica.antecedentes.ginecologicos} onChange={e => setHistoriaClinica(prev => ({...prev, antecedentes: {...prev.antecedentes, ginecologicos: e.target.value}}))} />
+            <input className="w-full border p-2 rounded" placeholder="Ginecológicos" value={historiaClinica.antecedentes.ginecologicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, ginecologicos: e.target.value}}))} />
           </div>
           
           <div className="flex items-center p-2">
@@ -1771,7 +1785,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               <input 
                 type="checkbox" 
                 checked={historiaClinica.antecedentes.fuma === "si"} 
-                onChange={e => setHistoriaClinica(prev => ({
+                onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({
                   ...prev, 
                   antecedentes: {
                     ...prev.antecedentes, 
@@ -1794,7 +1808,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                 rows={2}
                 placeholder={k} 
                 value={(historiaClinica.notas_corporales as any)[k]} 
-                onChange={e => setHistoriaClinica(prev => ({
+                onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({
                   ...prev, 
                   notas_corporales: {
                     ...prev.notas_corporales, 
@@ -1812,7 +1826,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             className="w-full border p-2 rounded" 
             placeholder="Diagnóstico" 
             value={historiaClinica.diagnostico} 
-            onChange={e => setHistoriaClinica(prev => ({...prev, diagnostico: e.target.value}))} 
+            onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, diagnostico: e.target.value}))} 
           />
         </div>
 
@@ -1823,7 +1837,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             rows={3}
             placeholder="Plan de conducta" 
             value={historiaClinica.plan_conducta} 
-            onChange={e => setHistoriaClinica(prev => ({...prev, plan_conducta: e.target.value}))} 
+            onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, plan_conducta: e.target.value}))} 
           />
         </div>
 

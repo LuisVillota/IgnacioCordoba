@@ -16,7 +16,7 @@ def test_database():
             host='localhost',
             user='root',
             password='root',
-            database='prueba_consultorio_db',
+            database='u997398721_consultorio_db',
             port=3306
         )
         print("   ✅ Conexión exitosa")

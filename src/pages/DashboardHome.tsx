@@ -16,7 +16,7 @@ interface DashboardStats {
   citasHoy: number
 }
 
-export function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
+export default function DashboardHome({ user, hasPermission }: DashboardHomeProps) {
   const [stats, setStats] = useState<DashboardStats>({
     totalPacientes: 0,
     citasHoy: 0

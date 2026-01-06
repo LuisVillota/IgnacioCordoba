@@ -302,7 +302,7 @@ export const api = {
     fetchAPI(`/api/agenda-procedimientos/${id}`),
 
   createAgendaProcedimiento: (data: any) => {
-    return preventDuplicateCall('createAgendaProcedimiento', () => {
+    return preventDuplicateCall('createAgendaProcedimiento', async () => {
       console.log("📤 Creando procedimiento agendado, datos recibidos EN API:", data);
       
       // **CORRECCIÓN CRÍTICA: Crear una copia profunda y convertir tipos**
@@ -407,6 +407,10 @@ export const api = {
 
       if (excludeId && excludeId > 0) {
         params.append('exclude_id', excludeId.toString());
+      }
+
+      if (procedimiento_id !== undefined && procedimiento_id !== null) {
+        params.append('procedimiento_id', procedimiento_id.toString());
       }
 
       const url = `/api/agenda-procedimientos/disponibilidad?${params.toString()}`;
@@ -966,31 +970,6 @@ export const api = {
   debugUploadDir: () => fetchAPI('/api/debug/upload-dir'),
   debugSalaEspera: () => fetchAPI('/api/debug/sala-espera'),
   
-  // Nueva función para debug de fotos
-  debugHistoriaFotos: async (historiaId: number) => {
-    try {
-      const historia = await api.getHistoriaClinica(historiaId);
-      console.log("🔍 Debug historia fotos:", {
-        historiaId,
-        rawFotos: historia.fotos,
-        parsedFotos: historia.fotos ? historia.fotos.split(',').filter(f => f.trim()) : [],
-        urls: historia.fotos ? historia.fotos.split(',').map((url: string) => {
-          const trimmed = url.trim();
-          return {
-            original: trimmed,
-            isRelative: trimmed.startsWith('/uploads/'),
-            absoluteUrl: trimmed.startsWith('/uploads/') ? `${API_URL}${trimmed}` : trimmed,
-            willLoad: trimmed.startsWith('http') || trimmed.startsWith('/uploads/')
-          };
-        }) : []
-      });
-      return historia;
-    } catch (error) {
-      console.error("❌ Debug error:", error);
-      throw error;
-    }
-  },
-
   // ===== SALA DE ESPERA =====
   getSalaEspera: async (mostrarTodos: boolean = true): Promise<any> => {
     try {
@@ -1621,6 +1600,8 @@ export const api = {
     });
   },
 
+// En el objeto api, agregar o actualizar la función createPlanQuirurgico:
+
   createPlanQuirurgico: (data: any) => {
     const callKey = `createPlanQuirurgico_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
@@ -1632,15 +1613,26 @@ export const api = {
       
       console.log("📤 Datos para enviar al backend:", backendData);
       
+      // 🔴 CORRECCIÓN CRÍTICA: Asegurar que paciente_id sea un NÚMERO VÁLIDO
+      if (!backendData.paciente_id || backendData.paciente_id <= 0) {
+        console.error("❌ Error: paciente_id inválido:", backendData.paciente_id);
+        return {
+          success: false,
+          error: true,
+          message: "ID de paciente inválido. Debe ser un número mayor a 0.",
+          isValidationError: true
+        };
+      }
+      
+      backendData.paciente_id = parseInt(String(backendData.paciente_id));
+      
       try {
         const result = await fetchAPI('/api/planes-quirurgicos', {
           method: 'POST',
           body: JSON.stringify(backendData)
         });
         
-        console.log("✅ Resultado de fetchAPI:", result);
-        
-        // 🔴 VERIFICACIÓN SEGURA: Asegurar que result es válido
+
         if (!result) {
           return {
             success: false,
@@ -1651,6 +1643,35 @@ export const api = {
         
         // Si result ya tiene error, devolverlo
         if (result.error === true) {
+          // 🔴 CORRECCIÓN ESPECÍFICA PARA "Paciente no encontrado"
+          if (result.message && result.message.includes("Paciente no encontrado")) {
+            console.error("🔴 Error específico: Paciente con ID", backendData.paciente_id, "no encontrado en la BD");
+            
+            // Verificar si el paciente existe realmente
+            try {
+              const pacienteCheck = await api.getPaciente(backendData.paciente_id);
+              console.log("🔍 Verificación de paciente:", pacienteCheck);
+              
+              if (pacienteCheck && pacienteCheck.id) {
+                return {
+                  success: false,
+                  error: true,
+                  message: `El paciente con ID ${backendData.paciente_id} existe pero hay un error en el servidor. Contacte al administrador.`,
+                  pacienteExiste: true
+                };
+              } else {
+                return {
+                  success: false,
+                  error: true,
+                  message: `El paciente con ID ${backendData.paciente_id} no existe en la base de datos.`,
+                  pacienteExiste: false
+                };
+              }
+            } catch (pacienteError) {
+              console.error("❌ Error verificando paciente:", pacienteError);
+              return result;
+            }
+          }
           return result;
         }
         
@@ -1671,6 +1692,7 @@ export const api = {
     });
   },
 
+  // 🔴 AGREGAR TAMBIÉN EN LA FUNCIÓN updatePlanQuirurgico:
   updatePlanQuirurgico: (id: string, data: any) => {
     const callKey = `updatePlanQuirurgico_${id}_${Date.now()}`;
     
@@ -1682,15 +1704,48 @@ export const api = {
       
       console.log("📤 Datos para enviar al backend:", backendData);
       
+      // 🔴 CORRECCIÓN CRÍTICA: Asegurar que paciente_id sea un NÚMERO VÁLIDO
+      if (!backendData.paciente_id || backendData.paciente_id <= 0) {
+        console.error("❌ Error: paciente_id inválido:", backendData.paciente_id);
+        return {
+          success: false,
+          error: true,
+          message: "ID de paciente inválido. Debe ser un número mayor a 0.",
+          isValidationError: true
+        };
+      }
+      
+      backendData.paciente_id = parseInt(String(backendData.paciente_id));
+                  
       try {
         const result = await fetchAPI(`/api/planes-quirurgicos/${id}`, {
           method: 'PUT',
           body: JSON.stringify(backendData)
         });
         
-        // fetchAPI ya devuelve los datos parseados
         if (result && result.error === true) {
-          return result; // 🔴 NO lanzar error, devolver objeto de error
+          // 🔴 CORRECCIÓN ESPECÍFICA PARA "Paciente no encontrado"
+          if (result.message && result.message.includes("Paciente no encontrado")) {
+            console.error("🔴 Error específico: Paciente con ID", backendData.paciente_id, "no encontrado en la BD");
+            
+            // Verificar si el paciente existe realmente
+            try {
+              const pacienteCheck = await api.getPaciente(backendData.paciente_id);
+              console.log("🔍 Verificación de paciente:", pacienteCheck);
+              
+              if (pacienteCheck && pacienteCheck.id) {
+                return {
+                  success: false,
+                  error: true,
+                  message: `El paciente con ID ${backendData.paciente_id} existe pero hay un error en el servidor. Contacte al administrador.`,
+                  pacienteExiste: true
+                };
+              }
+            } catch (pacienteError) {
+              console.error("❌ Error verificando paciente:", pacienteError);
+            }
+          }
+          return result;
         }
         
         return {
@@ -1706,6 +1761,44 @@ export const api = {
         };
       }
     });
+  },
+
+  // 🔴 AGREGAR ESTA FUNCIÓN PARA VERIFICAR PACIENTE:
+  verificarPaciente: async (pacienteId: string | number) => {
+    try {
+      const pacienteIdNum = typeof pacienteId === 'string' ? parseInt(pacienteId) : pacienteId;
+      
+      if (isNaN(pacienteIdNum) || pacienteIdNum <= 0) {
+        return {
+          success: false,
+          existe: false,
+          message: "ID de paciente inválido"
+        };
+      }
+      
+      const paciente = await api.getPaciente(pacienteIdNum);
+      
+      if (paciente && paciente.id) {
+        return {
+          success: true,
+          existe: true,
+          paciente: paciente
+        };
+      } else {
+        return {
+          success: false,
+          existe: false,
+          message: "Paciente no encontrado"
+        };
+      }
+    } catch (error) {
+      console.error("❌ Error verificando paciente:", error);
+      return {
+        success: false,
+        existe: false,
+        message: "Error verificando paciente"
+      };
+    }
   },
 
   deletePlanQuirurgico: (id: string) => {
@@ -1734,10 +1827,6 @@ export const api = {
       }
     });
   },
-
-  // Buscar pacientes para autocompletar
-  buscarPacientes: (query: string, limit: number = 10) =>
-    fetchAPI(`/api/pacientes/buscar?q=${encodeURIComponent(query)}&limit=${limit}`),
 
   // ===== Obtener datos completos de un paciente para pre-llenar formulario =====
   getPacienteCompleto: async (pacienteId: string) => {
@@ -1974,7 +2063,7 @@ export const transformBackendToFrontend = {
     // Calcular total basado en items si el de la BD es 0
     let totalCalculado = totalBD;
     if (totalBD === 0 && items.length > 0) {
-      totalCalculado = items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+      totalCalculado = items.reduce((sum: number, item: any) => sum + (item.subtotal || 0), 0);
     }
     
     console.log("📊 Transformación completa:", {
