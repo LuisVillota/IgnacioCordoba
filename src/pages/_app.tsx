@@ -19,50 +19,85 @@ function LoadingScreen() {
 // Componente para manejar redirección y protección de rutas
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const { isAuthenticated, loading } = useAuth()
+  const { user, isAuthenticated, loading } = useAuth()
   const [isClient, setIsClient] = useState(false)
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
   useEffect(() => {
     setIsClient(true)
   }, [])
 
   useEffect(() => {
-    if (!loading && isClient) {
-      // Rutas públicas que no requieren autenticación
-      const publicPaths = ['/login', '/']
-      const isPublicPath = publicPaths.includes(router.pathname)
-
-      // Si no está autenticado y no está en una ruta pública, redirigir a login
-      if (!isAuthenticated && !isPublicPath) {
-        console.log('❌ Usuario no autenticado, redirigiendo a /login desde:', router.pathname)
-        router.push('/login')
-      }
-      
-      // Si está autenticado y está en login o raíz, redirigir a dashboard
-      if (isAuthenticated && (router.pathname === '/login' || router.pathname === '/')) {
-        console.log('✅ Usuario autenticado, redirigiendo a /DashboardHome')
-        router.push('/DashboardHome')
-      }
+    // Solo ejecutar en el cliente y cuando no esté cargando
+    if (!isClient || loading) {
+      console.log('⏳ AuthGuard: Esperando cliente o cargando...', { isClient, loading })
+      return
     }
-  }, [isAuthenticated, loading, router.pathname, isClient, router])
 
-  // Mientras carga o no está en cliente, mostrar loading
+    // Rutas públicas
+    const publicPaths = ['/login', '/']
+    const isPublicPath = publicPaths.includes(router.pathname)
+
+    console.log('🔍 AuthGuard: Estado actual', {
+      pathname: router.pathname,
+      isAuthenticated,
+      hasUser: !!user,
+      isPublicPath,
+      isRedirecting
+    })
+
+    // CASO 1: No autenticado en ruta protegida → Login
+    if (!isAuthenticated && !isPublicPath && !isRedirecting) {
+      console.log('🚫 No autenticado en ruta protegida, redirigiendo a /login')
+      setIsRedirecting(true)
+      router.replace('/login').finally(() => {
+        setIsRedirecting(false)
+      })
+      return
+    }
+    
+    // CASO 2: Autenticado en login o raíz → Dashboard
+    if (isAuthenticated && user && (router.pathname === '/login' || router.pathname === '/') && !isRedirecting) {
+      console.log('✅ Autenticado en página pública, redirigiendo a /DashboardHome')
+      setIsRedirecting(true)
+      router.replace('/DashboardHome').finally(() => {
+        setIsRedirecting(false)
+      })
+      return
+    }
+
+    // CASO 3: Ya está en la ruta correcta
+    console.log('✓ Usuario en ruta correcta')
+    
+  }, [isAuthenticated, user, loading, router.pathname, isClient, isRedirecting, router])
+
+  // Mientras carga o no está en cliente
   if (loading || !isClient) {
+    console.log('⏳ Mostrando LoadingScreen (loading o !isClient)')
     return <LoadingScreen />
   }
 
-  // Si estamos en una ruta pública, mostrar siempre
+  // Si está redirigiendo, mostrar loading
+  if (isRedirecting) {
+    console.log('🔄 Redirigiendo...')
+    return <LoadingScreen />
+  }
+
+  // Rutas públicas - mostrar siempre
   const publicPaths = ['/login', '/']
   if (publicPaths.includes(router.pathname)) {
+    console.log('📄 Mostrando ruta pública:', router.pathname)
     return <>{children}</>
   }
 
-  // Si no está autenticado en ruta protegida, mostrar loading mientras redirige
-  if (!isAuthenticated) {
+  // Ruta protegida sin autenticación - mostrar loading mientras redirige
+  if (!isAuthenticated || !user) {
+    console.log('🔒 Ruta protegida sin auth, mostrando LoadingScreen')
     return <LoadingScreen />
   }
 
-  // Usuario autenticado en ruta protegida, mostrar contenido
+  // Usuario autenticado en ruta protegida
+  console.log('✅ Mostrando contenido protegido')
   return <>{children}</>
 }
 

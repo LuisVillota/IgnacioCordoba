@@ -52,11 +52,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://drhernanignaciocordoba.me",
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "https://www.drhernanignaciocordoba.me" 
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], 
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,
 )
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
@@ -476,6 +479,70 @@ def root():
 def health_check():
     return {"status": "healthy", "database": "MySQL"}
 
+@app.get("/api/health-check")
+async def health_check_fast():
+    try:
+        conn = get_connection()
+        conn.ping(reconnect=True)
+        conn.close()
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e)[:100],  
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/dashboard/quick-counts")
+def get_quick_counts():
+    """Endpoint SUPER rápido solo para conteos"""
+    try:
+        conn = get_connection()
+        with conn:
+            with conn.cursor() as cursor:
+                # 1. Contar pacientes (solo COUNT, sin traer datos)
+                cursor.execute("SELECT COUNT(*) as total FROM paciente")
+                pacientes_total = cursor.fetchone()['total']
+                
+                # 2. Contar citas de hoy (solo COUNT)
+                hoy = datetime.now().strftime('%Y-%m-%d')
+                cursor.execute("""
+                    SELECT COUNT(*) as total 
+                    FROM cita 
+                    WHERE DATE(fecha_hora) = %s
+                """, (hoy,))
+                citas_hoy = cursor.fetchone()['total']
+                
+                return {
+                    "success": True,
+                    "pacientes_total": pacientes_total,
+                    "citas_hoy": citas_hoy,
+                    "timestamp": datetime.now().isoformat()
+                }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "pacientes_total": 0,
+            "citas_hoy": 0
+        }
+
+@app.get("/api/debug/endpoints")
+def debug_endpoints():
+    routes = []
+    for route in app.routes:
+        routes.append({
+            "path": route.path,
+            "name": route.name,
+            "methods": getattr(route, "methods", None)
+        })
+    
+    return {"endpoints": routes}
+
 @app.get("/api/debug/endpoints")
 def debug_endpoints():
     routes = []
@@ -581,6 +648,7 @@ def test_frontend():
             "message": f"Error en el backend: {str(e)}",
             "timestamp": datetime.now().isoformat()
         }
+
 
 # ====================== ENDPOINTS DE USUARIOS ======================
 
