@@ -1,6 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 
+const outDir = path.join(__dirname, 'out');
+
+// Verificar si existe la carpeta out
+if (!fs.existsSync(outDir)) {
+  console.error('❌ La carpeta out/ no existe. El build de Next.js falló o no se completó.');
+  process.exit(1);
+}
+
 const htaccessContent = `# Deshabilitar caché completamente
 <IfModule mod_headers.c>
   Header set Cache-Control "no-cache, no-store, must-revalidate"
@@ -30,11 +38,12 @@ RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^([^.]+)$ $1.html [NC,L]
 `;
 
-const htaccessPath = path.join(__dirname, 'out', '.htaccess');
+const htaccessPath = path.join(outDir, '.htaccess');
 
 try {
   fs.writeFileSync(htaccessPath, htaccessContent);
-  console.log('✅ .htaccess creado en out/');
+  console.log('✅ .htaccess creado exitosamente en out/');
 } catch (error) {
   console.error('❌ Error creando .htaccess:', error);
+  process.exit(1);
 }
