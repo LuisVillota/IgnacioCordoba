@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -8,18 +7,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  webpack: (config) => {
-    if (config.resolve) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        "@": path.resolve(__dirname, "src"),
-        "@/lib": path.resolve(__dirname, "src/lib"),
-        "@/context": path.resolve(__dirname, "src/context"),
-        "@/components": path.resolve(__dirname, "src/components"),
-      };
-    }
-    return config;
-  },
+  turbopack: {},
 };
 
 export default nextConfig;
