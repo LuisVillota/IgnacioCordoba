@@ -17,6 +17,17 @@ if os.getenv("ENV") != "production":
     from dotenv import load_dotenv
     load_dotenv()
 
+def get_connection():
+    return pymysql.connect(
+        host=os.getenv("DB_HOST"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        database=os.getenv("DB_NAME"),
+        port=int(os.getenv("DB_PORT", 3306)),
+        cursorclass=pymysql.cursors.DictCursor,
+        connect_timeout=10
+    )
+
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(os.path.join(UPLOAD_DIR, "historias"), exist_ok=True)
@@ -476,15 +487,7 @@ def debug_endpoints():
 @app.get("/api/test-frontend")
 def test_frontend():
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) as count FROM Paciente")
@@ -582,16 +585,7 @@ def create_usuario(usuario: UsuarioCreate):
     try:
         import hashlib
         password_hash = hashlib.sha256(usuario.password.encode()).hexdigest()
-        
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 # Verificar si el username ya existe
@@ -637,16 +631,7 @@ def create_usuario(usuario: UsuarioCreate):
 def update_usuario(usuario_id: int, usuario: UsuarioUpdate):
     try:
         import hashlib
-        
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 # Verificar que el usuario existe
@@ -712,15 +697,7 @@ def update_usuario(usuario_id: int, usuario: UsuarioUpdate):
 @app.delete("/api/usuarios/{usuario_id}", response_model=dict)
 def delete_usuario(usuario_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 # Verificar que el usuario existe
@@ -761,15 +738,7 @@ def delete_usuario(usuario_id: int):
 @app.get("/api/usuarios")
 def get_usuarios():
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -786,15 +755,7 @@ def get_usuarios():
 @app.get("/api/usuarios/{usuario_id}")
 def get_usuario(usuario_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -818,15 +779,7 @@ def login(username: str, password: str):
         import hashlib
         password_hash = hashlib.sha256(password.encode()).hexdigest()
         
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -856,15 +809,7 @@ def login(username: str, password: str):
 @app.get("/api/pacientes", response_model=dict)
 def get_pacientes(limit: int = 100, offset: int = 0):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) as total FROM Paciente")
@@ -889,15 +834,7 @@ def get_pacientes(limit: int = 100, offset: int = 0):
 @app.get("/api/pacientes/{paciente_id}", response_model=dict)
 def get_paciente(paciente_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM Paciente WHERE id = %s", (paciente_id,))
@@ -913,13 +850,7 @@ def get_paciente(paciente_id: int):
 @app.post("/api/pacientes", response_model=dict)
 def create_paciente(paciente: PacienteCreate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -966,13 +897,7 @@ def create_paciente(paciente: PacienteCreate):
 @app.put("/api/pacientes/{paciente_id}", response_model=dict)
 def update_paciente(paciente_id: int, paciente: PacienteUpdate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM Paciente WHERE id = %s", (paciente_id,))
@@ -1030,15 +955,7 @@ def update_paciente(paciente_id: int, paciente: PacienteUpdate):
 @app.delete("/api/pacientes/{paciente_id}", response_model=dict)
 def delete_paciente(paciente_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id, nombre, apellido FROM Paciente WHERE id = %s", (paciente_id,))
@@ -1080,15 +997,7 @@ def delete_paciente(paciente_id: int):
 @app.get("/api/citas")
 def get_citas(limit: int = 50, offset: int = 0):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -1113,15 +1022,7 @@ def get_citas(limit: int = 50, offset: int = 0):
 @app.get("/api/citas/{cita_id}")
 def get_cita(cita_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -1155,13 +1056,7 @@ def create_cita(cita: CitaCreate):
             fecha_hora_limpia += ":00"
         fecha_parseada = datetime.fromisoformat(fecha_hora_limpia)
         
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id, nombre, apellido FROM Paciente WHERE id = %s", (cita.paciente_id,))
@@ -1236,15 +1131,7 @@ def create_cita(cita: CitaCreate):
 @app.put("/api/citas/{cita_id}", response_model=dict)
 def update_cita(cita_id: int, cita: CitaUpdate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM Cita WHERE id = %s", (cita_id,))
@@ -1286,13 +1173,7 @@ def update_cita(cita_id: int, cita: CitaUpdate):
 @app.delete("/api/citas/{cita_id}", response_model=MessageResponse)
 def delete_cita(cita_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM Cita WHERE id = %s", (cita_id,))
@@ -1319,15 +1200,7 @@ def delete_cita(cita_id: int):
 @app.get("/api/estados/citas")
 def get_estados_citas():
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM Estado_Cita ORDER BY id")
@@ -1339,15 +1212,7 @@ def get_estados_citas():
 @app.get("/api/estados/quirurgicos")
 def get_estados_quirurgicos():
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM Estado_Quirurgico ORDER BY id")
@@ -1359,15 +1224,7 @@ def get_estados_quirurgicos():
 @app.get("/api/estados/cotizaciones")
 def get_estados_cotizaciones():
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM estado_cotizacion ORDER BY orden")
@@ -1386,15 +1243,7 @@ def get_estados_cotizaciones():
 @app.get("/api/procedimientos", response_model=dict)
 def get_procedimientos():
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -1446,15 +1295,7 @@ def get_procedimientos():
 @app.get("/api/procedimientos/{procedimiento_id}", response_model=dict)
 def get_procedimiento(procedimiento_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -1482,13 +1323,7 @@ def get_procedimiento(procedimiento_id: int):
 @app.post("/api/procedimientos", response_model=dict)
 def create_procedimiento(procedimiento: ProcedimientoCreate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 from datetime import datetime
@@ -1529,13 +1364,7 @@ def create_procedimiento(procedimiento: ProcedimientoCreate):
 @app.put("/api/procedimientos/{procedimiento_id}", response_model=dict)
 def update_procedimiento(procedimiento_id: int, procedimiento: ProcedimientoUpdate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id, tarifa_id FROM procedimiento WHERE id = %s", (procedimiento_id,))
@@ -1595,13 +1424,7 @@ def update_procedimiento(procedimiento_id: int, procedimiento: ProcedimientoUpda
 @app.delete("/api/procedimientos/{procedimiento_id}", response_model=dict)
 def delete_procedimiento(procedimiento_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT tarifa_id FROM procedimiento WHERE id = %s", (procedimiento_id,))
@@ -1631,15 +1454,7 @@ def delete_procedimiento(procedimiento_id: int):
 @app.get("/api/adicionales", response_model=dict)
 def get_adicionales():
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -1666,15 +1481,7 @@ def get_adicionales():
 @app.get("/api/adicionales/{adicional_id}", response_model=dict)
 def get_adicional(adicional_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -1702,13 +1509,7 @@ def get_adicional(adicional_id: int):
 @app.post("/api/adicionales", response_model=dict)
 def create_adicional(adicional: AdicionalCreate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 from datetime import datetime
@@ -1749,13 +1550,7 @@ def create_adicional(adicional: AdicionalCreate):
 @app.put("/api/adicionales/{adicional_id}", response_model=dict)
 def update_adicional(adicional_id: int, adicional: AdicionalUpdate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id, tarifa_id FROM adicional WHERE id = %s", (adicional_id,))
@@ -1815,13 +1610,7 @@ def update_adicional(adicional_id: int, adicional: AdicionalUpdate):
 @app.delete("/api/adicionales/{adicional_id}", response_model=dict)
 def delete_adicional(adicional_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT tarifa_id FROM adicional WHERE id = %s", (adicional_id,))
@@ -1851,15 +1640,7 @@ def delete_adicional(adicional_id: int):
 @app.get("/api/otros-adicionales", response_model=dict)
 def get_otros_adicionales():
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -1886,15 +1667,7 @@ def get_otros_adicionales():
 @app.get("/api/otros-adicionales/{otro_adicional_id}", response_model=dict)
 def get_otro_adicional(otro_adicional_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -1969,13 +1742,7 @@ def create_otro_adicional(otro_adicional: AdicionalCreate):
 @app.put("/api/otros-adicionales/{otro_adicional_id}", response_model=dict)
 def update_otro_adicional(otro_adicional_id: int, otro_adicional: AdicionalUpdate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id, tarifa_id FROM otro_adicional WHERE id = %s", (otro_adicional_id,))
@@ -2035,13 +1802,7 @@ def update_otro_adicional(otro_adicional_id: int, otro_adicional: AdicionalUpdat
 @app.delete("/api/otros-adicionales/{otro_adicional_id}", response_model=dict)
 def delete_otro_adicional(otro_adicional_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT tarifa_id FROM otro_adicional WHERE id = %s", (otro_adicional_id,))
@@ -2071,15 +1832,7 @@ def delete_otro_adicional(otro_adicional_id: int):
 @app.get("/api/historias-clinicas")
 def get_historias_clinicas(limit: int = 100, offset: int = 0):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -2097,15 +1850,7 @@ def get_historias_clinicas(limit: int = 100, offset: int = 0):
 @app.get("/api/historias-clinicas/paciente/{paciente_id}")
 def get_historias_by_paciente(paciente_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM paciente WHERE id = %s", (paciente_id,))
@@ -2129,15 +1874,7 @@ def get_historias_by_paciente(paciente_id: int):
 @app.get("/api/historias-clinicas/{historia_id}")
 def get_historia_clinica(historia_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM historial_clinico WHERE id = %s", (historia_id,))
@@ -2155,13 +1892,7 @@ def get_historia_clinica(historia_id: int):
 @app.post("/api/historias-clinicas", response_model=dict)
 def create_historia_clinica(historia: HistorialClinicoCreate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM paciente WHERE id = %s", (historia.paciente_id,))
@@ -2207,13 +1938,7 @@ def create_historia_clinica(historia: HistorialClinicoCreate):
 @app.put("/api/historias-clinicas/{historia_id}", response_model=dict)
 def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
@@ -2267,13 +1992,7 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
 @app.delete("/api/historias-clinicas/{historia_id}", response_model=MessageResponse)
 def delete_historia_clinica(historia_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=3306
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
@@ -2302,13 +2021,7 @@ async def upload_historia_foto(
     try:
         conn = None
         try:
-            conn = get_connection(
-                host=os.getenv("DB_HOST"),
-                user=os.getenv("DB_USER"),
-                password=os.getenv("DB_PASSWORD"),
-                database=os.getenv("DB_NAME"),
-                port=3306
-            )
+            conn = get_connection()
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
                 resultado = cursor.fetchone()
@@ -2402,15 +2115,7 @@ async def upload_historia_foto(
 @app.get("/api/sala-espera")
 def get_sala_espera(mostrarTodos: bool = True):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 hoy = datetime.now().strftime('%Y-%m-%d')
@@ -2598,15 +2303,7 @@ def get_sala_espera(mostrarTodos: bool = True):
 @app.post("/api/sala-espera", response_model=dict)
 def crear_registro_sala_espera(registro: SalaEsperaCreate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id, nombre, apellido FROM paciente WHERE id = %s", (registro.paciente_id,))
@@ -2690,15 +2387,7 @@ def crear_registro_sala_espera(registro: SalaEsperaCreate):
 @app.put("/api/sala-espera/{paciente_id}/estado", response_model=dict)
 def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id, nombre, apellido FROM paciente WHERE id = %s", (paciente_id,))
@@ -2817,15 +2506,7 @@ def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
 @app.put("/api/sala-espera/bulk-estados", response_model=dict)
 def bulk_update_estados_sala_espera(request: BulkUpdateEstadosRequest):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 actualizados = 0
@@ -2963,15 +2644,7 @@ def bulk_update_estados_sala_espera(request: BulkUpdateEstadosRequest):
 @app.get("/api/sala-espera/estadisticas")
 def get_estadisticas_sala_espera():
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 hoy = datetime.now().strftime('%Y-%m-%d')
@@ -3084,15 +2757,7 @@ def verificar_disponibilidad(
     """
     try:
         from datetime import datetime, timedelta
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 # Asegurar formato de hora
@@ -3189,15 +2854,7 @@ def get_agenda_procedimientos(
     fecha_fin: Optional[str] = None
 ):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 query = """
@@ -3276,15 +2933,7 @@ def get_agenda_procedimientos(
 @app.get("/api/agenda-procedimientos/{procedimiento_id}", response_model=dict)
 def get_agenda_procedimiento(procedimiento_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -3318,23 +2967,7 @@ def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
     try:
         from datetime import datetime, timedelta
         
-        print(f"📥 BACKEND create_agenda_procedimiento recibió:")
-        print(f"   numero_documento: {procedimiento.numero_documento}")
-        print(f"   fecha: {procedimiento.fecha} (tipo: {type(procedimiento.fecha)})")
-        print(f"   hora: {procedimiento.hora} (tipo: {type(procedimiento.hora)})")
-        print(f"   procedimiento_id: {procedimiento.procedimiento_id} (tipo: {type(procedimiento.procedimiento_id)})")
-        print(f"   duracion: {procedimiento.duracion}")
-        print(f"   estado: {procedimiento.estado}")
-        
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -3450,15 +3083,7 @@ def update_agenda_procedimiento(procedimiento_id: int, procedimiento: AgendaProc
     try:
         from datetime import datetime, timedelta
         
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -3568,15 +3193,7 @@ def update_agenda_procedimiento(procedimiento_id: int, procedimiento: AgendaProc
 @app.delete("/api/agenda-procedimientos/{procedimiento_id}", response_model=dict)
 def delete_agenda_procedimiento(procedimiento_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM agenda_procedimientos WHERE id = %s", (procedimiento_id,))
@@ -3646,15 +3263,7 @@ def get_estados_procedimiento():
 @app.get("/api/agenda-procedimientos/calendario/{year}/{month}")
 def get_calendario_procedimientos(year: int, month: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 fecha_inicio = f"{year}-{month:02d}-01"
@@ -3714,15 +3323,7 @@ def get_calendario_procedimientos(year: int, month: int):
 @app.get("/api/cotizaciones", response_model=dict)
 def get_cotizaciones(limit: int = 50, offset: int = 0):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -3836,15 +3437,7 @@ def get_cotizaciones(limit: int = 50, offset: int = 0):
 @app.get("/api/cotizaciones/{cotizacion_id}", response_model=dict)
 def get_cotizacion(cotizacion_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -3949,19 +3542,8 @@ def get_cotizacion(cotizacion_id: int):
     
 @app.put("/api/cotizaciones/{cotizacion_id}", response_model=dict)
 def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
-    print(f"🔄 Actualizando cotización ID: {cotizacion_id}")
-    print(f"📦 Datos recibidos: {cotizacion}")
-    
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 # 1. Verificar que la cotización existe
@@ -4108,15 +3690,7 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
 @app.post("/api/cotizaciones", response_model=dict)
 def create_cotizacion(cotizacion: CotizacionCreate):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         
         with conn:
             with conn.cursor() as cursor:
@@ -4224,15 +3798,7 @@ def create_cotizacion(cotizacion: CotizacionCreate):
 @app.delete("/api/cotizaciones/{cotizacion_id}", response_model=dict)
 def delete_cotizacion(cotizacion_id: int):
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM cotizacion WHERE id = %s", (cotizacion_id,))
@@ -4299,15 +3865,7 @@ def debug_upload_dir():
 @app.get("/api/debug/sala-espera")
 def debug_sala_espera():
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 hoy = datetime.now().strftime('%Y-%m-%d')
@@ -4363,22 +3921,12 @@ def debug_sala_espera():
 @app.get("/api/planes-quirurgicos", response_model=dict)
 def get_planes_quirurgicos(limit: int = 50, offset: int = 0):
     try:
-        conn = get_connection(
-            host="localhost",
-            user="hicadministracion@hotmail.com",
-            password="Hic12969991",
-            database="u997398721_consultorio_db",
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
 
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) AS total FROM plan_quirurgico")
                 total = cursor.fetchone()["total"]
-
-                # 🔴 MODIFICACIÓN: Agregar JOIN con paciente para traer nombre y documento
                 cursor.execute("""
                     SELECT 
                         pq.*,
@@ -4409,21 +3957,12 @@ def get_planes_quirurgicos(limit: int = 50, offset: int = 0):
     
 @app.get("/api/planes-quirurgicos/{plan_id}", response_model=dict)
 def get_plan_quirurgico(plan_id: str):
-    print(f"🔍 GET Plan quirúrgico ID: {plan_id}")
     try:
         # Limpiar ID si viene con prefijo 'plan_'
         plan_id_num = plan_id.replace('plan_', '')
         print(f"🔍 ID numérico: {plan_id_num}")
         
-        conn = get_connection(
-            host="localhost",
-            user="hicadministracion@hotmail.com",
-            password="Hic12969991",
-            database="u997398721_consultorio_db",
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         
         with conn:
             with conn.cursor() as cursor:
@@ -4459,15 +3998,7 @@ def get_todos_pacientes():
     Obtiene todos los pacientes para selección en formularios
     """
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -4520,16 +4051,7 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
                 return v[:8]
             return v
 
-        conn = get_connection(
-            host="localhost",
-            user="hicadministracion@hotmail.com",
-            password="Hic12969991",
-            database="u997398721_consultorio_db",
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10,
-            autocommit=False
-        )
+        conn = get_connection()
 
         with conn.cursor() as cursor:
 
@@ -4635,15 +4157,7 @@ def update_plan_quirurgico(plan_id: str, plan_update: PlanQuirurgicoUpdate):
         # Extraer ID numérico
         plan_id_num = plan_id.replace('plan_', '')
         
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 # 1. Verificar que el plan existe y obtener datos actuales
@@ -4879,18 +4393,8 @@ async def descargar_archivo_plan(plan_id: int, data: dict):
         
         if not nombre_archivo:
             raise HTTPException(status_code=400, detail="Nombre de archivo requerido")
-        
-        print(f"📥 Solicitando descarga del archivo: {nombre_archivo}, para plan: {plan_id}")
-        
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+                
+        conn = get_connection()
         
         with conn:
             with conn.cursor() as cursor:
@@ -5096,15 +4600,7 @@ def delete_plan_quirurgico(plan_id: str):
         # Extraer ID numérico
         plan_id_num = plan_id.replace('plan_', '')
         
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 # Verificar que el plan existe
@@ -5143,15 +4639,7 @@ def buscar_pacientes(
     Busca pacientes para autocompletar en formularios
     """
     try:
-        conn = get_connection(
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_NAME"),
-            port=int(os.getenv("DB_PORT", 3306)),
-            cursorclass=pymysql.cursors.DictCursor,
-            connect_timeout=10
-        )
+        conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 query = """
