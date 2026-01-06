@@ -7,9 +7,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  turbopack: {},
-
-  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+  webpack: (config) => {
     if (config.resolve) {
       config.resolve.alias = {
         ...config.resolve.alias,
