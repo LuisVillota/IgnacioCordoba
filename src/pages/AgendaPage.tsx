@@ -504,45 +504,29 @@ export default function AgendaPage() {
     return citasOrdenadas
   }
 
-  const verificarConflictoHorario = (nuevacita: Omit<cita, "id">, idExcluir?: string): citaConflict | null => {
-    const nuevaFecha = formatDate(nuevacita.fecha)
-    const nuevaHoraInicio = nuevacita.hora
-    const nuevaHoraFin = agregarMinutos(nuevacita.hora, nuevacita.duracion)
-    
+  const verificarConflictoHorario = (nuevaCita: Omit<cita, "id">, idExcluir?: string): citaConflict | null => {
+    const nuevaInicio = minutosDesdeHora(nuevaCita.hora)
+    const nuevaFin = nuevaInicio + nuevaCita.duracion
+
     for (const cita of citas) {
       if (idExcluir && cita.id === idExcluir) continue
-      
       if (cita.estado === "cancelada") continue
-      
-      const citaFecha = formatDate(cita.fecha)
-      if (citaFecha !== nuevaFecha) continue
-      
-      const citaHoraInicio = cita.hora
-      const citaHoraFin = agregarMinutos(cita.hora, cita.duracion)
-      
-      if (!(nuevaHoraInicio >= citaHoraFin || nuevaHoraFin <= citaHoraInicio)) {
-        const horasSuperpuestas = Math.min(
-          minutosDesdeHora(nuevaHoraFin) - minutosDesdeHora(citaHoraInicio),
-          minutosDesdeHora(citaHoraFin) - minutosDesdeHora(nuevaHoraInicio)
-        )
-        
-        let mensaje = "Hay una superposición de horarios."
-        if (nuevaHoraInicio === citaHoraInicio && nuevaHoraFin === citaHoraFin) {
-          mensaje = "Ya existe una cita exactamente en el mismo horario."
-        } else if (horasSuperpuestas >= 30) {
-          mensaje = `Las citas se superponen por ${horasSuperpuestas} minutos.`
-        }
-        
-        return {
-          citaExistente: cita,
-          nuevacita: nuevacita,
-          mensaje: mensaje
-        }
+      if (formatDate(cita.fecha) !== formatDate(nuevaCita.fecha)) continue
+
+      const citaInicio = minutosDesdeHora(cita.hora)
+      const citaFin = citaInicio + cita.duracion
+
+      if (Math.max(nuevaInicio, citaInicio) < Math.min(nuevaFin, citaFin)) {
+        const mensaje = nuevaInicio === citaInicio && nuevaFin === citaFin
+          ? "Ya existe una cita exactamente en el mismo horario."
+          : `Las citas se superponen por ${Math.min(nuevaFin, citaFin) - Math.max(nuevaInicio, citaInicio)} minutos.`
+        return { citaExistente: cita, nuevacita: nuevaCita, mensaje }
       }
     }
-    
+
     return null
   }
+
 
   const minutosDesdeHora = (hora: string): number => {
     const [h, m] = hora.split(":").map(Number)
