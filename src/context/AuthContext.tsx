@@ -58,12 +58,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const loadSession = async () => {
-      const storedUser = localStorage.getItem('user');
+      // 🔧 CONFIGURACIÓN: Cambiar a false para deshabilitar "recordar sesión"
+      const ENABLE_AUTO_LOGIN = false; // ⬅️ Cambia a true si quieres restaurar sesión automáticamente
+      
+      if (!ENABLE_AUTO_LOGIN) {
+        console.log('⚠️ Auto-login deshabilitado, mostrando página de login');
+        setLoading(false);
+        return;
+      }
+      
+      const storedUserStr = localStorage.getItem('user');
       const storedToken = localStorage.getItem('token');
       
-      if (storedUser && storedToken) {
+      if (storedUserStr && storedToken) {
         try {
-          const parsedUser = JSON.parse(storedUser);
+          const parsedData = JSON.parse(storedUserStr);
           
           // ✅ VALIDAR QUE EL TOKEN SEA VÁLIDO
           try {
@@ -71,13 +80,67 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const response = await api.testConnection();
             
             if (response.success) {
-              // Token válido, restaurar sesión
               console.log('✅ Token válido, restaurando sesión');
-              setUser(parsedUser);
-              setBackendUser(parsedUser.backendUser);
+              
+              // ⚠️ IMPORTANTE: Verificar la estructura correcta del usuario
+              let frontendUser: User;
+              let backendUserData: BackendUser | null = null;
+              
+              // Si tiene la estructura completa con backendUser
+              if (parsedData.backendUser) {
+                frontendUser = {
+                  id: parsedData.id,
+                  nombre_completo: parsedData.nombre_completo,
+                  email: parsedData.email,
+                  rol: parsedData.rol,
+                  estado: parsedData.estado
+                };
+                backendUserData = parsedData.backendUser;
+              } 
+              // Si solo tiene la estructura frontend
+              else if (parsedData.nombre_completo) {
+                frontendUser = parsedData;
+              }
+              // Si tiene estructura backend directa
+              else if (parsedData.nombre) {
+                const backendData: BackendUser = {
+                  id: parsedData.id,
+                  username: parsedData.username || '',
+                  nombre: parsedData.nombre,
+                  email: parsedData.email,
+                  rol: parsedData.rol,
+                  activo: parsedData.activo !== false
+                };
+                frontendUser = mapBackendToFrontendUser(backendData);
+                backendUserData = backendData;
+              }
+              // Fallback: estructura desconocida
+              else {
+                console.error('❌ Estructura de usuario desconocida:', parsedData);
+                logout();
+                setLoading(false);
+                return;
+              }
+              
+              // Validar que el usuario tenga los campos requeridos
+              if (!frontendUser.nombre_completo || !frontendUser.email || !frontendUser.rol) {
+                console.error('❌ Usuario incompleto:', frontendUser);
+                logout();
+                setLoading(false);
+                return;
+              }
+              
+              setUser(frontendUser);
+              setBackendUser(backendUserData);
               setToken(storedToken);
+              
+              console.log('👤 Usuario restaurado:', {
+                nombre: frontendUser.nombre_completo,
+                email: frontendUser.email,
+                rol: frontendUser.rol
+              });
+              
             } else {
-              // Token inválido, limpiar sesión
               console.warn('⚠️ Token inválido, limpiando sesión');
               logout();
             }
@@ -118,8 +181,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         const frontendUser = mapBackendToFrontendUser(backendUserData);
         
-        const fullUserData = {
-          ...frontendUser,
+        const dataToStore = {
+          id: frontendUser.id,
+          nombre_completo: frontendUser.nombre_completo,
+          email: frontendUser.email,
+          rol: frontendUser.rol,
+          estado: frontendUser.estado,
           backendUser: backendUserData
         };
         
@@ -127,10 +194,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setBackendUser(backendUserData);
         setToken(response.token || response.access_token || '');
         
-        localStorage.setItem('user', JSON.stringify(fullUserData));
+        localStorage.setItem('user', JSON.stringify(dataToStore));
         localStorage.setItem('token', response.token || response.access_token || '');
         
-        console.log('💾 Sesión guardada en localStorage');
+        console.log('💾 Sesión guardada');
+        console.log('👤 Usuario logueado');
+        
+        // ✅ NO hacer ninguna llamada extra aquí
+        // Solo retornar true para que el componente sepa que fue exitoso
         
         return true;
       } else {

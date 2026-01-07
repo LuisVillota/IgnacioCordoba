@@ -1,7 +1,27 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://ignaciocordoba-backend.onrender.com";
+const TIMEOUT_MS = 10000; // 10 segundos
 
 // Variable global para rastrear llamadas en progreso y prevenir duplicados
+// Variable global para rastrear llamadas en progreso y prevenir duplicados
 const callsInProgress = new Set<string>();
+
+// Cache simple para reducir llamadas repetidas
+const apiCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 30000; // 30 segundos
+
+// Helper para usar caché
+const getCachedData = (key: string) => {
+  const cached = apiCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log(`📦 Usando datos cacheados para: ${key}`);
+    return cached.data;
+  }
+  return null;
+};
+
+const setCachedData = (key: string, data: any) => {
+  apiCache.set(key, { data, timestamp: Date.now() });
+};
 
 // Cliente HTTP reutilizable - VERSIÓN CORREGIDA CON MEJOR MANEJO DE ERRORES
 export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
@@ -26,15 +46,22 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     body: bodyForLog
   });
   
+  // Crear AbortController para timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  
   try {
     const response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         ...options?.headers,
       },
-      ...options,
     });
+    
+    clearTimeout(timeoutId);
     
     console.log(`📥 API Response Status: ${response.status} ${response.statusText}`);
     
@@ -121,6 +148,19 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     return responseData;
     
   } catch (error) {
+    clearTimeout(timeoutId);
+    
+    // Manejar timeout específicamente
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('❌ Request timeout después de', TIMEOUT_MS, 'ms');
+      return {
+        success: false,
+        error: true,
+        message: 'La solicitud tardó demasiado tiempo. Intenta nuevamente.',
+        isTimeoutError: true
+      };
+    }
+    
     console.error('❌ API Fetch Error (network):', error);
     
     // Para errores de red, devolver objeto de error
@@ -143,8 +183,6 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-// Helper para prevenir llamadas duplicadas
-// Helper para prevenir llamadas duplicadas - VERSIÓN SIMPLIFICADA
 const preventDuplicateCall = async (callType: string, callFn: () => Promise<any>): Promise<any> => {
   // Crear una clave única para esta llamada
   const callKey = `${callType}_${Date.now()}`;
@@ -220,10 +258,25 @@ export const api = {
 
   // ===== DEBUG =====
   debugUsuariosTabla: () => fetchAPI('/api/debug/usuarios-tabla'),
-  
-  // ===== pacienteS =====
-  getpacientes: (limit?: number, offset?: number) => 
-    fetchAPI(`/api/pacientes?limit=${limit || 100}&offset=${offset || 0}`),
+
+    // ===== pacientes =====
+  getpacientes: (limit?: number, offset?: number) => {
+    const cacheKey = `pacientes_${limit}_${offset}`;
+    const cached = getCachedData(cacheKey);
+    
+    if (cached) {
+      return Promise.resolve(cached);
+    }
+    
+    return fetchAPI(`/api/pacientes?limit=${limit || 100}&offset=${offset || 0}`)
+      .then(response => {
+        // Solo cachear si fue exitoso
+        if (!response.error) {
+          setCachedData(cacheKey, response);
+        }
+        return response;
+      });
+  },
   getpaciente: (id: number) => fetchAPI(`/api/pacientes/${id}`),
   createpaciente: (data: any) => 
     fetchAPI('/api/pacientes', { 
@@ -902,33 +955,21 @@ export const api = {
   // ===== DASHBOARD =====
   async getDashboardStats() {
     try {
-      const [pacientesResponse, citasResponse] = await Promise.all([
-        this.getpacientes(10000),
-        this.getcitas(1000)
-      ]);
+      // ✅ Usar el endpoint rápido
+      const quickCounts = await this.getQuickCounts();
       
-      const totalpacientes = pacientesResponse.pacientes?.length || 0;
-      const today = new Date().toISOString().split('T')[0];
-      let citasHoy = 0;
-      
-      if (citasResponse && citasResponse.citas) {
-        citasHoy = citasResponse.citas.filter((cita: any) => {
-          if (cita.fecha_hora) {
-            try {
-              const citaDate = new Date(cita.fecha_hora);
-              const citaDateStr = citaDate.toISOString().split('T')[0];
-              return citaDateStr === today;
-            } catch {
-              return false;
-            }
-          }
-          return false;
-        }).length;
+      if (quickCounts && quickCounts.success) {
+        return {
+          totalpacientes: quickCounts.pacientes_total || 0,
+          citasHoy: quickCounts.citas_hoy || 0,
+          totalCotizaciones: 0,
+          ingresosMes: "$0"
+        };
       }
       
       return {
-        totalpacientes,
-        citasHoy,
+        totalpacientes: 0,
+        citasHoy: 0,
         totalCotizaciones: 0,
         ingresosMes: "$0"
       };
@@ -942,6 +983,9 @@ export const api = {
       };
     }
   },
+
+  // ✅ AGREGAR ESTE MÉTODO NUEVO (si no existe)
+  getQuickCounts: () => fetchAPI('/api/dashboard/quick-counts'),
   
   // ===== TEST =====
   testBackend: () => fetchAPI('/api/test-frontend'),
