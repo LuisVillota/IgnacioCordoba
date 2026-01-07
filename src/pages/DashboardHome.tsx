@@ -4,7 +4,7 @@ import { Users, Calendar, RefreshCw } from "lucide-react"
 import type { User } from "../context/AuthContext"
 import type { Permission } from "../types/permissions"
 import { api } from "../lib/api"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 
 interface DashboardHomeProps {
   user: User
@@ -37,70 +37,50 @@ export default function DashboardHome({ user, hasPermission }: DashboardHomeProp
     )
   }
 
-  useEffect(() => {
-    console.log('📊 DashboardHome: Iniciando carga de datos...')
-    fetchQuickStats()
-  }, [])
-
-  // Función SUPER RÁPIDA usando el endpoint optimizado
-  const fetchQuickStats = async () => {
+  // OPTIMIZACIÓN: useCallback para evitar recrear función
+  const fetchQuickStats = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       
-      console.log("⚡ Llamando a /api/dashboard/quick-counts...")
       const startTime = Date.now()
       
-      // Usar el endpoint ultra-rápido
+      // UNA SOLA llamada API optimizada
       const response = await api.getQuickCounts()
       
       const endTime = Date.now()
-      console.log(`✅ Respuesta recibida en ${endTime - startTime}ms`)
+      console.log(`✅ Stats cargados en ${endTime - startTime}ms`)
       
-      if (response && response.success) {
+      if (response?.success) {
         setStats({
           totalpacientes: response.pacientes_total || 0,
           citasHoy: response.citas_hoy || 0
         })
-        
-        console.log("✅ Stats actualizados:", {
-          totalpacientes: response.pacientes_total,
-          citasHoy: response.citas_hoy
-        })
       } else {
-        console.warn("⚠️ Respuesta sin success:", response)
-        // Valores por defecto
-        setStats({
-          totalpacientes: 0,
-          citasHoy: 0
-        })
+        setStats({ totalpacientes: 0, citasHoy: 0 })
       }
       
     } catch (err: any) {
-      console.error("❌ Error cargando quick stats:", err)
+      console.error("❌ Error cargando stats:", err)
       setError('Error al cargar estadísticas')
-      
-      // Valores por defecto en caso de error
-      setStats({
-        totalpacientes: 0,
-        citasHoy: 0
-      })
+      setStats({ totalpacientes: 0, citasHoy: 0 })
     } finally {
       setLoading(false)
-      console.log("✓ fetchQuickStats completado")
     }
-  }
+  }, []) // Sin dependencias - función estable
 
-  const handleRefresh = () => {
-    console.log("🔄 Refresh manual iniciado")
+  // Cargar datos UNA SOLA VEZ al montar
+  useEffect(() => {
+    fetchQuickStats()
+  }, [fetchQuickStats])
+
+  const handleRefresh = useCallback(() => {
     setRefreshing(true)
     fetchQuickStats().finally(() => {
       setRefreshing(false)
-      console.log("✓ Refresh completado")
     })
-  }
+  }, [fetchQuickStats])
 
-  // Obtener nombre con validación
   const getNombreUsuario = () => {
     if (!user?.nombre_completo) return 'Usuario'
     return user.nombre_completo.split(' ')[0]
@@ -149,7 +129,7 @@ export default function DashboardHome({ user, hasPermission }: DashboardHomeProp
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-600">Error: {error}</p>
           <button 
-            onClick={fetchQuickStats}
+            onClick={handleRefresh}
             className="mt-2 text-sm text-red-700 underline"
           >
             Intentar nuevamente
@@ -170,24 +150,25 @@ export default function DashboardHome({ user, hasPermission }: DashboardHomeProp
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
-          {statCards.map(
-            (stat, idx) =>
-              (!stat.permission || hasPermission(stat.permission)) && (
-                <div
-                  key={idx}
-                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 hover:shadow-md transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-600 text-sm font-medium">{stat.label}</p>
-                      <p className="text-2xl md:text-3xl font-bold text-gray-800 mt-1 md:mt-2">{stat.value}</p>
-                    </div>
-                    <div className={`${stat.color} p-2 md:p-3 rounded-lg`}>
-                      <stat.icon size={20} className="text-white" />
-                    </div>
+          {statCards.map((stat, idx) =>
+            (!stat.permission || hasPermission(stat.permission)) && (
+              <div
+                key={idx}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 hover:shadow-md transition"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-medium">{stat.label}</p>
+                    <p className="text-2xl md:text-3xl font-bold text-gray-800 mt-1 md:mt-2">
+                      {stat.value}
+                    </p>
+                  </div>
+                  <div className={`${stat.color} p-2 md:p-3 rounded-lg`}>
+                    <stat.icon size={20} className="text-white" />
                   </div>
                 </div>
-              ),
+              </div>
+            )
           )}
         </div>
       )}

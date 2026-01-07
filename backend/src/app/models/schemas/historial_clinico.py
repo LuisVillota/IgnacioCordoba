@@ -1,6 +1,6 @@
-from pydantic import BaseModel, ConfigDict
-from datetime import datetime
+from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 class HistorialClinicoBase(BaseModel):
     paciente_id: int
@@ -21,8 +21,15 @@ class HistorialClinicoCreate(HistorialClinicoBase):
 class HistorialClinicoUpdate(HistorialClinicoBase):
     pass
 
-class HistorialClinicoResponse(HistorialClinicoBase):
+class HistorialClinicoInDB(HistorialClinicoBase):
     id: int
-    fecha_creacion: datetime
+    fecha_creacion: Optional[datetime] = None
     
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
+
+class FileUploadResponse(BaseModel):
+    success: bool
+    message: str
+    url: Optional[str] = None
+    filename: Optional[str] = None

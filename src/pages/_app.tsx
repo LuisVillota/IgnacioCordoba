@@ -16,102 +16,64 @@ function LoadingScreen() {
   )
 }
 
-// Componente para manejar redirección y protección de rutas
+// COMPONENTE OPTIMIZADO - Reduce re-renders y lógica redundante
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, isAuthenticated, loading } = useAuth()
-  const [isClient, setIsClient] = useState(false)
-  const [isRedirecting, setIsRedirecting] = useState(false)
-
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
-
-  useEffect(() => {
-    // Solo ejecutar en el cliente y cuando no esté cargando
-    if (!isClient || loading) {
-      console.log('⏳ AuthGuard: Esperando cliente o cargando...', { isClient, loading })
-      return
-    }
-
-    // Rutas públicas
-    const publicPaths = ['/login', '/']
-    const isPublicPath = publicPaths.includes(router.pathname)
-
-    console.log('🔍 AuthGuard: Estado actual', {
-      pathname: router.pathname,
-      isAuthenticated,
-      hasUser: !!user,
-      isPublicPath,
-      isRedirecting
-    })
-
-    // CASO 1: No autenticado en ruta protegida → Login
-    if (!isAuthenticated && !isPublicPath && !isRedirecting) {
-      console.log('🚫 No autenticado en ruta protegida, redirigiendo a /login')
-      setIsRedirecting(true)
-      router.replace('/login').finally(() => {
-        setIsRedirecting(false)
-      })
-      return
-    }
-    
-    // CASO 2: Autenticado en login o raíz → Dashboard
-    if (isAuthenticated && user && (router.pathname === '/login' || router.pathname === '/') && !isRedirecting) {
-      console.log('✅ Autenticado en página pública, redirigiendo a /DashboardHome')
-      setIsRedirecting(true)
-      router.replace('/DashboardHome').finally(() => {
-        setIsRedirecting(false)
-      })
-      return
-    }
-
-    // CASO 3: Ya está en la ruta correcta
-    console.log('✓ Usuario en ruta correcta')
-    
-  }, [isAuthenticated, user, loading, router.pathname, isClient, isRedirecting, router])
-
-  // Mientras carga o no está en cliente
-  if (loading || !isClient) {
-    console.log('⏳ Mostrando LoadingScreen (loading o !isClient)')
-    return <LoadingScreen />
-  }
-
-  // Si está redirigiendo, mostrar loading
-  if (isRedirecting) {
-    console.log('🔄 Redirigiendo...')
-    return <LoadingScreen />
-  }
-
-  // Rutas públicas - mostrar siempre
-  const publicPaths = ['/login', '/']
-  if (publicPaths.includes(router.pathname)) {
-    console.log('📄 Mostrando ruta pública:', router.pathname)
-    return <>{children}</>
-  }
-
-  // Ruta protegida sin autenticación - mostrar loading mientras redirige
-  if (!isAuthenticated || !user) {
-    console.log('🔒 Ruta protegida sin auth, mostrando LoadingScreen')
-    return <LoadingScreen />
-  }
-
-  // Usuario autenticado en ruta protegida
-  console.log('✅ Mostrando contenido protegido')
-  return <>{children}</>
-}
-
-export default function App({ Component, pageProps }: AppProps) {
   const [mounted, setMounted] = useState(false)
 
+  // Solo montar en cliente
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  if (!mounted) {
+  // ÚNICO useEffect para manejar redirecciones
+  useEffect(() => {
+    if (!mounted || loading) return
+
+    const currentPath = router.pathname
+    const isPublicPath = currentPath === '/login' || currentPath === '/'
+    
+    // Usuario no autenticado en ruta protegida → Login
+    if (!isAuthenticated && !isPublicPath) {
+      router.replace('/login')
+      return
+    }
+    
+    // Usuario autenticado en página de login → Dashboard
+    if (isAuthenticated && currentPath === '/login') {
+      router.replace('/DashboardHome')
+      return
+    }
+
+    // Usuario autenticado en raíz → Dashboard
+    if (isAuthenticated && currentPath === '/') {
+      router.replace('/DashboardHome')
+      return
+    }
+  }, [mounted, loading, isAuthenticated, router.pathname])
+
+  // Estados de carga
+  if (!mounted || loading) {
     return <LoadingScreen />
   }
 
+  // Rutas públicas
+  const isPublicPath = router.pathname === '/login' || router.pathname === '/'
+  if (isPublicPath) {
+    return <>{children}</>
+  }
+
+  // Ruta protegida sin autenticación
+  if (!isAuthenticated || !user) {
+    return <LoadingScreen />
+  }
+
+  // Usuario autenticado en ruta protegida
+  return <>{children}</>
+}
+
+export default function App({ Component, pageProps }: AppProps) {
   return (
     <AuthProvider>
       <AuthGuard>
