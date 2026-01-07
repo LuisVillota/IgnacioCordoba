@@ -78,6 +78,41 @@ def get_usuarios():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ¡IMPORTANTE: Esta ruta debe ir ANTES de la ruta con parámetro {usuario_id}!
+@router.get("/login", response_model=dict)
+def login(username: str = Query(..., description="Nombre de usuario"), 
+          password: str = Query(..., description="Contraseña")):
+    """
+    Login de usuario
+    """
+    try:
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        conn = get_connection()
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
+                    FROM usuario u 
+                    JOIN rol r ON u.rol_id = r.id
+                    WHERE u.username = %s AND u.password = %s AND u.activo = 1
+                """, (username, password_hash))
+                
+                usuario = cursor.fetchone()
+                if not usuario:
+                    raise HTTPException(status_code=401, detail="Credenciales incorrectas o usuario inactivo")
+                
+                return {
+                    "success": True, 
+                    "message": "Login exitoso",
+                    "usuario": usuario,
+                    "token": "simulado_para_desarrollo"
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/{usuario_id}", response_model=dict)
 def get_usuario(usuario_id: int):
     """
@@ -215,11 +250,12 @@ def delete_usuario(usuario_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/login", response_model=dict)
-def login(username: str = Query(..., description="Nombre de usuario"), 
-          password: str = Query(..., description="Contraseña")):
+# Endpoint temporal alternativo (si aún tienes problemas)
+@router.get("/auth/login", response_model=dict)
+def login_alternativo(username: str = Query(..., description="Nombre de usuario"), 
+                     password: str = Query(..., description="Contraseña")):
     """
-    Login de usuario
+    Endpoint alternativo de login (temporal)
     """
     try:
         password_hash = hashlib.sha256(password.encode()).hexdigest()
