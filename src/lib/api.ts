@@ -760,82 +760,92 @@ export const api = {
   
   // ===== SUBIDA DE ARCHIVOS =====
   uploadHistoriaFoto: async (historiaId: number, file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  
+  try {
+    console.log("📤 Subiendo foto para historia:", historiaId);
+    console.log("📁 Detalles del archivo:", {
+      nombre: file.name,
+      tipo: file.type,
+      tamaño: file.size,
+      ultimaModificacion: new Date(file.lastModified).toISOString()
+    });
     
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    console.log("🚀 Iniciando upload real...");
+    const response = await fetch(`${API_URL}/api/upload/historia/${historiaId}`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
     
-    try {
-      console.log("📤 Subiendo foto para historia:", historiaId);
-      console.log("📁 Detalles del archivo:", {
-        nombre: file.name,
-        tipo: file.type,
-        tamaño: file.size,
-        ultimaModificacion: new Date(file.lastModified).toISOString()
-      });
-      
-      console.log("🚀 Iniciando upload real...");
-      const response = await fetch(`${API_URL}/api/upload/historia/${historiaId}`, {
-        method: 'POST',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: formData,
-      });
-      
-      console.log("📥 Upload response status:", response.status, response.statusText);
-      
-      if (!response.ok) {
-        let errorDetail = `Error ${response.status}: ${response.statusText}`;
+    console.log("📥 Upload response status:", response.status, response.statusText);
+    
+    if (!response.ok) {
+      let errorDetail = `Error ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorDetail = errorData.detail || errorData.message || JSON.stringify(errorData);
+        console.error("❌ Error detallado:", errorData);
+      } catch {
         try {
-          const errorData = await response.json();
-          errorDetail = errorData.detail || errorData.message || JSON.stringify(errorData);
-          console.error("❌ Error detallado:", errorData);
-        } catch {
-          try {
-            const text = await response.text();
-            if (text) {
-              errorDetail = text;
-              console.error("❌ Error texto:", text);
-            }
-          } catch {
-            // Ignorar
+          const text = await response.text();
+          if (text) {
+            errorDetail = text;
+            console.error("❌ Error texto:", text);
           }
-        }
-        
-        throw new Error(errorDetail);
-      }
-      
-      const result = await response.json();
-      console.log("✅ Foto subida exitosamente:", result);
-      
-      if (result.url && result.url.startsWith('/uploads/')) {
-        result.url = `${API_URL}${result.url}`;
-        console.log("🔗 URL convertida a absoluta:", result.url);
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('❌ Error subiendo foto:', error);
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('⚠️ En modo desarrollo, usando Data URL como fallback');
-        try {
-          const dataUrl = await fileToBase64(file);
-          return {
-            success: true,
-            message: "Foto subida (modo simulación - desarrollo)",
-            url: dataUrl,
-            filename: file.name
-          };
-        } catch (base64Error) {
-          console.error('❌ Error creando Data URL:', base64Error);
+        } catch {
+          // Ignorar
         }
       }
       
-      throw error;
+      throw new Error(errorDetail);
     }
-  },
+    
+    const result = await response.json();
+    console.log("✅ Foto subida exitosamente:", result);
+    
+    // ✅ CORRECCIÓN: El backend devuelve 'file_url', no 'url'
+    let finalUrl = result.file_url || result.url;
+    
+    if (finalUrl && finalUrl.startsWith('/uploads/')) {
+      finalUrl = `${API_URL}${finalUrl}`;
+      console.log("🔗 URL convertida a absoluta:", finalUrl);
+    }
+    
+    // Devolver en formato que espera el frontend
+    return {
+      success: result.success,
+      url: finalUrl,  // ✅ Mapear file_url a url
+      filename: result.filename,
+      message: result.message
+    };
+    
+  } catch (error) {
+    console.error('❌ Error subiendo foto:', error);
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('⚠️ En modo desarrollo, usando Data URL como fallback');
+      try {
+        const dataUrl = await fileToBase64(file);
+        return {
+          success: true,
+          message: "Foto subida (modo simulación - desarrollo)",
+          url: dataUrl,
+          filename: file.name
+        };
+      } catch (base64Error) {
+        console.error('❌ Error creando Data URL:', base64Error);
+      }
+    }
+    
+    throw error;
+  }
+},
   
   // ===== ESTADOS =====
   getEstadoscitas: () => fetchAPI('/api/estados/citas'),
