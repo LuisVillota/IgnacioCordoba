@@ -31,5 +31,9 @@ class HistorialClinicoInDB(HistorialClinicoBase):
 class FileUploadResponse(BaseModel):
     success: bool
     message: str
-    url: Optional[str] = None
+    url: Optional[str] = None 
+    file_url: Optional[str] = None  
     filename: Optional[str] = None
+    
+    class Config:
+        extra = "allow"
