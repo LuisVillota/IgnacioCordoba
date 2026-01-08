@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { ChevronLeft, ChevronRight, Plus, Edit2, Calendar, Clock, User, AlertCircle, RefreshCw, AlertTriangle, X } from "lucide-react"
-import { ProtectedRoute } from "../../components/ProtectedRoute" 
-import { CitaForm } from "../../components/CitaForm" 
-import { CitaModal } from "../../components/CitaModal"
+import { ProtectedRoute } from "../../../components/ProtectedRoute" 
+import { CitaForm } from "../../../components/CitaForm" 
+import { CitaModal } from "../../../components/CitaModal"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
-import type { paciente } from "../../types/paciente"
+import type { paciente } from "../../../types/paciente"
 
 interface cita {
   id: string

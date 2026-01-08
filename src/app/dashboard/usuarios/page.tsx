@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { Search, Plus, Edit2, Eye, Loader2, RefreshCw } from "lucide-react"
-import { ProtectedRoute } from "../../components/ProtectedRoute"
-import { useAuth } from "../../hooks/useAuth"
-import { hasAnyPermission } from "../../types/permissions"
-import { api, transformBackendToFrontend, handleApiError } from "../../lib/api"
-import { UsuarioForm } from "../../components/UsuarioForm"
-import { UsuarioModal } from "../../components/UsuarioModal"
+import { ProtectedRoute } from "../../../components/ProtectedRoute"
+import { useAuth } from "../../../hooks/useAuth"
+import { hasAnyPermission } from "../../../types/permissions"
+import { api, transformBackendToFrontend, handleApiError } from "../../../lib/api"
+import { UsuarioForm } from "../../../components/UsuarioForm"
+import { UsuarioModal } from "../../../components/UsuarioModal"
 
 export interface Usuario {
   id: string

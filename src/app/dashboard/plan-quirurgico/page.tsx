@@ -3,9 +3,9 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Plus, Edit2, Eye, Calendar, Scale, User, FileText, RefreshCw, Download } from "lucide-react"
-import type { PlanQuirurgico } from "../../types/planQuirurgico"
-import { PlanQuirurgicoForm } from "../../components/PlanQuirurgicoForm"
-import { api } from "../../lib/api"
+import type { PlanQuirurgico } from "../../../types/planQuirurgico"
+import { PlanQuirurgicoForm } from "../../../components/PlanQuirurgicoForm"
+import { api } from "../../../lib/api"
 
 // ❌ QUITA ESTO: export const PlanQuirurgicoPage: React.FC = () => {
 // ✅ REEMPLAZA CON:
