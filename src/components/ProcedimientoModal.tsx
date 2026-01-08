@@ -58,7 +58,7 @@ export function ProcedimientoModal({ procedimiento, onClose, onEdit }: Procedimi
               Cerrar
             </button>
             <div className="flex space-x-2">
-              <ProtectedRoute permissions={["editar_procedimiento"]}>
+              <ProtectedRoute permissions={["editar_procedimientos"]}>
                 <button
                   onClick={onEdit}
                   className="flex items-center space-x-2 px-4 py-2 bg-[#669933] text-white rounded-lg hover:bg-[#558822] transition"

@@ -1,0 +1,3 @@
+# .hostingerignore
+.next
+node_modules

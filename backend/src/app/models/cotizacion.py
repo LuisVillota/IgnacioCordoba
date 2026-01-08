@@ -1,64 +1,51 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List
-from ...schemas.cotizacion import CotizacionCreate, CotizacionResponse
-from ...models.cotizacion import Cotizacion, CotizacionItem, CotizacionServicioIncluido
-from ...core.database import get_db
+# backend\src\app\models\cotizacion.py
+from sqlalchemy import Column, Integer, Float, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
+from .base import BaseModel
 
-router = APIRouter()
+class Cotizacion(BaseModel):
+    __tablename__ = "cotizacion"
+    
+    paciente_id = Column(Integer, ForeignKey('paciente.id'), nullable=False)
+    usuario_id = Column(Integer, ForeignKey('usuario.id'), nullable=False)
+    plan_id = Column(Integer, ForeignKey('plan_quirurgico.id'), nullable=True)
+    estado_id = Column(Integer, ForeignKey('estado_cotizacion.id'), nullable=False)
+    
+    total = Column(Float(10, 2), nullable=False, default=0.00)
+    subtotal_procedimientos = Column(Float(10, 2), nullable=False, default=0.00)
+    subtotal_adicionales = Column(Float(10, 2), nullable=False, default=0.00)
+    subtotal_otros_adicionales = Column(Float(10, 2), nullable=False, default=0.00)
+    
+    notas = Column(Text, nullable=True)
+    fecha_emision = Column(DateTime, default=func.now())
+    fecha_vencimiento = Column(DateTime, nullable=True)
+    
+    # Relaciones
+    paciente = relationship("paciente")
+    usuario = relationship("Usuario")
+    plan = relationship("PlanQuirurgico")
+    estado = relationship("EstadoCotizacion")
+    items = relationship("CotizacionItem", back_populates="cotizacion")
+    servicios_incluidos = relationship("CotizacionServicioIncluido", cascade="all, delete-orphan")
 
-@router.post("/", response_model=CotizacionResponse)
-async def create_cotizacion(
-    cotizacion: CotizacionCreate,
-    db: Session = Depends(get_db)
-):
-    """
-    Crear una nueva cotización.
-    IMPORTANTE: El campo 'total' NO se envía, la BD lo calcula automáticamente.
-    """
+class CotizacionItem(BaseModel):
+    __tablename__ = "cotizacion_item"
     
-    # Crear la cotización sin el campo 'total'
-    db_cotizacion = Cotizacion(
-        paciente_id=cotizacion.paciente_id,
-        usuario_id=cotizacion.usuario_id,
-        estado_id=cotizacion.estado_id,
-        subtotal_procedimientos=cotizacion.subtotal_procedimientos,
-        subtotal_adicionales=cotizacion.subtotal_adicionales,
-        subtotal_otros_adicionales=cotizacion.subtotal_otros_adicionales,
-        # **NO incluir: total**
-        validez_dias=cotizacion.validez_dias,
-        observaciones=cotizacion.observaciones,
-        fecha_vencimiento=cotizacion.fecha_vencimiento
-    )
+    cotizacion_id = Column(Integer, ForeignKey('cotizacion.id'), nullable=False)
+    tipo = Column(String(50), nullable=False)  # 'procedimiento', 'adicional', 'otro_adicional'
+    item_id = Column(Integer, nullable=False)
+    descripcion = Column(String(255), nullable=False)
+    cantidad = Column(Integer, nullable=False, default=1)
+    precio_unitario = Column(Float(10, 2), nullable=False)
+    subtotal = Column(Float(10, 2), nullable=False)
     
-    db.add(db_cotizacion)
-    db.commit()
-    db.refresh(db_cotizacion)
+    # Relación
+    cotizacion = relationship("Cotizacion", back_populates="items")
+
+class CotizacionServicioIncluido(BaseModel):
+    __tablename__ = "cotizacion_servicio_incluido"
     
-    # Crear items de la cotización
-    for item in cotizacion.items:
-        db_item = CotizacionItem(
-            cotizacion_id=db_cotizacion.id,
-            tipo=item.tipo,
-            item_id=item.item_id,
-            nombre=item.nombre,
-            descripcion=item.descripcion,
-            cantidad=item.cantidad,
-            precio_unitario=item.precio_unitario,
-            subtotal=item.subtotal
-        )
-        db.add(db_item)
-    
-    # Crear servicios incluidos
-    for servicio in cotizacion.servicios_incluidos:
-        db_servicio = CotizacionServicioIncluido(
-            cotizacion_id=db_cotizacion.id,
-            servicio_nombre=servicio.servicio_nombre,
-            requiere=servicio.requiere
-        )
-        db.add(db_servicio)
-    
-    db.commit()
-    db.refresh(db_cotizacion)
-    
-    return db_cotizacion
+    cotizacion_id = Column(Integer, ForeignKey('cotizacion.id'), nullable=False)
+    servicio_nombre = Column(String(255), nullable=False)
+    requiere = Column(Boolean, default=False, nullable=False)

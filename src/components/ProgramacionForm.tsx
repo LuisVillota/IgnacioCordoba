@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { X, Calendar, Clock, User, Loader2, AlertCircle, Scissors, AlertTriangle } from "lucide-react"
-import type { Programacion } from "../pages/ProgramacionQuirurgicaPage"
+import type { Programacion, CreateProgramacionData } from "../types/programacion"
 import { api, handleApiError } from "../lib/api"
 
 interface ProgramacionFormProps {
   programacion?: Programacion
-  onSave: (data: Omit<Programacion, "id">) => void
+  onSave: (data: CreateProgramacionData) => void
   onClose: () => void
   isLoading?: boolean
 }
@@ -25,39 +25,33 @@ interface Procedimiento {
   precio: number
 }
 
-// Función para formatear hora en formato 12 horas
 const formatHora = (hora: string): string => {
   console.log("🕐 Formateando hora:", hora);
   
   if (!hora) return "00:00 AM";
   
   try {
-    // Si es un formato PT14H (duración ISO 8601)
     if (hora.startsWith('PT')) {
       const horasMatch = hora.match(/PT(\d+)H/);
       const horas = horasMatch ? parseInt(horasMatch[1]) : 0;
       
-      // Formato 12 horas con AM/PM
       const ampm = horas >= 12 ? 'PM' : 'AM';
       const horas12 = horas % 12 || 12;
       
       return `${horas12.toString().padStart(2, '0')}:00 ${ampm}`;
     }
     
-    // Si ya es un formato HH:MM:SS o HH:MM
     if (hora.includes(':')) {
       const partes = hora.split(':');
       const horas = parseInt(partes[0]);
       const minutos = partes[1] ? parseInt(partes[1].split(':')[0]) : 0;
       
-      // Formato 12 horas con AM/PM
       const ampm = horas >= 12 ? 'PM' : 'AM';
       const horas12 = horas % 12 || 12;
       
       return `${horas12.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')} ${ampm}`;
     }
     
-    // Si es solo un número (ej: "14")
     const horasNum = parseInt(hora);
     if (!isNaN(horasNum)) {
       const ampm = horasNum >= 12 ? 'PM' : 'AM';
@@ -72,16 +66,13 @@ const formatHora = (hora: string): string => {
   }
 };
 
-// 🔴 NUEVA FUNCIÓN: Formatear hora de conflicto (maneja diferentes formatos)
 const formatConflictTime = (hora: any): string => {
   if (!hora) return "00:00";
   
   console.log("🕐 Formateando hora de conflicto:", hora, "tipo:", typeof hora);
   
   try {
-    // Si es un string
     if (typeof hora === 'string') {
-      // Si ya está en formato HH:MM:SS
       if (hora.includes(':')) {
         const partes = hora.split(':');
         const horas = partes[0] || '00';
@@ -91,23 +82,19 @@ const formatConflictTime = (hora: any): string => {
       return hora;
     }
     
-    // Si es un objeto (puede venir del backend)
     if (hora && typeof hora === 'object') {
-      // Si tiene propiedades hours/minutes (formato MySQL time)
       if ('hours' in hora && 'minutes' in hora) {
         const hours = hora.hours || 0;
         const minutes = hora.minutes || 0;
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
       }
       
-      // Si tiene propiedades hour/minute
       if ('hour' in hora && 'minute' in hora) {
         const hours = hora.hour || 0;
         const minutes = hora.minute || 0;
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
       }
       
-      // Si es un objeto Date
       if (hora instanceof Date || (hora.getHours && hora.getMinutes)) {
         const hours = hora.getHours();
         const minutes = hora.getMinutes();
@@ -115,7 +102,6 @@ const formatConflictTime = (hora: any): string => {
       }
     }
     
-    // Si es un número (timestamp)
     if (typeof hora === 'number') {
       const date = new Date(hora);
       const hours = date.getHours();
@@ -123,7 +109,6 @@ const formatConflictTime = (hora: any): string => {
       return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     }
     
-    // Último recurso: convertirlo a string
     return String(hora);
   } catch (error) {
     console.error("❌ Error formateando hora de conflicto:", error);
@@ -177,7 +162,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
         
         setPacientesLoading(true)
         console.log("📥 Cargando pacientes...");
-        const pacientesData = await api.getPacientes(1000, 0)
+        const pacientesData = await api.getpacientes(1000, 0)
         
         console.log("📥 Respuesta de pacientes:", pacientesData);
         
@@ -214,9 +199,9 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
           console.log(`✅ ${procedimientosFormateados.length} procedimientos cargados`);
           setProcedimientos(procedimientosFormateados)
           
-          // Si hay una programación para editar, establecer el procedimiento seleccionado
           if (programacion?.procedimiento_id) {
-            const proc = procedimientosFormateados.find(p => p.id === programacion.procedimiento_id);
+            const procedimientoId = Number(programacion.procedimiento_id);
+            const proc = procedimientosFormateados.find((p: Procedimiento) => p.id === procedimientoId);
             if (proc) {
               console.log(`🔍 Procedimiento encontrado para edición: ${proc.nombre} (ID: ${proc.id})`);
               setProcedimientoSeleccionado(proc);
@@ -256,7 +241,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
     setError(null)
     setConflictValidationError(null)
       
-    // Validaciones básicas
     if (!formData.numero_documento) {
       setError("Por favor selecciona un paciente")
       setValidating(false)
@@ -287,13 +271,8 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       return;
     }
 
-    // ✅ Convertir y validar procedimiento_id UNA SOLA VEZ
-    const procedimientoIdNum =
-      Number.isInteger(Number(formData.procedimiento_id)) &&
-      Number(formData.procedimiento_id) > 0
-        ? Number(formData.procedimiento_id)
-        : undefined;
-
+    const procedimientoIdNum = Number(formData.procedimiento_id) || 0;
+    
     if (!Number.isInteger(procedimientoIdNum) || procedimientoIdNum <= 0) {
       console.error("❌ procedimiento_id inválido:", formData.procedimiento_id);
       setError("Debes seleccionar un procedimiento válido");
@@ -316,7 +295,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
 
       console.log("✅ Procedimiento validado en la lista");
 
-      // 🔴 DEPURACIÓN: Verificar qué hora se está enviando
       console.log("🕐 Hora del formulario:", {
         hora_original: formData.hora,
         formato: formData.hora.includes(":") ? formData.hora.split(":").length + " partes" : "formato desconocido",
@@ -331,7 +309,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
 
       console.log("📤 Preparando datos para enviar al padre...");
       
-      // Verificar disponibilidad si hay cambios en fecha/hora
       if (!programacion || 
           formData.fecha !== programacion.fecha || 
           formData.hora !== programacion.hora || 
@@ -350,7 +327,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
             hora: horaFormateada,
             duracion: formData.duracion,
             excludeId,
-            procedimiento_id: procedimientoIdNum  // ✅ ENVIAR COMO NÚMERO
+            procedimiento_id: procedimientoIdNum
           });
           
           setIsCheckingAvailability(true);
@@ -360,12 +337,11 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
             horaFormateada,
             formData.duracion,
             excludeId,
-            procedimientoIdNum // ← ahora puede ser number o undefined
+            procedimientoIdNum
           )
 
           console.log("📊 Resultado disponibilidad COMPLETO:", disponibilidad);
           
-          // 🔴 CORRECCIÓN: Verificar si es un objeto de error
           if (disponibilidad && disponibilidad.error === true) {
             console.error("❌ Error en verificación de disponibilidad:", disponibilidad.message);
             setError(`Error verificando disponibilidad: ${disponibilidad.message}`);
@@ -383,14 +359,12 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
               const conflicto = disponibilidad.conflictos[0];
               mensajeConflicto += `Ya existe un procedimiento programado para esa hora (ID: ${conflicto.id}).`;
               
-              // 🔴 CORRECCIÓN: Usar la nueva función formatConflictTime
               const horaConflictFormateada = formatConflictTime(conflicto.hora);
               
-              // Mostrar modal de conflicto con más información
               setConflictInfo({
                 id: conflicto.id.toString(),
                 fecha: conflicto.fecha,
-                hora: horaConflictFormateada, // ✅ Usar la función corregida
+                hora: horaConflictFormateada,
                 duracion: conflicto.duracion || 60,
                 estado: conflicto.estado || "Programado",
                 paciente_nombre: conflicto.paciente_nombre,
@@ -399,11 +373,9 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
               });
               setShowConflictModal(true);
             } else {
-              // Si no hay conflictos específicos, mostrar el mensaje del backend
               mensajeConflicto += disponibilidad.mensaje || "El horario no está disponible.";
               setError(mensajeConflicto);
               
-              // 🔴 DEPURACIÓN: Mostrar información de debug si está disponible
               if (disponibilidad.debug_info) {
                 console.log("🔍 Debug info del backend:", disponibilidad.debug_info);
               }
@@ -416,7 +388,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
           console.log("✅ Horario disponible confirmado por backend");
         } catch (dispoError: any) {
           console.error("❌ Error en catch de disponibilidad:", dispoError);
-          // No bloquear por error en verificación, pero mostrar advertencia
           setConflictValidationError("No se pudo verificar la disponibilidad del horario. Por favor, asegúrate de que no haya conflictos.");
         } finally {
           setIsCheckingAvailability(false);
@@ -426,12 +397,17 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       }
 
       console.log("✅ Todos los datos validados, enviando al padre...");
-      const datosParaParent = {
+      
+      // Buscar el paciente seleccionado para obtener su ID
+      const pacienteSeleccionado = pacientes.find(p => p.numero_documento === formData.numero_documento);
+      
+      const datosParaParent: CreateProgramacionData = {
+        paciente_id: pacienteSeleccionado?.id || "", // Usar el ID del paciente
         numero_documento: formData.numero_documento,
         fecha: formData.fecha,
         hora: formData.hora,
         duracion: formData.duracion,
-        procedimiento_id: procedimientoIdNum,
+        procedimiento_id: procedimientoIdNum.toString(),
         anestesiologo: formData.anestesiologo,
         estado: formData.estado as Programacion["estado"],
         observaciones: formData.observaciones
@@ -454,7 +430,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       } else if (errorMessage.includes("Validation error")) {
         setError("Error de validación: Por favor verifica todos los campos.")
       } else if (errorMessage.includes("Conflicto de horario")) {
-        // Manejar conflicto de horario desde el error del backend
         setConflictValidationError(errorMessage);
         setError("Conflicto de horario: Ya existe un procedimiento programado para esa hora. Por favor selecciona otra hora.");
       } else if (errorMessage.includes("procedimiento no encontrado")) {
@@ -468,14 +443,12 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
     }
   }
 
-  // Función para manejar cuando el usuario decide continuar a pesar del conflicto
   const handleContinueWithConflict = () => {
     setShowConflictModal(false);
     setConflictInfo(null);
     setValidating(true);
     
-    // Continuar con el guardado
-    const procedimientoIdNum = Number(formData.procedimiento_id);
+    const procedimientoIdNum = Number(formData.procedimiento_id) || 0;
 
     if (!Number.isInteger(procedimientoIdNum) || procedimientoIdNum <= 0) {
       setError("Procedimiento inválido");
@@ -483,12 +456,16 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       return;
     }
 
-    const datosParaParent = {
+    // Buscar el paciente seleccionado para obtener su ID
+    const pacienteSeleccionado = pacientes.find(p => p.numero_documento === formData.numero_documento);
+    
+    const datosParaParent: CreateProgramacionData = {
+      paciente_id: pacienteSeleccionado?.id || "",
       numero_documento: formData.numero_documento,
       fecha: formData.fecha,
       hora: formData.hora,
       duracion: formData.duracion,
-      procedimiento_id: procedimientoIdNum,
+      procedimiento_id: procedimientoIdNum.toString(),
       anestesiologo: formData.anestesiologo,
       estado: formData.estado as Programacion["estado"],
       observaciones: formData.observaciones
@@ -510,7 +487,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
         : value
     }))
 
-    // Si cambia el procedimiento, actualizar el procedimiento seleccionado
     if (field === "procedimiento_id") {
       const proc = procedimientos.find(p => p.id === Number(value));
       setProcedimientoSeleccionado(proc || null);
@@ -518,13 +494,11 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
     }
   }
 
-  // Función para obtener la fecha mínima (hoy)
   const getFechaMinima = () => {
     const hoy = new Date();
     return hoy.toISOString().split('T')[0];
   }
 
-  // Función para formatear moneda
   const formatCurrency = (amount: number | undefined): string => {
     if (!amount) return "$0";
     
@@ -817,7 +791,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
           </div>
         </form>
 
-        {/* Modal de conflicto de horario */}
         {showConflictModal && conflictInfo && (
           <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100] p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-md w-full animate-fadeIn">

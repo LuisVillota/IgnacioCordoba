@@ -1,12 +1,17 @@
 "use client"
 
 import { X, Calendar, FileText, Image as ImageIcon } from "lucide-react"
-import type { HistoriaClinica } from "../pages/HistoriaClinicaPage"
-import type { PacienteFrontend } from "../pages/HistoriaClinicaPage"
+import type { HistoriaClinica } from "../types/historia-clinica"
+import type { paciente } from "../types/paciente" 
+
+
+type pacienteFrontend = paciente & {
+
+}
 
 interface HistoriaModalProps {
   historia: HistoriaClinica
-  paciente?: PacienteFrontend
+  paciente?: pacienteFrontend
   onClose: () => void
   onEdit: () => void
 }
@@ -57,19 +62,19 @@ export function HistoriaModal({ historia, paciente, onClose, onEdit }: HistoriaM
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Médicos</p>
-                <p className="text-gray-700">{historia.antecedentes_medicos}</p>
+                <p className="text-gray-700">{historia.antecedentes_medicos || 'No especificado'}</p>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Quirúrgicos</p>
-                <p className="text-gray-700">{historia.antecedentes_quirurgicos}</p>
+                <p className="text-gray-700">{historia.antecedentes_quirurgicos || 'No especificado'}</p>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Alérgicos</p>
-                <p className="text-gray-700">{historia.antecedentes_alergicos}</p>
+                <p className="text-gray-700">{historia.antecedentes_alergicos || 'No especificado'}</p>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Farmacológicos</p>
-                <p className="text-gray-700">{historia.antecedentes_farmacologicos}</p>
+                <p className="text-gray-700">{historia.antecedentes_farmacologicos || 'No especificado'}</p>
               </div>
             </div>
           </section>
@@ -77,22 +82,22 @@ export function HistoriaModal({ historia, paciente, onClose, onEdit }: HistoriaM
           {/* Exploración Física */}
           <section>
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Exploración Física</h3>
-            <p className="text-gray-700 bg-blue-50 p-4 rounded-lg">{historia.exploracion_fisica}</p>
+            <p className="text-gray-700 bg-blue-50 p-4 rounded-lg">{historia.exploracion_fisica || 'No especificado'}</p>
           </section>
 
           {/* Diagnóstico y Tratamiento */}
           <section>
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Diagnóstico</h3>
-            <p className="text-gray-700 bg-green-50 p-4 rounded-lg mb-6">{historia.diagnostico}</p>
+            <p className="text-gray-700 bg-green-50 p-4 rounded-lg mb-6">{historia.diagnostico || 'No especificado'}</p>
 
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Tratamiento</h3>
-            <p className="text-gray-700 bg-yellow-50 p-4 rounded-lg">{historia.tratamiento}</p>
+            <p className="text-gray-700 bg-yellow-50 p-4 rounded-lg">{historia.tratamiento || 'No especificado'}</p>
           </section>
 
           {/* Recomendaciones */}
           <section>
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Recomendaciones</h3>
-            <p className="text-gray-700 bg-orange-50 p-4 rounded-lg">{historia.recomendaciones}</p>
+            <p className="text-gray-700 bg-orange-50 p-4 rounded-lg">{historia.recomendaciones || 'No especificado'}</p>
           </section>
 
           {/* Fotos */}

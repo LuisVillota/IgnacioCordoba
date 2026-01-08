@@ -9,14 +9,15 @@ from datetime import datetime
 def create_initial_data():
     try:
         # Conexión a MySQL
-        conn = pymysql.connect(
-            host='localhost',
-            user='root',
-            password='root',
-            database='prueba_consultorio_db',
-            port=3306,
+        conn = get_connection(
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_NAME"),
+            port=int(os.getenv("DB_PORT", 3306)),
             charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10
         )
         
         print("✅ Conectado a MySQL")
@@ -140,7 +141,7 @@ def create_initial_data():
                 
                 for nombre, color in estados_cita:
                     cursor.execute(
-                        "INSERT IGNORE INTO Estado_Cita (nombre, color) VALUES (%s, %s)",
+                        "INSERT IGNORE INTO estado_cita (nombre, color) VALUES (%s, %s)",
                         (nombre, color)
                     )
                 
@@ -172,7 +173,7 @@ def create_initial_data():
                 
                 for paciente in pacientes:
                     cursor.execute("""
-                        INSERT IGNORE INTO Paciente 
+                        INSERT IGNORE INTO paciente 
                         (numero_documento, tipo_documento, nombre, apellido, 
                          fecha_nacimiento, genero, telefono, email, direccion)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -199,7 +200,7 @@ def create_initial_data():
 if __name__ == "__main__":
     print("🚀 Iniciando creación de datos iniciales...")
     print(f"📁 Directorio actual: {os.getcwd()}")
-    print(f"🔗 Base de datos: prueba_consultorio_db")
+    print(f"🔗 Base de datos: u997398721_consultorio_db")
     print(f"👤 Usuario MySQL: root")
     print("=" * 50)
     

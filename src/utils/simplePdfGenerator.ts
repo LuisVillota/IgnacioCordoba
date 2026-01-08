@@ -113,8 +113,8 @@ export async function generarPDFOrdenExamenes(data: OrdenExamenesData) {
 
     addLine()
 
-    // Información del Paciente
-    addText('INFORMACIÓN DEL PACIENTE', 14, true, margin, 10, '#1a6b32')
+    // Información del paciente
+    addText('INFORMACIÓN DEL paciente', 14, true, margin, 10, '#1a6b32')
     yPosition += 2
     
     // Crear cuadro de información del paciente
@@ -126,7 +126,7 @@ export async function generarPDFOrdenExamenes(data: OrdenExamenesData) {
     doc.setFontSize(12)
     
     // Datos del paciente
-    const datosPaciente = [
+    const datospaciente = [
       `Nombre: ${data.paciente.nombres} ${data.paciente.apellidos}`,
       `Documento: ${data.paciente.documento}`,
       `Fecha de orden: ${data.fecha}`,
@@ -134,14 +134,14 @@ export async function generarPDFOrdenExamenes(data: OrdenExamenesData) {
     ]
     
     // Añadir datos del paciente al cuadro
-    datosPaciente.forEach((linea, index) => {
+    datospaciente.forEach((linea, index) => {
       doc.text(linea, margin + 10, patientInfoY + 12 + (index * 8))
     })
     
     yPosition = patientInfoY + 45
 
     // Exámenes Solicitados
-    addText('EXÁMENES SOLICITADOS', 14, true, margin, 10, '#1a6b32')
+    addText('EXÁMENES SOLIcitaDOS', 14, true, margin, 10, '#1a6b32')
     yPosition += 5
 
     // Tabla de exámenes - solo los seleccionados
@@ -156,7 +156,7 @@ export async function generarPDFOrdenExamenes(data: OrdenExamenesData) {
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(10)
       doc.text('N°', margin + 8, yPosition + 5)
-      doc.text('EXAMEN SOLICITADO', margin + 25, yPosition + 5)
+      doc.text('EXAMEN SOLIcitaDO', margin + 25, yPosition + 5)
       yPosition += 8
 
       // Filas de la tabla - solo exámenes seleccionados
@@ -170,7 +170,7 @@ export async function generarPDFOrdenExamenes(data: OrdenExamenesData) {
           doc.setTextColor(255, 255, 255)
           doc.setFontSize(10)
           doc.text('N°', margin + 8, yPosition + 5)
-          doc.text('EXAMEN SOLICITADO', margin + 25, yPosition + 5)
+          doc.text('EXAMEN SOLIcitaDO', margin + 25, yPosition + 5)
           yPosition += 8
         }
 
@@ -227,7 +227,7 @@ export async function generarPDFOrdenExamenes(data: OrdenExamenesData) {
     doc.line(margin, yPosition + 15, margin + 80, yPosition + 15)
 
     // Firma del paciente
-    doc.text('Firma del Paciente', pageWidth - margin - 80, yPosition + 5)
+    doc.text('Firma del paciente', pageWidth - margin - 80, yPosition + 5)
     doc.text('Aceptación y Conformidad', pageWidth - margin - 80, yPosition + 10)
     doc.line(pageWidth - margin - 80, yPosition + 15, pageWidth - margin, yPosition + 15)
 
@@ -288,7 +288,7 @@ export async function generarVistaPreviaPDF(data: OrdenExamenesData): Promise<st
     // Información básica
     doc.setFontSize(12)
     doc.setTextColor(0, 0, 0)
-    doc.text(`Paciente: ${data.paciente.nombres} ${data.paciente.apellidos}`, margin, yPosition)
+    doc.text(`paciente: ${data.paciente.nombres} ${data.paciente.apellidos}`, margin, yPosition)
     yPosition += 7
     doc.text(`Documento: ${data.paciente.documento}`, margin, yPosition)
     yPosition += 7

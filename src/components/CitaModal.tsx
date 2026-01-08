@@ -1,12 +1,12 @@
 "use client"
 
 import { X, Clock, Calendar, User, FileText } from "lucide-react"
-import type { Cita } from "../pages/AgendaPage"
-import type { Paciente } from "../pages/PacientesPage"
+import type { Cita } from "../types/cita"
+import type { paciente } from "../types/paciente"
 
 interface CitaModalProps {
   cita: Cita
-  paciente?: Paciente
+  paciente?: paciente
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
@@ -32,7 +32,7 @@ export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: CitaMod
       <div className="bg-white rounded-lg shadow-lg max-w-md w-full">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800">Detalles de la Cita</h2>
+          <h2 className="text-xl font-bold text-gray-800">Detalles de la cita</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
             <X size={20} />
           </button>

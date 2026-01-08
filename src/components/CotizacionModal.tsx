@@ -2,11 +2,17 @@
 
 import { X, Calendar, Printer, Loader2 } from "lucide-react"
 import { useState } from "react"
-import type { Cotizacion, Paciente } from "../pages/CotizacionesPage"
+import type { Cotizacion } from "../types/cotizacion"
+
+interface paciente {
+  nombres: string
+  apellidos: string
+  documento?: string
+}
 
 interface CotizacionModalProps {
   cotizacion: Cotizacion
-  paciente?: Paciente
+  paciente?: paciente
   onClose: () => void
   onEdit: () => void
 }
@@ -14,21 +20,19 @@ interface CotizacionModalProps {
 export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: CotizacionModalProps) {
   const [imprimiendo, setImprimiendo] = useState(false)
 
-  // ⬇️ COMENTAR O ELIMINAR ESTA LÍNEA ⬇️
-  // const estadoColors: Record<string, string> = {
-  //   pendiente: "bg-yellow-100 text-yellow-800",
-  //   aceptada: "bg-green-100 text-green-800",
-  //   rechazada: "bg-red-100 text-red-800",
-  //   facturada: "bg-blue-100 text-blue-800",
-  // }
-
   const itemsPorTipo = {
     procedimientos: cotizacion.items.filter(item => item.tipo === 'procedimiento'),
     adicionales: cotizacion.items.filter(item => item.tipo === 'adicional'),
     otrosAdicionales: cotizacion.items.filter(item => item.tipo === 'otroAdicional'),
   }
 
-  const serviciosIncluidos = cotizacion.servicios_incluidos || cotizacion.serviciosIncluidos || []
+  // CORRECCIÓN: Usar solo servicios_incluidos, no serviciosIncluidos
+  const serviciosIncluidos = cotizacion.servicios_incluidos ?? []
+
+  // Helper para obtener los subtotales en el formato correcto
+  const getSubtotalProcedimientos = () => cotizacion.subtotal_procedimientos || 0
+  const getSubtotalAdicionales = () => cotizacion.subtotal_adicionales || 0
+  const getSubtotalOtrosAdicionales = () => cotizacion.subtotal_otros_adicionales || 0
 
   const handleImprimir = () => {
     setImprimiendo(true)
@@ -95,20 +99,13 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               </div>
               <div>
                 <div class="info-item">
-                  <div class="info-label">PACIENTE</div>
+                  <div class="info-label">paciente</div>
                   <div class="info-value">${paciente?.nombres} ${paciente?.apellidos}</div>
                 </div>
                 <div class="info-item">
                   <div class="info-label">DOCUMENTO</div>
                   <div class="info-value">${paciente?.documento || 'No especificado'}</div>
                 </div>
-                <!-- ⬇️ ELIMINAR LA SECCIÓN DE ESTADO DEL HTML ⬇️ -->
-                <!-- 
-                <div class="info-item">
-                  <div class="info-label">ESTADO</div>
-                  <div class="estado estado-${cotizacion.estado}">${cotizacion.estado.toUpperCase()}</div>
-                </div>
-                -->
               </div>
             </div>
 
@@ -118,7 +115,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 ${serviciosIncluidos.map((servicio: any) => `
                   <div class="servicio-item">
                     <span class="servicio-check">${servicio.requiere ? '✓' : '○'}</span>
-                    <span class="servicio-text">${servicio.servicio_nombre || servicio.nombre || 'Servicio'}</span>
+                    <span class="servicio-text">${servicio.servicio_nombre || 'Servicio'}</span>
                   </div>
                 `).join('')}
               </div>
@@ -205,18 +202,18 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
             <div class="total-section">
               <div class="total-row">
                 <span>Subtotal Procedimientos:</span>
-                <span>$${(cotizacion.subtotalProcedimientos || 0).toLocaleString('es-CO')}</span>
+                <span>$${(getSubtotalProcedimientos()).toLocaleString('es-CO')}</span>
               </div>
               ${itemsPorTipo.adicionales.length > 0 ? `
                 <div class="total-row">
                   <span>Subtotal Adicionales:</span>
-                  <span>$${(cotizacion.subtotalAdicionales || 0).toLocaleString('es-CO')}</span>
+                  <span>$${(getSubtotalAdicionales()).toLocaleString('es-CO')}</span>
                 </div>
               ` : ''}
               ${itemsPorTipo.otrosAdicionales.length > 0 ? `
                 <div class="total-row">
                   <span>Subtotal Otros Adicionales:</span>
-                  <span>$${(cotizacion.subtotalOtrosAdicionales || 0).toLocaleString('es-CO')}</span>
+                  <span>$${(getSubtotalOtrosAdicionales()).toLocaleString('es-CO')}</span>
                 </div>
               ` : ''}
               <div class="total-row grand-total">
@@ -285,17 +282,6 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 <p className="font-medium text-gray-800">{cotizacion.fecha_creacion}</p>
               </div>
             </div>
-            {/* ⬇️ ELIMINAR LA SECCIÓN DE ESTADO COMPLETA ⬇️ */}
-            {/* 
-            <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Estado</p>
-              <span
-                className={`inline-block px-3 py-1 rounded-full text-xs font-semibold capitalize ${estadoColors[cotizacion.estado]}`}
-              >
-                {cotizacion.estado}
-              </span>
-            </div>
-            */}
             <div className="flex items-center space-x-3">
               <Calendar className="text-[#f59e0b]" size={20} />
               <div>
@@ -324,7 +310,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                       {servicio.requiere ? '✓' : '○'}
                     </div>
                     <span className={`text-sm ${servicio.requiere ? 'text-gray-800 font-medium' : 'text-gray-600'}`}>
-                      {servicio.servicio_nombre || servicio.nombre || 'Servicio'}
+                      {servicio.servicio_nombre || 'Servicio'}
                     </span>
                   </div>
                 ))
@@ -359,7 +345,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 <div className="flex justify-between items-center pt-3 border-t border-gray-300">
                   <span className="font-semibold text-gray-700">Total Procedimientos:</span>
                   <span className="font-bold text-[#1a6b32]">
-                    ${(cotizacion.subtotalProcedimientos || 0).toLocaleString("es-CO")}
+                    ${(getSubtotalProcedimientos()).toLocaleString("es-CO")}
                   </span>
                 </div>
               </div>
@@ -389,7 +375,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 <div className="flex justify-between items-center pt-3 border-t border-gray-300">
                   <span className="font-semibold text-gray-700">Total Adicionales:</span>
                   <span className="font-bold text-[#1a6b32]">
-                    ${(cotizacion.subtotalAdicionales || 0).toLocaleString("es-CO")}
+                    ${(getSubtotalAdicionales()).toLocaleString("es-CO")}
                   </span>
                 </div>
               </div>
@@ -419,7 +405,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 <div className="flex justify-between items-center pt-3 border-t border-gray-300">
                   <span className="font-semibold text-gray-700">Total Otros Adicionales:</span>
                   <span className="font-bold text-[#1a6b32]">
-                    ${(cotizacion.subtotalOtrosAdicionales || 0).toLocaleString("es-CO")}
+                    ${(getSubtotalOtrosAdicionales()).toLocaleString("es-CO")}
                   </span>
                 </div>
               </div>
@@ -430,14 +416,14 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
             <div className="flex items-center justify-between">
               <span className="text-gray-700">Subtotal Procedimientos:</span>
               <span className="font-semibold text-gray-800">
-                ${(cotizacion.subtotalProcedimientos || 0).toLocaleString("es-CO")}
+                ${(getSubtotalProcedimientos()).toLocaleString("es-CO")}
               </span>
             </div>
             {itemsPorTipo.adicionales.length > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-700">Subtotal Adicionales:</span>
                 <span className="font-semibold text-gray-800">
-                  ${(cotizacion.subtotalAdicionales || 0).toLocaleString("es-CO")}
+                  ${(getSubtotalAdicionales()).toLocaleString("es-CO")}
                 </span>
               </div>
             )}
@@ -445,7 +431,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               <div className="flex items-center justify-between">
                 <span className="text-gray-700">Subtotal Otros Adicionales:</span>
                 <span className="font-semibold text-gray-800">
-                  ${(cotizacion.subtotalOtrosAdicionales || 0).toLocaleString("es-CO")}
+                  ${(getSubtotalOtrosAdicionales()).toLocaleString("es-CO")}
                 </span>
               </div>
             )}
@@ -502,3 +488,5 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
     </div>
   )
 }
+
+export default CotizacionModal

@@ -1,4 +1,3 @@
-// En types/planQuirurgico.ts
 export interface PlanQuirurgico {
   id: string
   id_paciente: string
@@ -17,13 +16,12 @@ export interface PlanQuirurgico {
     fecha_consulta: string
     hora_consulta: string
   }
-  historia_clinica: any // Ajusta según tu estructura
-  conducta_quirurgica: any // Ajusta según tu estructura
+  historia_clinica: any 
+  conducta_quirurgica: any 
   dibujos_esquema: any[]
   notas_doctor: string
   cirugias_previas: any[]
   imagenes_adjuntas: string[]
-  estado: 'borrador' | 'aprobado' | 'completado'
   esquema_mejorado?: {
     zoneMarkings: Record<string, any>
     selectionHistory: any[]

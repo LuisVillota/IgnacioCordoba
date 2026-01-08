@@ -1,13 +1,23 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-// Variable global para rastrear llamadas en progreso y prevenir duplicados
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://ignaciocordoba-backend.onrender.com";
+const TIMEOUT_MS = 60000;
 const callsInProgress = new Set<string>();
+const apiCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 30000; 
+const getCachedData = (key: string) => {
+  const cached = apiCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log(`📦 Usando datos cacheados para: ${key}`);
+    return cached.data;
+  }
+  return null;
+};
 
-// Cliente HTTP reutilizable - VERSIÓN CORREGIDA CON MEJOR MANEJO DE ERRORES
+const setCachedData = (key: string, data: any) => {
+  apiCache.set(key, { data, timestamp: Date.now() });
+};
+
 export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  
-  // 🛠️ CORRECCIÓN: Manejo seguro del body para logging
   let bodyForLog = undefined;
   try {
     if (options?.body) {
@@ -26,24 +36,37 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     body: bodyForLog
   });
   
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  
   try {
+    const defaultHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      defaultHeaders['Authorization'] = `Bearer ${token}`;
+    }
+    
+    let finalHeaders = { ...defaultHeaders };
+    if (options?.headers) {
+      const optHeaders = options.headers as Record<string, string>;
+      finalHeaders = { ...finalHeaders, ...optHeaders };
+    }
+    
     const response = await fetch(`${API_URL}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        ...options?.headers,
-      },
       ...options,
+      signal: controller.signal,
+      headers: finalHeaders,
     });
     
-    console.log(`📥 API Response Status: ${response.status} ${response.statusText}`);
+    clearTimeout(timeoutId);
     
-    // **CORRECCIÓN: Leer respuesta como texto primero**
+    console.log(`📥 API Response Status: ${response.status} ${response.statusText}`);
     const responseText = await response.text();
     
     let responseData;
     try {
-      // Intentar parsear como JSON
       responseData = responseText ? JSON.parse(responseText) : {};
       console.log(`📥 API Response Body (parsed):`, responseData);
     } catch (parseError) {
@@ -55,17 +78,13 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       console.log(`⚠️ API Error ${response.status}:`, responseData);
       
       let errorMessage = `Error HTTP ${response.status}`;
-      
-      // **CORRECCIÓN: Manejar diferentes formatos de error**
       if (typeof responseData === 'string') {
         errorMessage = responseData;
       } else if (responseData && typeof responseData === 'object') {
-        // Backend puede devolver error en formato {detail: string} o {message: string}
         if (responseData.detail) {
           if (typeof responseData.detail === 'string') {
             errorMessage = responseData.detail;
           } else if (Array.isArray(responseData.detail)) {
-            // Manejar lista de errores de Pydantic
             errorMessage = responseData.detail.map((err: any) => {
               if (typeof err === 'string') return err;
               if (err && typeof err === 'object' && err.msg && err.loc) {
@@ -75,7 +94,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
               return JSON.stringify(err);
             }).join(', ');
           } else if (responseData.detail && typeof responseData.detail === 'object') {
-            // Si detail es un objeto (como {error: "message"})
             errorMessage = responseData.detail.message || JSON.stringify(responseData.detail);
           }
         } else if (responseData.message) {
@@ -87,7 +105,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
             errorMessage = responseData.error.message || JSON.stringify(responseData.error);
           }
         } else {
-          // Para validaciones
           const errorKeys = Object.keys(responseData).filter(key => 
             key.toLowerCase().includes('error') || 
             key.toLowerCase().includes('detail') ||
@@ -101,10 +118,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
           }
         }
       }
-      
-      console.log('📝 Error message extracted:', errorMessage);
-      
-      // **DEVOLVER OBJETO DE ERROR**
       return {
         success: false,
         error: true,
@@ -117,10 +130,20 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       };
     }
     
-    // **SI ES ÉXITO, devolver el dato normalmente**
     return responseData;
     
   } catch (error) {
+    clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+      console.error('❌ Request timeout después de', TIMEOUT_MS, 'ms');
+      return {
+        success: false,
+        error: true,
+        message: 'La solicitud tardó demasiado. El servidor en Render puede estar "dormido". Intenta de nuevo en 30 segundos.',
+        isTimeoutError: true
+      };
+    }
+    
     console.error('❌ API Fetch Error (network):', error);
     
     // Para errores de red, devolver objeto de error
@@ -143,8 +166,6 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-// Helper para prevenir llamadas duplicadas
-// Helper para prevenir llamadas duplicadas - VERSIÓN SIMPLIFICADA
 const preventDuplicateCall = async (callType: string, callFn: () => Promise<any>): Promise<any> => {
   // Crear una clave única para esta llamada
   const callKey = `${callType}_${Date.now()}`;
@@ -194,9 +215,11 @@ export const api = {
   login: (username: string, password: string) => {
     const encodedUsername = encodeURIComponent(username);
     const encodedPassword = encodeURIComponent(password);
-    return fetchAPI(`/api/login?username=${encodedUsername}&password=${encodedPassword}`);
+    return fetchAPI(`/api/usuarios/login?username=${encodedUsername}&password=${encodedPassword}`, {
+      method: 'GET',
+    });
   },
-  
+    
   // ===== USUARIOS =====
   getUsuarios: () => fetchAPI('/api/usuarios'),
   getUsuario: (id: number) => fetchAPI(`/api/usuarios/${id}`),
@@ -220,27 +243,42 @@ export const api = {
 
   // ===== DEBUG =====
   debugUsuariosTabla: () => fetchAPI('/api/debug/usuarios-tabla'),
-  
-  // ===== PACIENTES =====
-  getPacientes: (limit?: number, offset?: number) => 
-    fetchAPI(`/api/pacientes?limit=${limit || 100}&offset=${offset || 0}`),
-  getPaciente: (id: number) => fetchAPI(`/api/pacientes/${id}`),
-  createPaciente: (data: any) => 
+
+    // ===== pacientes =====
+  getpacientes: (limit?: number, offset?: number) => {
+    const cacheKey = `pacientes_${limit}_${offset}`;
+    const cached = getCachedData(cacheKey);
+    
+    if (cached) {
+      return Promise.resolve(cached);
+    }
+    
+    return fetchAPI(`/api/pacientes?limit=${limit || 100}&offset=${offset || 0}`)
+      .then(response => {
+        // Solo cachear si fue exitoso
+        if (!response.error) {
+          setCachedData(cacheKey, response);
+        }
+        return response;
+      });
+  },
+  getpaciente: (id: number) => fetchAPI(`/api/pacientes/${id}`),
+  createpaciente: (data: any) => 
     fetchAPI('/api/pacientes', { 
       method: 'POST', 
       body: JSON.stringify(data) 
     }),
-  updatePaciente: (id: number, data: any) =>
+  updatepaciente: (id: number, data: any) =>
     fetchAPI(`/api/pacientes/${id}`, { 
       method: 'PUT', 
       body: JSON.stringify(data) 
     }),
-  deletePaciente: (id: number) =>
+  deletepaciente: (id: number) =>
     fetchAPI(`/api/pacientes/${id}`, { method: 'DELETE' }),
 
   // AGREGAR ESTO en la sección de pacientes del objeto api:
 
-  getTodosPacientes: async () => {
+  getTodospacientes: async () => {
     try {
       console.log("📥 Llamando a /api/pacientes para obtener todos los pacientes...");
       
@@ -259,22 +297,22 @@ export const api = {
         return [];
       }
     } catch (error) {
-      console.error("❌ Error en getTodosPacientes:", error);
+      console.error("❌ Error en getTodospacientes:", error);
       return [];
     }
   },
 
-  // Asegúrate de que también tengas la función buscarPacientes:
-  buscarPacientes: (query: string, limit: number = 10) =>
+  // Asegúrate de que también tengas la función buscarpacientes:
+  buscarpacientes: (query: string, limit: number = 10) =>
     fetchAPI(`/api/pacientes/buscar?q=${encodeURIComponent(query)}&limit=${limit}`),
 
-  // ===== CITAS =====
-  getCitas: (limit?: number, offset?: number) =>
+  // ===== citaS =====
+  getcitas: (limit?: number, offset?: number) =>
     fetchAPI(`/api/citas?limit=${limit || 100}&offset=${offset || 0}`),
-  getCita: (id: number) => fetchAPI(`/api/citas/${id}`),
-  createCita: (data: any) => fetchAPI('/api/citas', { method: 'POST', body: JSON.stringify(data) }),
-  updateCita: (id: number, data: any) => fetchAPI(`/api/citas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteCita: (id: number) => fetchAPI(`/api/citas/${id}`, { method: 'DELETE' }),
+  getcita: (id: number) => fetchAPI(`/api/citas/${id}`),
+  createcita: (data: any) => fetchAPI('/api/citas', { method: 'POST', body: JSON.stringify(data) }),
+  updatecita: (id: number, data: any) => fetchAPI(`/api/citas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletecita: (id: number) => fetchAPI(`/api/citas/${id}`, { method: 'DELETE' }),
   
   // ===== AGENDA DE PROCEDIMIENTOS =====
   getAgendaProcedimientos: (
@@ -302,7 +340,7 @@ export const api = {
     fetchAPI(`/api/agenda-procedimientos/${id}`),
 
   createAgendaProcedimiento: (data: any) => {
-    return preventDuplicateCall('createAgendaProcedimiento', () => {
+    return preventDuplicateCall('createAgendaProcedimiento', async () => {
       console.log("📤 Creando procedimiento agendado, datos recibidos EN API:", data);
       
       // **CORRECCIÓN CRÍTICA: Crear una copia profunda y convertir tipos**
@@ -407,6 +445,10 @@ export const api = {
 
       if (excludeId && excludeId > 0) {
         params.append('exclude_id', excludeId.toString());
+      }
+
+      if (procedimiento_id !== undefined && procedimiento_id !== null) {
+        params.append('procedimiento_id', procedimiento_id.toString());
       }
 
       const url = `/api/agenda-procedimientos/disponibilidad?${params.toString()}`;
@@ -594,7 +636,7 @@ export const api = {
   getHistoriasClinicas: (limit?: number, offset?: number) =>
     fetchAPI(`/api/historias-clinicas?limit=${limit || 100}&offset=${offset || 0}`),
   
-  getHistoriasByPaciente: async (pacienteId: number) => {
+  getHistoriasBypaciente: async (pacienteId: number) => {
     console.log(`📋 Obteniendo historias para paciente ${pacienteId}...`);
     
     try {
@@ -796,7 +838,7 @@ export const api = {
   },
   
   // ===== ESTADOS =====
-  getEstadosCitas: () => fetchAPI('/api/estados/citas'),
+  getEstadoscitas: () => fetchAPI('/api/estados/citas'),
   getEstadosQuirurgicos: () => fetchAPI('/api/estados/quirurgicos'),
   
   // ===== PROCEDIMIENTOS =====
@@ -898,46 +940,37 @@ export const api = {
   // ===== DASHBOARD =====
   async getDashboardStats() {
     try {
-      const [pacientesResponse, citasResponse] = await Promise.all([
-        this.getPacientes(10000),
-        this.getCitas(1000)
-      ]);
+      // ✅ Usar el endpoint rápido
+      const quickCounts = await this.getQuickCounts();
       
-      const totalPacientes = pacientesResponse.pacientes?.length || 0;
-      const today = new Date().toISOString().split('T')[0];
-      let citasHoy = 0;
-      
-      if (citasResponse && citasResponse.citas) {
-        citasHoy = citasResponse.citas.filter((cita: any) => {
-          if (cita.fecha_hora) {
-            try {
-              const citaDate = new Date(cita.fecha_hora);
-              const citaDateStr = citaDate.toISOString().split('T')[0];
-              return citaDateStr === today;
-            } catch {
-              return false;
-            }
-          }
-          return false;
-        }).length;
+      if (quickCounts && quickCounts.success) {
+        return {
+          totalpacientes: quickCounts.pacientes_total || 0,
+          citasHoy: quickCounts.citas_hoy || 0,
+          totalCotizaciones: 0,
+          ingresosMes: "$0"
+        };
       }
       
       return {
-        totalPacientes,
-        citasHoy,
+        totalpacientes: 0,
+        citasHoy: 0,
         totalCotizaciones: 0,
         ingresosMes: "$0"
       };
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
       return {
-        totalPacientes: 0,
+        totalpacientes: 0,
         citasHoy: 0,
         totalCotizaciones: 0,
         ingresosMes: "$0"
       };
     }
   },
+
+  // ✅ AGREGAR ESTE MÉTODO NUEVO (si no existe)
+  getQuickCounts: () => fetchAPI('/api/dashboard/quick-counts'),
   
   // ===== TEST =====
   testBackend: () => fetchAPI('/api/test-frontend'),
@@ -966,31 +999,6 @@ export const api = {
   debugUploadDir: () => fetchAPI('/api/debug/upload-dir'),
   debugSalaEspera: () => fetchAPI('/api/debug/sala-espera'),
   
-  // Nueva función para debug de fotos
-  debugHistoriaFotos: async (historiaId: number) => {
-    try {
-      const historia = await api.getHistoriaClinica(historiaId);
-      console.log("🔍 Debug historia fotos:", {
-        historiaId,
-        rawFotos: historia.fotos,
-        parsedFotos: historia.fotos ? historia.fotos.split(',').filter(f => f.trim()) : [],
-        urls: historia.fotos ? historia.fotos.split(',').map((url: string) => {
-          const trimmed = url.trim();
-          return {
-            original: trimmed,
-            isRelative: trimmed.startsWith('/uploads/'),
-            absoluteUrl: trimmed.startsWith('/uploads/') ? `${API_URL}${trimmed}` : trimmed,
-            willLoad: trimmed.startsWith('http') || trimmed.startsWith('/uploads/')
-          };
-        }) : []
-      });
-      return historia;
-    } catch (error) {
-      console.error("❌ Debug error:", error);
-      throw error;
-    }
-  },
-
   // ===== SALA DE ESPERA =====
   getSalaEspera: async (mostrarTodos: boolean = true): Promise<any> => {
     try {
@@ -1151,7 +1159,7 @@ export const api = {
     }
   },
 
-  agregarPacienteSalaEspera: async (pacienteId: string, citaId?: string): Promise<any> => {
+  agregarpacienteSalaEspera: async (pacienteId: string, citaId?: string): Promise<any> => {
     try {
       console.log("➕ Agregando paciente a sala de espera:", { pacienteId, citaId });
       
@@ -1189,7 +1197,7 @@ export const api = {
       }
       
       const data = await response.json();
-      console.log("✅ Paciente agregado a sala de espera:", data);
+      console.log("✅ paciente agregado a sala de espera:", data);
       return data;
     } catch (error) {
       console.error('❌ Error agregando paciente:', error);
@@ -1621,6 +1629,8 @@ export const api = {
     });
   },
 
+// En el objeto api, agregar o actualizar la función createPlanQuirurgico:
+
   createPlanQuirurgico: (data: any) => {
     const callKey = `createPlanQuirurgico_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
@@ -1632,15 +1642,26 @@ export const api = {
       
       console.log("📤 Datos para enviar al backend:", backendData);
       
+      // 🔴 CORRECCIÓN CRÍTICA: Asegurar que paciente_id sea un NÚMERO VÁLIDO
+      if (!backendData.paciente_id || backendData.paciente_id <= 0) {
+        console.error("❌ Error: paciente_id inválido:", backendData.paciente_id);
+        return {
+          success: false,
+          error: true,
+          message: "ID de paciente inválido. Debe ser un número mayor a 0.",
+          isValidationError: true
+        };
+      }
+      
+      backendData.paciente_id = parseInt(String(backendData.paciente_id));
+      
       try {
         const result = await fetchAPI('/api/planes-quirurgicos', {
           method: 'POST',
           body: JSON.stringify(backendData)
         });
         
-        console.log("✅ Resultado de fetchAPI:", result);
-        
-        // 🔴 VERIFICACIÓN SEGURA: Asegurar que result es válido
+
         if (!result) {
           return {
             success: false,
@@ -1651,6 +1672,35 @@ export const api = {
         
         // Si result ya tiene error, devolverlo
         if (result.error === true) {
+          // 🔴 CORRECCIÓN ESPECÍFICA PARA "paciente no encontrado"
+          if (result.message && result.message.includes("paciente no encontrado")) {
+            console.error("🔴 Error específico: paciente con ID", backendData.paciente_id, "no encontrado en la BD");
+            
+            // Verificar si el paciente existe realmente
+            try {
+              const pacienteCheck = await api.getpaciente(backendData.paciente_id);
+              console.log("🔍 Verificación de paciente:", pacienteCheck);
+              
+              if (pacienteCheck && pacienteCheck.id) {
+                return {
+                  success: false,
+                  error: true,
+                  message: `El paciente con ID ${backendData.paciente_id} existe pero hay un error en el servidor. Contacte al administrador.`,
+                  pacienteExiste: true
+                };
+              } else {
+                return {
+                  success: false,
+                  error: true,
+                  message: `El paciente con ID ${backendData.paciente_id} no existe en la base de datos.`,
+                  pacienteExiste: false
+                };
+              }
+            } catch (pacienteError) {
+              console.error("❌ Error verificando paciente:", pacienteError);
+              return result;
+            }
+          }
           return result;
         }
         
@@ -1671,6 +1721,7 @@ export const api = {
     });
   },
 
+  // 🔴 AGREGAR TAMBIÉN EN LA FUNCIÓN updatePlanQuirurgico:
   updatePlanQuirurgico: (id: string, data: any) => {
     const callKey = `updatePlanQuirurgico_${id}_${Date.now()}`;
     
@@ -1682,15 +1733,48 @@ export const api = {
       
       console.log("📤 Datos para enviar al backend:", backendData);
       
+      // 🔴 CORRECCIÓN CRÍTICA: Asegurar que paciente_id sea un NÚMERO VÁLIDO
+      if (!backendData.paciente_id || backendData.paciente_id <= 0) {
+        console.error("❌ Error: paciente_id inválido:", backendData.paciente_id);
+        return {
+          success: false,
+          error: true,
+          message: "ID de paciente inválido. Debe ser un número mayor a 0.",
+          isValidationError: true
+        };
+      }
+      
+      backendData.paciente_id = parseInt(String(backendData.paciente_id));
+                  
       try {
         const result = await fetchAPI(`/api/planes-quirurgicos/${id}`, {
           method: 'PUT',
           body: JSON.stringify(backendData)
         });
         
-        // fetchAPI ya devuelve los datos parseados
         if (result && result.error === true) {
-          return result; // 🔴 NO lanzar error, devolver objeto de error
+          // 🔴 CORRECCIÓN ESPECÍFICA PARA "paciente no encontrado"
+          if (result.message && result.message.includes("paciente no encontrado")) {
+            console.error("🔴 Error específico: paciente con ID", backendData.paciente_id, "no encontrado en la BD");
+            
+            // Verificar si el paciente existe realmente
+            try {
+              const pacienteCheck = await api.getpaciente(backendData.paciente_id);
+              console.log("🔍 Verificación de paciente:", pacienteCheck);
+              
+              if (pacienteCheck && pacienteCheck.id) {
+                return {
+                  success: false,
+                  error: true,
+                  message: `El paciente con ID ${backendData.paciente_id} existe pero hay un error en el servidor. Contacte al administrador.`,
+                  pacienteExiste: true
+                };
+              }
+            } catch (pacienteError) {
+              console.error("❌ Error verificando paciente:", pacienteError);
+            }
+          }
+          return result;
         }
         
         return {
@@ -1706,6 +1790,44 @@ export const api = {
         };
       }
     });
+  },
+
+  // 🔴 AGREGAR ESTA FUNCIÓN PARA VERIFICAR paciente:
+  verificarpaciente: async (pacienteId: string | number) => {
+    try {
+      const pacienteIdNum = typeof pacienteId === 'string' ? parseInt(pacienteId) : pacienteId;
+      
+      if (isNaN(pacienteIdNum) || pacienteIdNum <= 0) {
+        return {
+          success: false,
+          existe: false,
+          message: "ID de paciente inválido"
+        };
+      }
+      
+      const paciente = await api.getpaciente(pacienteIdNum);
+      
+      if (paciente && paciente.id) {
+        return {
+          success: true,
+          existe: true,
+          paciente: paciente
+        };
+      } else {
+        return {
+          success: false,
+          existe: false,
+          message: "paciente no encontrado"
+        };
+      }
+    } catch (error) {
+      console.error("❌ Error verificando paciente:", error);
+      return {
+        success: false,
+        existe: false,
+        message: "Error verificando paciente"
+      };
+    }
   },
 
   deletePlanQuirurgico: (id: string) => {
@@ -1735,34 +1857,30 @@ export const api = {
     });
   },
 
-  // Buscar pacientes para autocompletar
-  buscarPacientes: (query: string, limit: number = 10) =>
-    fetchAPI(`/api/pacientes/buscar?q=${encodeURIComponent(query)}&limit=${limit}`),
-
   // ===== Obtener datos completos de un paciente para pre-llenar formulario =====
-  getPacienteCompleto: async (pacienteId: string) => {
+  getpacienteCompleto: async (pacienteId: string) => {
     try {
-      const paciente = await api.getPaciente(parseInt(pacienteId));
+      const paciente = await api.getpaciente(parseInt(pacienteId));
       
       // Obtener historias clínicas del paciente
-      const historias = await api.getHistoriasByPaciente(parseInt(pacienteId));
+      const historias = await api.getHistoriasBypaciente(parseInt(pacienteId));
       
       // Obtener la última cita del paciente
-      const citasResponse = await api.getCitas(100, 0);
-      const citasPaciente = citasResponse.citas?.filter((cita: any) => 
+      const citasResponse = await api.getcitas(100, 0);
+      const citaspaciente = citasResponse.citas?.filter((cita: any) => 
         cita.paciente_id === parseInt(pacienteId)
       ) || [];
       
-      const ultimaCita = citasPaciente.length > 0 ? citasPaciente[0] : null;
+      const ultimacita = citaspaciente.length > 0 ? citaspaciente[0] : null;
       
       return {
         paciente: paciente,
         ultimaHistoria: historias.length > 0 ? historias[0] : null,
-        ultimaCita: ultimaCita
+        ultimacita: ultimacita
       };
     } catch (error) {
       console.error("Error obteniendo datos del paciente:", error);
-      return { paciente: null, ultimaHistoria: null, ultimaCita: null };
+      return { paciente: null, ultimaHistoria: null, ultimacita: null };
     }
   },
 
@@ -1843,29 +1961,29 @@ export const transformBackendToFrontend = {
   }),
 
   // Transformar paciente del backend al formato del frontend
-  paciente: (backendPaciente: any) => ({
-    id: backendPaciente.id?.toString() || '',
-    nombres: backendPaciente.nombre || '',
-    apellidos: backendPaciente.apellido || '',
-    tipo_documento: backendPaciente.tipo_documento || 'CC',
-    documento: backendPaciente.numero_documento || '',
-    fecha_nacimiento: backendPaciente.fecha_nacimiento || '',
-    genero: backendPaciente.genero || '',
-    telefono: backendPaciente.telefono || '',
-    email: backendPaciente.email || '',
-    direccion: backendPaciente.direccion || '',
-    ciudad: backendPaciente.ciudad || 'No especificada',
+  paciente: (backendpaciente: any) => ({
+    id: backendpaciente.id?.toString() || '',
+    nombres: backendpaciente.nombre || '',
+    apellidos: backendpaciente.apellido || '',
+    tipo_documento: backendpaciente.tipo_documento || 'CC',
+    documento: backendpaciente.numero_documento || '',
+    fecha_nacimiento: backendpaciente.fecha_nacimiento || '',
+    genero: backendpaciente.genero || '',
+    telefono: backendpaciente.telefono || '',
+    email: backendpaciente.email || '',
+    direccion: backendpaciente.direccion || '',
+    ciudad: backendpaciente.ciudad || 'No especificada',
     estado_paciente: 'activo',
-    fecha_registro: backendPaciente.fecha_registro || new Date().toISOString(),
+    fecha_registro: backendpaciente.fecha_registro || new Date().toISOString(),
   }),
   
   // Transformar cita del backend al formato del frontend
-  cita: (backendCita: any) => {
+  cita: (backendcita: any) => {
     let fecha = '';
     let hora = '';
     
-    if (backendCita.fecha_hora) {
-      const fechaHoraStr = backendCita.fecha_hora.toString();
+    if (backendcita.fecha_hora) {
+      const fechaHoraStr = backendcita.fecha_hora.toString();
       
       if (fechaHoraStr.includes(' ')) {
         const [datePart, timePart] = fechaHoraStr.split(' ');
@@ -1879,30 +1997,30 @@ export const transformBackendToFrontend = {
     }
     
     let tipoCompleto = "consulta";
-    if (backendCita.tipo === "program_quir") tipoCompleto = "programacion_quirurgica";
-    else if (backendCita.tipo === "consulta") tipoCompleto = "consulta";
-    else if (backendCita.tipo === "control") tipoCompleto = "control";
-    else if (backendCita.tipo === "valoracion") tipoCompleto = "valoracion";
+    if (backendcita.tipo === "program_quir") tipoCompleto = "programacion_quirurgica";
+    else if (backendcita.tipo === "consulta") tipoCompleto = "consulta";
+    else if (backendcita.tipo === "control") tipoCompleto = "control";
+    else if (backendcita.tipo === "valoracion") tipoCompleto = "valoracion";
     
     let estadoNombre = "pendiente";
-    if (backendCita.estado_id === 1) estadoNombre = "pendiente";
-    else if (backendCita.estado_id === 2) estadoNombre = "confirmada";
-    else if (backendCita.estado_id === 3) estadoNombre = "completada";
-    else if (backendCita.estado_id === 4) estadoNombre = "cancelada";
+    if (backendcita.estado_id === 1) estadoNombre = "pendiente";
+    else if (backendcita.estado_id === 2) estadoNombre = "confirmada";
+    else if (backendcita.estado_id === 3) estadoNombre = "completada";
+    else if (backendcita.estado_id === 4) estadoNombre = "cancelada";
     
     return {
-      id: backendCita.id?.toString() || '',
-      id_paciente: backendCita.paciente_id?.toString() || '',
-      id_usuario: backendCita.usuario_id?.toString() || '',
+      id: backendcita.id?.toString() || '',
+      id_paciente: backendcita.paciente_id?.toString() || '',
+      id_usuario: backendcita.usuario_id?.toString() || '',
       tipo_cita: tipoCompleto as "consulta" | "control" | "valoracion" | "programacion_quirurgica",
       fecha: fecha || '',
       hora: hora || '09:00',
-      duracion: backendCita.duracion_minutos || 30,
+      duracion: backendcita.duracion_minutos || 30,
       estado: estadoNombre as "pendiente" | "confirmada" | "completada" | "cancelada",
-      observaciones: backendCita.notas || '',
-      paciente_nombre: backendCita.paciente_nombre || '',
-      paciente_apellido: backendCita.paciente_apellido || '',
-      doctor_nombre: backendCita.doctor_nombre || '',
+      observaciones: backendcita.notas || '',
+      paciente_nombre: backendcita.paciente_nombre || '',
+      paciente_apellido: backendcita.paciente_apellido || '',
+      doctor_nombre: backendcita.doctor_nombre || '',
     };
   },
   
@@ -1974,7 +2092,7 @@ export const transformBackendToFrontend = {
     // Calcular total basado en items si el de la BD es 0
     let totalCalculado = totalBD;
     if (totalBD === 0 && items.length > 0) {
-      totalCalculado = items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+      totalCalculado = items.reduce((sum: number, item: any) => sum + (item.subtotal || 0), 0);
     }
     
     console.log("📊 Transformación completa:", {
@@ -2089,20 +2207,20 @@ export const transformBackendToFrontend = {
   }),
 
   // Transformar paciente de sala de espera del backend al formato del frontend
-  pacienteSalaEspera: (backendPaciente: any) => ({
-    id: backendPaciente.id?.toString() || '',
-    nombres: backendPaciente.nombres || backendPaciente.nombre || '',
-    apellidos: backendPaciente.apellidos || backendPaciente.apellido || '',
-    documento: backendPaciente.documento || backendPaciente.numero_documento || '',
-    telefono: backendPaciente.telefono || '',
-    email: backendPaciente.email || '',
-    cita_id: backendPaciente.cita_id?.toString(),
-    hora_cita: backendPaciente.hora_cita || '',
-    fecha_cita: backendPaciente.fecha_cita || '',
-    estado_sala: backendPaciente.estado_sala || 'pendiente',
-    tiempo_espera: backendPaciente.tiempo_espera || 0,
-    tiene_cita_hoy: backendPaciente.tiene_cita_hoy || false,
-    sala_espera_id: backendPaciente.sala_espera_id?.toString()
+  pacienteSalaEspera: (backendpaciente: any) => ({
+    id: backendpaciente.id?.toString() || '',
+    nombres: backendpaciente.nombres || backendpaciente.nombre || '',
+    apellidos: backendpaciente.apellidos || backendpaciente.apellido || '',
+    documento: backendpaciente.documento || backendpaciente.numero_documento || '',
+    telefono: backendpaciente.telefono || '',
+    email: backendpaciente.email || '',
+    cita_id: backendpaciente.cita_id?.toString(),
+    hora_cita: backendpaciente.hora_cita || '',
+    fecha_cita: backendpaciente.fecha_cita || '',
+    estado_sala: backendpaciente.estado_sala || 'pendiente',
+    tiempo_espera: backendpaciente.tiempo_espera || 0,
+    tiene_cita_hoy: backendpaciente.tiene_cita_hoy || false,
+    sala_espera_id: backendpaciente.sala_espera_id?.toString()
   }),
   
   // Función completa para transformBackendToFrontend.planQuirurgico
@@ -2146,10 +2264,10 @@ export const transformBackendToFrontend = {
     const paciente_id = backendPlan.paciente_id ? String(backendPlan.paciente_id) : '';
     const usuario_id = backendPlan.usuario_id ? String(backendPlan.usuario_id) : '1';
     
-    // 🔴 DATOS PERSONALES - PRIORIZAR JOIN CON PACIENTE
+    // 🔴 DATOS PERSONALES - PRIORIZAR JOIN CON paciente
     const nombre_completo = backendPlan.nombre_completo_paciente || 
                           backendPlan.nombre_completo || 
-                          'Paciente no identificado';
+                          'paciente no identificado';
     
     const identificacion = backendPlan.paciente_documento || 
                           backendPlan.identificacion || 
@@ -2291,7 +2409,7 @@ export const transformBackendToFrontend = {
       fecha_creacion: backendPlan.fecha_creacion || new Date().toISOString(),
       fecha_modificacion: backendPlan.fecha_modificacion || backendPlan.fecha_creacion || '',
       
-      // DATOS PACIENTE
+      // DATOS paciente
       datos_paciente: {
         id: paciente_id,
         identificacion: identificacion,
@@ -2485,9 +2603,9 @@ export const transformBackendToFrontend = {
     return backendData;
   },
 
-  // Transformación inversa - Paciente
-  pacienteToBackend: (frontendPaciente: any) => {
-    let genero = frontendPaciente.genero;
+  // Transformación inversa - paciente
+  pacienteToBackend: (frontendpaciente: any) => {
+    let genero = frontendpaciente.genero;
     if (genero) {
       const lowerGenero = genero.toLowerCase();
       if (lowerGenero.includes('masc') || lowerGenero === 'm' || lowerGenero === 'masculino') {
@@ -2502,16 +2620,16 @@ export const transformBackendToFrontend = {
     }
 
     return {
-      numero_documento: frontendPaciente.documento,
-      tipo_documento: frontendPaciente.tipo_documento,
-      nombre: frontendPaciente.nombres,
-      apellido: frontendPaciente.apellidos,
-      fecha_nacimiento: frontendPaciente.fecha_nacimiento,
+      numero_documento: frontendpaciente.documento,
+      tipo_documento: frontendpaciente.tipo_documento,
+      nombre: frontendpaciente.nombres,
+      apellido: frontendpaciente.apellidos,
+      fecha_nacimiento: frontendpaciente.fecha_nacimiento,
       genero: genero,
-      telefono: frontendPaciente.telefono,
-      email: frontendPaciente.email,
-      direccion: frontendPaciente.direccion,
-      ciudad: frontendPaciente.ciudad,
+      telefono: frontendpaciente.telefono,
+      email: frontendpaciente.email,
+      direccion: frontendpaciente.direccion,
+      ciudad: frontendpaciente.ciudad,
     };
   },
   
@@ -2697,7 +2815,7 @@ export const transformBackendToFrontend = {
       numero_items: items.length,
       numero_servicios: servicios_incluidos.length
     });
-    console.log("🚫 Campos EXPLÍCITAMENTE excluidos: 'total', 'id' (en body)");
+    console.log("🚫 Campos EXPLÍcitaMENTE excluidos: 'total', 'id' (en body)");
     
     return data;
   },
@@ -2720,11 +2838,11 @@ export const transformBackendToFrontend = {
   },
 
   // Transformación inversa - Sala de Espera
-  salaEsperaToBackend: (frontendPaciente: any) => {
+  salaEsperaToBackend: (frontendpaciente: any) => {
     return {
-      paciente_id: parseInt(frontendPaciente.id),
-      estado: frontendPaciente.estado_sala,
-      cita_id: frontendPaciente.cita_id ? parseInt(frontendPaciente.cita_id) : undefined
+      paciente_id: parseInt(frontendpaciente.id),
+      estado: frontendpaciente.estado_sala,
+      cita_id: frontendpaciente.cita_id ? parseInt(frontendpaciente.cita_id) : undefined
     };
   },
 

@@ -4,15 +4,15 @@ import type React from "react"
 
 import { useState } from "react"
 import { X } from "lucide-react"
-import type { Paciente } from "../pages/PacientesPage"
+import type { paciente } from "../types/paciente"
 
-interface PacienteFormProps {
-  paciente?: Paciente
-  onSave: (data: Omit<Paciente, "id" | "fecha_registro">) => void
+interface pacienteFormProps {
+  paciente?: paciente
+  onSave: (data: Omit<paciente, "id" | "fecha_registro">) => void
   onClose: () => void
 }
 
-export function PacienteForm({ paciente, onSave, onClose }: PacienteFormProps) {
+export function PacienteForm({ paciente, onSave, onClose }: pacienteFormProps) {
   const [formData, setFormData] = useState({
     nombres: paciente?.nombres || "",
     apellidos: paciente?.apellidos || "",
@@ -55,7 +55,7 @@ export function PacienteForm({ paciente, onSave, onClose }: PacienteFormProps) {
       <div className="bg-white rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800">{paciente ? "Editar Paciente" : "Nuevo Paciente"}</h2>
+          <h2 className="text-xl font-bold text-gray-800">{paciente ? "Editar paciente" : "Nuevo paciente"}</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
             <X size={20} />
           </button>
