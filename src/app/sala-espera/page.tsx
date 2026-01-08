@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Clock, AlertCircle, CheckCircle2, Save, UserCheck, UserX, User, Calendar, RefreshCw } from "lucide-react"
-import { ProtectedRoute } from "../components/ProtectedRoute"
+import { ProtectedRoute } from "../../components/ProtectedRoute"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
 

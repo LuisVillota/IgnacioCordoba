@@ -1,48 +1,18 @@
+// src/app/historias-clinicas/page.tsx
 "use client"
 
 import { useState, useEffect, useRef } from "react"
 import { Plus, Edit2, Eye, ArrowLeft, Upload } from "lucide-react"
-import { ProtectedRoute } from "../components/ProtectedRoute"
-import { HistoriaForm } from "../components/HistoriaForm"
-import { HistoriaModal } from "../components/HistoriaModal"
-import { api, transformBackendToFrontend, handleApiError } from "../lib/api"
-
-export interface HistoriaClinica {
-  id: string
-  id_paciente: string
-  fecha_creacion: string
-  motivo_consulta: string
-  antecedentes_medicos: string
-  antecedentes_quirurgicos: string
-  antecedentes_alergicos: string
-  antecedentes_farmacologicos: string
-  exploracion_fisica: string
-  diagnostico: string
-  tratamiento: string
-  recomendaciones: string
-  medico_id: string
-  fotos: string
-}
-
-export interface pacienteFrontend {
-  id: string
-  nombres: string
-  apellidos: string
-  tipo_documento: string
-  documento: string
-  fecha_nacimiento: string
-  genero: string
-  telefono: string
-  email: string
-  direccion: string
-  ciudad: string
-  estado_paciente: string
-  fecha_registro: string
-}
+import { ProtectedRoute } from "../../components/ProtectedRoute"
+import { HistoriaForm } from "../../components/HistoriaForm"
+import { HistoriaModal } from "../../components/HistoriaModal"
+import { api, transformBackendToFrontend, handleApiError } from "../../lib/api"
+import type { HistoriaClinica } from "../../types/historia-clinica"
+import type { paciente } from "../../types/paciente"
 
 export default function HistoriaClinicaPage() {
   const [historias, setHistorias] = useState<HistoriaClinica[]>([])
-  const [pacientes, setpacientes] = useState<pacienteFrontend[]>([])
+  const [pacientes, setpacientes] = useState<paciente[]>([])
   const [selectedpacienteId, setSelectedpacienteId] = useState<string>("")
   const [selectedHistoria, setSelectedHistoria] = useState<HistoriaClinica | null>(null)
   const [showForm, setShowForm] = useState(false)

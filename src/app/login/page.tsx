@@ -3,10 +3,12 @@
 import type React from "react"
 import { useState } from "react"
 import { Lock, Mail } from "lucide-react"
-import { useAuth } from "../hooks/useAuth"
+import { useAuth } from "../../hooks/useAuth"
+import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
   const { login } = useAuth()
+  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -22,9 +24,9 @@ export default function LoginPage() {
       
       const success = await login(username, password)
       if (success) {
-        // Mostrar mensaje de éxito brevemente
-        setError("") // Limpiar cualquier error previo
-        // El AuthGuard detectará automáticamente y redirigirá
+        console.log('✅ [LOGIN] Login exitoso, redirigiendo...')
+        // Usar router.push en vez de window.location.href
+        router.push('/DashboardHome')
       } else {
         setError("Credenciales incorrectas")
       }

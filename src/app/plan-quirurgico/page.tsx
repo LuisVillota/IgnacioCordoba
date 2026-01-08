@@ -3,11 +3,13 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Plus, Edit2, Eye, Calendar, Scale, User, FileText, RefreshCw, Download } from "lucide-react"
-import type { PlanQuirurgico } from "../types/planQuirurgico"
-import { PlanQuirurgicoForm } from "../components/PlanQuirurgicoForm"
-import { api } from "../lib/api"
+import type { PlanQuirurgico } from "../../types/planQuirurgico"
+import { PlanQuirurgicoForm } from "../../components/PlanQuirurgicoForm"
+import { api } from "../../lib/api"
 
-export const PlanQuirurgicoPage: React.FC = () => {
+// ❌ QUITA ESTO: export const PlanQuirurgicoPage: React.FC = () => {
+// ✅ REEMPLAZA CON:
+export default function PlanQuirurgicoPage() {
   const [planesQuirurgicos, setPlanesQuirurgicos] = useState<PlanQuirurgico[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -996,5 +998,3 @@ export const PlanQuirurgicoPage: React.FC = () => {
     </div>
   )
 }
-
-export default PlanQuirurgicoPage

@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { X, Upload, X as XIcon, Loader2 } from "lucide-react"
-import type { HistoriaClinica } from "../pages/HistoriaClinicaPage"
+import type { HistoriaClinica } from "../types/historia-clinica"
 import { api } from "../lib/api"
 
 interface HistoriaFormProps {

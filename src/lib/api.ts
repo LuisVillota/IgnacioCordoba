@@ -1,15 +1,8 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://ignaciocordoba-backend.onrender.com";
-const TIMEOUT_MS = 10000; // 10 segundos
-
-// Variable global para rastrear llamadas en progreso y prevenir duplicados
-// Variable global para rastrear llamadas en progreso y prevenir duplicados
+const TIMEOUT_MS = 60000;
 const callsInProgress = new Set<string>();
-
-// Cache simple para reducir llamadas repetidas
 const apiCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_DURATION = 30000; // 30 segundos
-
-// Helper para usar caché
+const CACHE_DURATION = 30000; 
 const getCachedData = (key: string) => {
   const cached = apiCache.get(key);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
@@ -23,11 +16,8 @@ const setCachedData = (key: string, data: any) => {
   apiCache.set(key, { data, timestamp: Date.now() });
 };
 
-// Cliente HTTP reutilizable - VERSIÓN CORREGIDA CON MEJOR MANEJO DE ERRORES
 export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  
-  // 🛠️ CORRECCIÓN: Manejo seguro del body para logging
   let bodyForLog = undefined;
   try {
     if (options?.body) {
@@ -46,31 +36,37 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     body: bodyForLog
   });
   
-  // Crear AbortController para timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
   
   try {
+    const defaultHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      defaultHeaders['Authorization'] = `Bearer ${token}`;
+    }
+    
+    let finalHeaders = { ...defaultHeaders };
+    if (options?.headers) {
+      const optHeaders = options.headers as Record<string, string>;
+      finalHeaders = { ...finalHeaders, ...optHeaders };
+    }
+    
     const response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        ...options?.headers,
-      },
+      headers: finalHeaders,
     });
     
     clearTimeout(timeoutId);
     
     console.log(`📥 API Response Status: ${response.status} ${response.statusText}`);
-    
-    // **CORRECCIÓN: Leer respuesta como texto primero**
     const responseText = await response.text();
     
     let responseData;
     try {
-      // Intentar parsear como JSON
       responseData = responseText ? JSON.parse(responseText) : {};
       console.log(`📥 API Response Body (parsed):`, responseData);
     } catch (parseError) {
@@ -82,17 +78,13 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       console.log(`⚠️ API Error ${response.status}:`, responseData);
       
       let errorMessage = `Error HTTP ${response.status}`;
-      
-      // **CORRECCIÓN: Manejar diferentes formatos de error**
       if (typeof responseData === 'string') {
         errorMessage = responseData;
       } else if (responseData && typeof responseData === 'object') {
-        // Backend puede devolver error en formato {detail: string} o {message: string}
         if (responseData.detail) {
           if (typeof responseData.detail === 'string') {
             errorMessage = responseData.detail;
           } else if (Array.isArray(responseData.detail)) {
-            // Manejar lista de errores de Pydantic
             errorMessage = responseData.detail.map((err: any) => {
               if (typeof err === 'string') return err;
               if (err && typeof err === 'object' && err.msg && err.loc) {
@@ -102,7 +94,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
               return JSON.stringify(err);
             }).join(', ');
           } else if (responseData.detail && typeof responseData.detail === 'object') {
-            // Si detail es un objeto (como {error: "message"})
             errorMessage = responseData.detail.message || JSON.stringify(responseData.detail);
           }
         } else if (responseData.message) {
@@ -114,7 +105,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
             errorMessage = responseData.error.message || JSON.stringify(responseData.error);
           }
         } else {
-          // Para validaciones
           const errorKeys = Object.keys(responseData).filter(key => 
             key.toLowerCase().includes('error') || 
             key.toLowerCase().includes('detail') ||
@@ -128,10 +118,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
           }
         }
       }
-      
-      console.log('📝 Error message extracted:', errorMessage);
-      
-      // **DEVOLVER OBJETO DE ERROR**
       return {
         success: false,
         error: true,
@@ -144,19 +130,16 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       };
     }
     
-    // **SI ES ÉXITO, devolver el dato normalmente**
     return responseData;
     
   } catch (error) {
     clearTimeout(timeoutId);
-    
-    // Manejar timeout específicamente
-    if (error instanceof Error && error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
       console.error('❌ Request timeout después de', TIMEOUT_MS, 'ms');
       return {
         success: false,
         error: true,
-        message: 'La solicitud tardó demasiado tiempo. Intenta nuevamente.',
+        message: 'La solicitud tardó demasiado. El servidor en Render puede estar "dormido". Intenta de nuevo en 30 segundos.',
         isTimeoutError: true
       };
     }
@@ -232,9 +215,11 @@ export const api = {
   login: (username: string, password: string) => {
     const encodedUsername = encodeURIComponent(username);
     const encodedPassword = encodeURIComponent(password);
-    return fetchAPI(`/api/login?username=${encodedUsername}&password=${encodedPassword}`);
+    return fetchAPI(`/api/usuarios/login?username=${encodedUsername}&password=${encodedPassword}`, {
+      method: 'GET',
+    });
   },
-  
+    
   // ===== USUARIOS =====
   getUsuarios: () => fetchAPI('/api/usuarios'),
   getUsuario: (id: number) => fetchAPI(`/api/usuarios/${id}`),

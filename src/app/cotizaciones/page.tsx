@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { Plus, Edit2, Eye, Loader2 } from "lucide-react"
-import { ProtectedRoute } from "../components/ProtectedRoute"
-import { CotizacionForm } from "../components/CotizacionForm"
-import { CotizacionModal } from "../components/CotizacionModal"
-import { api, transformBackendToFrontend } from "../lib/api"
-import type { Cotizacion } from "../types/cotizacion"
+import { ProtectedRoute } from "../../components/ProtectedRoute"
+import { CotizacionForm } from "../../components/CotizacionForm"
+import { CotizacionModal } from "../../components/CotizacionModal"
+import { api, transformBackendToFrontend } from "../../lib/api"
+import type { Cotizacion } from "../../types/cotizacion"
 
 export interface paciente {
   id: string
