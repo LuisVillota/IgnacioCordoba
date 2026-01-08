@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 import os
 import uuid
 from datetime import datetime
+import shutil
 
 router = APIRouter()
 
