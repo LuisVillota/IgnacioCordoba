@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { OrdenExamenesForm } from "../../components/OrdenExamenesForm"
+import { OrdenExamenesForm } from "../../../components/OrdenExamenesForm"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
 import { Search, Filter, Loader2, User, Phone, Mail, Calendar } from "lucide-react"

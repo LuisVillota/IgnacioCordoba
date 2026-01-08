@@ -16,11 +16,11 @@ import {
   User,
   X
 } from "lucide-react"
-import { ProtectedRoute } from "../../components/ProtectedRoute"
-import { ProgramacionForm } from "../../components/ProgramacionForm"
-import { ProgramacionModal } from "../../components/ProgramacionModal"
-import type { Programacion, CreateProgramacionData } from "../../types/programacion"
-import { api, handleApiError } from "../../lib/api"
+import { ProtectedRoute } from "../../../components/ProtectedRoute"
+import { ProgramacionForm } from "../../../components/ProgramacionForm"
+import { ProgramacionModal } from "../../../components/ProgramacionModal"
+import type { Programacion, CreateProgramacionData } from "../../../types/programacion"
+import { api, handleApiError } from "../../../lib/api"
 
 export default function ProgramacionQuirurgicaPage() {
   const [programaciones, setProgramaciones] = useState<Programacion[]>([])

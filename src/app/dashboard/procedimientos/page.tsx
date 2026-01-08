@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { Plus, Edit2, Loader2, RefreshCw } from "lucide-react"
-import { ProtectedRoute } from "../../components/ProtectedRoute"
-import { ProcedimientoForm } from "../../components/ProcedimientoForm"
-import { ProcedimientoModal } from "../../components/ProcedimientoModal"
-import { AdicionalForm } from "../../components/AdicionalForm"
-import { AdicionalModal } from "../../components/AdicionalModal"
-import { OtroAdicionalForm } from "../../components/OtroAdicionalForm"
-import { OtroAdicionalModal } from "../../components/OtroAdicionalModal"
-import { api, handleApiError } from "../../lib/api"
+import { ProtectedRoute } from "../../../components/ProtectedRoute"
+import { ProcedimientoForm } from "../../../components/ProcedimientoForm"
+import { ProcedimientoModal } from "../../../components/ProcedimientoModal"
+import { AdicionalForm } from "../../../components/AdicionalForm"
+import { AdicionalModal } from "../../../components/AdicionalModal"
+import { OtroAdicionalForm } from "../../../components/OtroAdicionalForm"
+import { OtroAdicionalModal } from "../../../components/OtroAdicionalModal"
+import { api, handleApiError } from "../../../lib/api"
 
 export interface ItemBase {
   id: string

@@ -1,14 +1,13 @@
-// src/app/historias-clinicas/page.tsx
 "use client"
 
 import { useState, useEffect, useRef } from "react"
 import { Plus, Edit2, Eye, ArrowLeft, Upload } from "lucide-react"
-import { ProtectedRoute } from "../../components/ProtectedRoute"
-import { HistoriaForm } from "../../components/HistoriaForm"
-import { HistoriaModal } from "../../components/HistoriaModal"
-import { api, transformBackendToFrontend, handleApiError } from "../../lib/api"
-import type { HistoriaClinica } from "../../types/historia-clinica"
-import type { paciente } from "../../types/paciente"
+import { ProtectedRoute } from "../../../components/ProtectedRoute"
+import { HistoriaForm } from "../../../components/HistoriaForm"
+import { HistoriaModal } from "../../../components/HistoriaModal"
+import { api, transformBackendToFrontend, handleApiError } from "../../../lib/api"
+import type { HistoriaClinica } from "../../../types/historia-clinica"
+import type { paciente } from "../../../types/paciente"
 
 export default function HistoriaClinicaPage() {
   const [historias, setHistorias] = useState<HistoriaClinica[]>([])

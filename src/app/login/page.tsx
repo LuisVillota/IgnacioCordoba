@@ -26,7 +26,7 @@ export default function LoginPage() {
       if (success) {
         console.log('✅ [LOGIN] Login exitoso, redirigiendo...')
         // Usar router.push en vez de window.location.href
-        router.push('/DashboardHome')
+        router.push('/dashboard')
       } else {
         setError("Credenciales incorrectas")
       }

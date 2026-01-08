@@ -1,25 +1,23 @@
-# backend/src/app/api/__init__.py
 from fastapi import APIRouter
 from .routes import (
     sistema,
-    usuario,  # ✅ archivo: usuario.py
+    usuario,
     pacientes,
     citas,
     estados,
     procedimientos,
     adicionales,
-    otro_adicionales,  # ✅ archivo: otro_adicionales.py
+    otro_adicionales,
     historias_clinicas,
     sala_espera,
-    agenda_procedimiento,  # ✅ archivo: agenda_procedimiento.py
+    agenda_procedimiento,
     cotizaciones,
     planes_quirurgicos,
-    debug
+    debug,
+    upload  
 )
 
 api_router = APIRouter()
-
-# Incluir todas las rutas
 api_router.include_router(sistema.router, tags=["sistema"])
 api_router.include_router(usuario.router, prefix="/usuarios", tags=["usuarios"])
 api_router.include_router(pacientes.router, prefix="/pacientes", tags=["pacientes"])
@@ -34,3 +32,4 @@ api_router.include_router(agenda_procedimiento.router, prefix="/agenda-procedimi
 api_router.include_router(cotizaciones.router, prefix="/cotizaciones", tags=["cotizaciones"])
 api_router.include_router(planes_quirurgicos.router, prefix="/planes-quirurgicos", tags=["planes-quirurgicos"])
 api_router.include_router(debug.router, prefix="/debug", tags=["debug"])
+api_router.include_router(upload.router, prefix="/upload", tags=["upload"])  # ✅ NUEVO
