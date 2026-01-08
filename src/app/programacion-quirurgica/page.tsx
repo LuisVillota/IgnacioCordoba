@@ -16,37 +16,11 @@ import {
   User,
   X
 } from "lucide-react"
-import { ProtectedRoute } from "../components/ProtectedRoute"
-import { ProgramacionForm } from "../components/ProgramacionForm"
-import { ProgramacionModal } from "../components/ProgramacionModal"
-import { api, handleApiError } from "../lib/api"
-
-export interface ProgramacionBackend {
-  numero_documento: string
-  fecha: string
-  hora: string
-  duracion: number
-  procedimiento_id: number
-  anestesiologo: string
-  estado: "Programado" | "Aplazado" | "Confirmado" | "En Quirofano" | "Operado" | "Cancelado"
-  observaciones: string
-}
-
-export interface Programacion {
-  id: string
-  numero_documento: string
-  fecha: string
-  hora: string
-  duracion: number
-  procedimiento_id: string
-  anestesiologo: string
-  estado: "Programado" | "Aplazado" | "Confirmado" | "En Quirofano" | "Operado" | "Cancelado"
-  observaciones: string
-  paciente_nombre?: string
-  paciente_apellido?: string
-  procedimiento_nombre?: string
-  procedimiento_precio?: number
-}
+import { ProtectedRoute } from "../../components/ProtectedRoute"
+import { ProgramacionForm } from "../../components/ProgramacionForm"
+import { ProgramacionModal } from "../../components/ProgramacionModal"
+import type { Programacion, CreateProgramacionData } from "../../types/programacion"
+import { api, handleApiError } from "../../lib/api"
 
 export default function ProgramacionQuirurgicaPage() {
   const [programaciones, setProgramaciones] = useState<Programacion[]>([])
@@ -70,37 +44,27 @@ export default function ProgramacionQuirurgicaPage() {
     aplazados: 0
   })
 
-  // Función para formatear hora en formato 12 horas
   const formatHora = (hora: string): string => {
     if (!hora) return "00:00 AM";
     
     try {
-      // Si es un formato PT14H (duración ISO 8601)
       if (hora.startsWith('PT')) {
         const horasMatch = hora.match(/PT(\d+)H/);
         const horas = horasMatch ? parseInt(horasMatch[1]) : 0;
-        
-        // Formato 12 horas con AM/PM
         const ampm = horas >= 12 ? 'PM' : 'AM';
         const horas12 = horas % 12 || 12;
-        
         return `${horas12.toString().padStart(2, '0')}:00 ${ampm}`;
       }
       
-      // Si ya es un formato HH:MM:SS o HH:MM
       if (hora.includes(':')) {
         const partes = hora.split(':');
         const horas = parseInt(partes[0]);
         const minutos = partes[1] ? parseInt(partes[1]) : 0;
-        
-        // Formato 12 horas con AM/PM
         const ampm = horas >= 12 ? 'PM' : 'AM';
         const horas12 = horas % 12 || 12;
-        
         return `${horas12.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')} ${ampm}`;
       }
       
-      // Si es solo un número
       const horasNum = parseInt(hora);
       if (!isNaN(horasNum)) {
         const ampm = horasNum >= 12 ? 'PM' : 'AM';
@@ -110,15 +74,12 @@ export default function ProgramacionQuirurgicaPage() {
       
       return hora;
     } catch (error) {
-      console.error("❌ Error formateando hora:", error, "hora original:", hora);
       return hora;
     }
   };
 
-  // Función para formatear moneda
   const formatCurrency = (amount: number | undefined): string => {
     if (!amount) return "$0";
-    
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
@@ -132,11 +93,9 @@ export default function ProgramacionQuirurgicaPage() {
   }, [filterEstado, filterFecha, refreshKey])
 
   useEffect(() => {
-    // Si hay filtro de documento, buscar programaciones específicas
     if (filterDocumento.trim() !== "") {
       buscarPorDocumento(filterDocumento)
     } else if (filterDocumento.trim() === "" && refreshKey > 0) {
-      // Si se borró el filtro, recargar todas las programaciones
       loadProgramaciones()
     }
   }, [filterDocumento])
@@ -185,8 +144,6 @@ export default function ProgramacionQuirurgicaPage() {
         }
       }
       
-      console.log("📥 Cargando programaciones con params:", params);
-      
       const response = await api.getAgendaProcedimientos(
         params.limit,
         params.offset,
@@ -197,20 +154,20 @@ export default function ProgramacionQuirurgicaPage() {
         params.fecha_fin
       )
       
-      console.log("📥 Respuesta de getAgendaProcedimientos:", response);
-      
       if (response && response.procedimientos) {
         const programacionesFormateadas = response.procedimientos.map((proc: any) => {
           return {
             id: proc.id.toString(),
+            paciente_id: proc.paciente_id || "",
             numero_documento: proc.numero_documento || "",
             fecha: proc.fecha,
             hora: proc.hora || "09:00",
             duracion: proc.duracion || 60,
             procedimiento_id: proc.procedimiento_id?.toString() || "0",
             anestesiologo: proc.anestesiologo || "",
-            estado: proc.estado as Programacion["estado"],
+            estado: proc.estado,
             observaciones: proc.observaciones || "",
+            fecha_creacion: proc.fecha_creacion || new Date().toISOString(),
             paciente_nombre: proc.paciente_nombre,
             paciente_apellido: proc.paciente_apellido,
             procedimiento_nombre: proc.procedimiento_nombre,
@@ -218,13 +175,9 @@ export default function ProgramacionQuirurgicaPage() {
           }
         })
         
-        console.log(`Programaciones formateadas: ${programacionesFormateadas.length} registros`);
         setProgramaciones(programacionesFormateadas)
-        
-        // Calcular estadísticas de la lista cargada
         calcularEstadisticas(programacionesFormateadas)
       } else {
-        console.log("⚠️ No hay programaciones o respuesta vacía");
         setProgramaciones([])
         setStats({
           total: 0,
@@ -237,7 +190,6 @@ export default function ProgramacionQuirurgicaPage() {
         })
       }
     } catch (err: any) {
-      console.error("❌ Error cargando programaciones:", err);
       setError(handleApiError(err))
     } finally {
       setLoading(false)
@@ -265,14 +217,16 @@ export default function ProgramacionQuirurgicaPage() {
       if (response && response.procedimientos) {
         const programacionesFormateadas = response.procedimientos.map((proc: any) => ({
           id: proc.id.toString(),
+          paciente_id: proc.paciente_id || "",
           numero_documento: proc.numero_documento || "",
           fecha: proc.fecha,
           hora: proc.hora || "09:00",
           duracion: proc.duracion || 60,
           procedimiento_id: proc.procedimiento_id?.toString() || "0",
           anestesiologo: proc.anestesiologo || "",
-          estado: proc.estado as Programacion["estado"],
+          estado: proc.estado,
           observaciones: proc.observaciones || "",
+          fecha_creacion: proc.fecha_creacion || new Date().toISOString(),
           paciente_nombre: proc.paciente_nombre,
           paciente_apellido: proc.paciente_apellido,
           procedimiento_nombre: proc.procedimiento_nombre,
@@ -285,7 +239,6 @@ export default function ProgramacionQuirurgicaPage() {
         setProgramaciones([])
       }
     } catch (err: any) {
-      console.error("❌ Error buscando por documento:", err);
       setError(handleApiError(err))
     } finally {
       setLoading(false)
@@ -304,26 +257,18 @@ export default function ProgramacionQuirurgicaPage() {
     }
     
     setStats(estadisticas)
-    console.log("📊 Estadísticas calculadas:", estadisticas)
   }
 
   const handleEdit = (prog: Programacion) => {
-    console.log("✏️ Editando programación:", {
-      id: prog.id,
-      procedimiento_id: prog.procedimiento_id,
-      tipo: typeof prog.procedimiento_id
-    });
     setSelectedProgramacion(prog)
     setEditingId(prog.id)
     setShowForm(true)
   }
 
   const filteredProgramaciones = programaciones.filter((p) => {
-    // Aplicar filtro de estado
     const estadoMatch = filterEstado === "todas" || 
                        p.estado.toLowerCase().replace(" ", "_") === filterEstado
     
-    // Aplicar filtro de documento si existe
     const documentoMatch = !filterDocumento || 
                           p.numero_documento.toLowerCase().includes(filterDocumento.toLowerCase()) ||
                           (p.paciente_nombre && p.paciente_nombre.toLowerCase().includes(filterDocumento.toLowerCase())) ||
@@ -332,40 +277,27 @@ export default function ProgramacionQuirurgicaPage() {
     return estadoMatch && documentoMatch
   })
 
-  const handleSaveProgramacion = async (data: Omit<Programacion, "id">) => {
+  const handleSaveProgramacion = async (data: CreateProgramacionData) => {
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
     
     try {
-      console.log("📤 Iniciando guardado de programación:", {
-        editingId,
-        datosRecibidos: data,
-        procedimiento_id: data.procedimiento_id,
-        tipo_procedimiento_id: typeof data.procedimiento_id
-      });
-      
       const procedimientoIdStr = data.procedimiento_id.toString();
 
-      // CORRECCIÓN: Validación simplificada y clara
       if (procedimientoIdStr === "0" || !procedimientoIdStr.trim()) {
-        console.error("❌ procedimiento_id no seleccionado");
         setError("Por favor selecciona un procedimiento de la lista");
         setLoading(false);
         return;
       }
 
-      // CORRECCIÓN: Conversión y validación simplificada
       const procedimientoIdNum = parseInt(procedimientoIdStr, 10);
       
       if (isNaN(procedimientoIdNum) || procedimientoIdNum <= 0) {
-        console.error("❌ procedimiento_id no válido:", procedimientoIdStr);
         setError("El procedimiento seleccionado no existe. Por favor selecciona uno diferente de la lista.");
         setLoading(false);
         return;
       }
-
-      console.log("procedimiento_id convertido correctamente a número:", procedimientoIdNum);
 
       let horaFormateada = data.hora;
       if (horaFormateada.includes(":") && horaFormateada.split(":").length === 2) {
@@ -380,13 +312,9 @@ export default function ProgramacionQuirurgicaPage() {
         duracion: data.duracion,
         anestesiologo: data.anestesiologo,
         estado: data.estado,
-        observaciones: data.observaciones
+        observaciones: data.observaciones,
+        paciente_id: data.paciente_id ? parseInt(data.paciente_id) : undefined
       }
-
-      console.log("📤 Datos para enviar al backend:", {
-        ...datosParaBackend,
-        procedimiento_id_tipo: typeof datosParaBackend.procedimiento_id
-      });
 
       let response;
       if (editingId) {
@@ -396,35 +324,21 @@ export default function ProgramacionQuirurgicaPage() {
           setLoading(false);
           return;
         }
-        console.log(`🔄 Actualizando programación ID: ${editingIdNum}`);
         response = await api.updateAgendaProcedimiento(editingIdNum, datosParaBackend);
       } else {
-        console.log(`🆕 Creando nueva programación`);
         response = await api.createAgendaProcedimiento(datosParaBackend);
       }
       
-      console.log("📥 Respuesta del backend:", response);
-      
-      // 🔴 **CORRECCIÓN CRÍTICA: Manejar respuesta como objeto**
       if (response && response.error === true) {
-        // Esto es un error del backend
-        console.log("⚠️ Respuesta de error del backend:", response);
-        
-        // Manejar diferentes tipos de errores
         if (response.isConflictError) {
-          // Conflicto de horario - mostramos en el formulario
           setError(`⚠️ ${response.message || "Conflicto de horario"}. Por favor selecciona otra hora.`);
         } else if (response.isValidationError) {
-          // Error de validación (procedimiento_id no es número, etc.)
           setError(`❌ ${response.message || "Error de validación"}`);
         } else if (response.isNotFoundError) {
-          // No encontrado
           setError(`❌ ${response.message || "Recurso no encontrado"}`);
         } else if (response.isNetworkError) {
-          // Error de red
           setError("❌ Error de conexión. Verifica tu conexión a internet.");
         } else {
-          // Otros errores
           setError(`❌ ${response.message || "Error desconocido"}`);
         }
         
@@ -432,19 +346,16 @@ export default function ProgramacionQuirurgicaPage() {
         return;
       }
       
-      // 🔴 **SI ES ÉXITO**: response debería ser el objeto normal sin propiedad 'error'
       if (response && response.success !== false) {
         setSuccessMessage(editingId ? 
           "Programación actualizada correctamente" : 
           "Programación creada correctamente"
         );
         
-        // Limpiar filtro de documento si existe
         if (filterDocumento) {
           setFilterDocumento("");
         }
         
-        // Recargar datos después de un pequeño delay
         setTimeout(() => {
           setRefreshKey(prev => prev + 1);
         }, 500);
@@ -454,26 +365,18 @@ export default function ProgramacionQuirurgicaPage() {
         setSelectedProgramacion(null);
         setLoading(false);
       } else {
-        // Respuesta inesperada
-        console.error("❌ Respuesta inesperada:", response);
         setError("❌ Respuesta inesperada del servidor");
         setLoading(false);
       }
 
     } catch (err: any) {
-      // **CORRECCIÓN: Este catch solo debería ejecutarse para errores no manejados**
-      console.error("❌ Error no manejado en handleSaveProgramacion:", err);
-      
-      // Manejar caso donde el error ya fue manejado por fetchAPI
       if (err && typeof err === 'object' && 'error' in err && err.error === true) {
-        // Ya fue manejado
         setLoading(false);
         return;
       }
       
       const errorMsg = err.message || "Error desconocido";
       
-      // Manejo de errores de red u otros
       if (errorMsg.includes("network") || errorMsg.includes("failed to fetch")) {
         setError("❌ Error de conexión. Verifica que el backend esté funcionando.");
       } else {
@@ -495,16 +398,12 @@ export default function ProgramacionQuirurgicaPage() {
           return;
         }
         
-        console.log(`🗑️ Cancelando programación ID: ${idNum}`);
-        
-        // Primero obtenemos la programación actual
         const programacionActual = programaciones.find(p => p.id === id);
         if (!programacionActual) {
           setError("Programación no encontrada");
           return;
         }
         
-        // Creamos datos para actualizar el estado a Cancelado
         const datosParaCancelar = {
           numero_documento: programacionActual.numero_documento,
           fecha: programacionActual.fecha,
@@ -516,20 +415,16 @@ export default function ProgramacionQuirurgicaPage() {
           observaciones: programacionActual.observaciones || `Cancelado el ${new Date().toLocaleDateString()}`
         };
         
-        // Actualizar el estado a Cancelado en lugar de eliminar
         await api.updateAgendaProcedimiento(idNum, datosParaCancelar);
         
         setSuccessMessage("Programación cancelada exitosamente");
         
-        // Limpiar filtro de documento si existe
         if (filterDocumento) {
           setFilterDocumento("");
         }
         
-        // Recargar datos
         setRefreshKey(prev => prev + 1);
       } catch (err: any) {
-        console.error("❌ Error cancelando programación:", err);
         setError(handleApiError(err));
       } finally {
         setLoading(false);
@@ -570,7 +465,6 @@ export default function ProgramacionQuirurgicaPage() {
       setSuccessMessage(`Estado cambiado a "${nuevoEstado}"`);
       setRefreshKey(prev => prev + 1);
     } catch (err: any) {
-      console.error("❌ Error cambiando estado:", err);
       setError(handleApiError(err));
     } finally {
       setLoading(false);
@@ -606,7 +500,6 @@ export default function ProgramacionQuirurgicaPage() {
   return (
     <ProtectedRoute permissions={["ver_programacion"]}>
       <div className="p-6">
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Programación Quirúrgica</h1>
@@ -625,7 +518,6 @@ export default function ProgramacionQuirurgicaPage() {
             <ProtectedRoute permissions={["crear_programacion"]}>
               <button
                 onClick={() => {
-                  console.log("➕ Abriendo formulario para nueva programación");
                   setEditingId(null);
                   setSelectedProgramacion(null);
                   setShowForm(true);
@@ -639,7 +531,6 @@ export default function ProgramacionQuirurgicaPage() {
           </div>
         </div>
 
-        {/* Mensajes de éxito y error */}
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
             <AlertCircle className="text-red-500 mr-2 mt-0.5 flex-shrink-0" size={20} />
@@ -672,7 +563,6 @@ export default function ProgramacionQuirurgicaPage() {
           </div>
         )}
 
-        {/* Estadísticas */}
         <div className="grid grid-cols-1 md:grid-cols-7 gap-4 mb-8">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="flex items-center justify-between">
@@ -759,7 +649,6 @@ export default function ProgramacionQuirurgicaPage() {
           </div>
         </div>
 
-        {/* Filtros */}
         <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div className="flex items-center mb-4">
             <Filter size={18} className="text-gray-500 mr-2" />
@@ -847,13 +736,12 @@ export default function ProgramacionQuirurgicaPage() {
           </div>
         )}
 
-        {/* Tabla de programaciones */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">paciente</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Paciente</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Procedimiento</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Fecha/Hora</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Duración</th>
@@ -931,7 +819,7 @@ export default function ProgramacionQuirurgicaPage() {
                         </div>
                         <div className="flex items-center space-x-1 mt-1">
                           <Clock size={14} className="text-gray-400" />
-                          <span>{formatHora(prog.hora)}</span> {/* Usar formatHora aquí */}
+                          <span>{formatHora(prog.hora)}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
@@ -955,7 +843,6 @@ export default function ProgramacionQuirurgicaPage() {
                                 className="text-xs text-green-600 hover:text-green-800"
                                 title="Confirmar"
                               >
-                                
                               </button>
                             </ProtectedRoute>
                           )}
@@ -988,7 +875,6 @@ export default function ProgramacionQuirurgicaPage() {
             </table>
           </div>
           
-          {/* Footer de la tabla */}
           {filteredProgramaciones.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
               <div className="flex items-center justify-between">
@@ -1018,13 +904,11 @@ export default function ProgramacionQuirurgicaPage() {
           )}
         </div>
 
-        {/* Formulario de programación */}
         {showForm && (
           <ProgramacionForm
             programacion={selectedProgramacion || undefined}
             onSave={handleSaveProgramacion}
             onClose={() => {
-              console.log("❌ Cerrando formulario");
               setShowForm(false)
               setEditingId(null)
               setError(null)
@@ -1034,7 +918,6 @@ export default function ProgramacionQuirurgicaPage() {
           />
         )}
 
-        {/* Modal de detalles */}
         {selectedProgramacion && !showForm && (
           <ProgramacionModal
             programacion={selectedProgramacion}

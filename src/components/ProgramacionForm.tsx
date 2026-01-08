@@ -2,17 +2,17 @@
 
 import { useState, useEffect } from "react"
 import { X, Calendar, Clock, User, Loader2, AlertCircle, Scissors, AlertTriangle } from "lucide-react"
-import type { Programacion } from "../pages/ProgramacionQuirurgicaPage"
+import type { Programacion, CreateProgramacionData } from "../types/programacion"
 import { api, handleApiError } from "../lib/api"
 
 interface ProgramacionFormProps {
   programacion?: Programacion
-  onSave: (data: Omit<Programacion, "id">) => void
+  onSave: (data: CreateProgramacionData) => void
   onClose: () => void
   isLoading?: boolean
 }
 
-interface paciente {
+interface Paciente {
   id: string
   nombre: string
   apellido: string
@@ -130,10 +130,10 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
     observaciones: programacion?.observaciones || "",
   })
 
-  const [pacientes, setpacientes] = useState<paciente[]>([])
+  const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [procedimientos, setProcedimientos] = useState<Procedimiento[]>([])
   const [loadingData, setLoadingData] = useState(false)
-  const [pacientesLoading, setpacientesLoading] = useState(true)
+  const [pacientesLoading, setPacientesLoading] = useState(true)
   const [procedimientosLoading, setProcedimientosLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
@@ -160,7 +160,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       try {
         console.log("📥 Cargando datos para formulario...");
         
-        setpacientesLoading(true)
+        setPacientesLoading(true)
         console.log("📥 Cargando pacientes...");
         const pacientesData = await api.getpacientes(1000, 0)
         
@@ -174,10 +174,10 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
             numero_documento: pac.numero_documento || ""
           }))
           console.log(`✅ ${pacientesFormateados.length} pacientes cargados`);
-          setpacientes(pacientesFormateados)
+          setPacientes(pacientesFormateados)
         } else {
           console.warn("⚠️ No se pudieron cargar pacientes, respuesta inesperada");
-          setpacientes([])
+          setPacientes([])
         }
 
         setProcedimientosLoading(true)
@@ -225,7 +225,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
         console.error("❌ Error cargando datos:", err);
         setError(handleApiError(err))
       } finally {
-        setpacientesLoading(false)
+        setPacientesLoading(false)
         setProcedimientosLoading(false)
         setLoadingData(false)
         console.log("✅ Carga de datos completada");
@@ -397,7 +397,12 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       }
 
       console.log("✅ Todos los datos validados, enviando al padre...");
-      const datosParaParent: Omit<Programacion, "id"> = {
+      
+      // Buscar el paciente seleccionado para obtener su ID
+      const pacienteSeleccionado = pacientes.find(p => p.numero_documento === formData.numero_documento);
+      
+      const datosParaParent: CreateProgramacionData = {
+        paciente_id: pacienteSeleccionado?.id || "", // Usar el ID del paciente
         numero_documento: formData.numero_documento,
         fecha: formData.fecha,
         hora: formData.hora,
@@ -451,7 +456,11 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       return;
     }
 
-    const datosParaParent: Omit<Programacion, "id"> = {
+    // Buscar el paciente seleccionado para obtener su ID
+    const pacienteSeleccionado = pacientes.find(p => p.numero_documento === formData.numero_documento);
+    
+    const datosParaParent: CreateProgramacionData = {
+      paciente_id: pacienteSeleccionado?.id || "",
       numero_documento: formData.numero_documento,
       fecha: formData.fecha,
       hora: formData.hora,
@@ -557,7 +566,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              paciente
+              Paciente
               {pacientesLoading && <Loader2 className="inline ml-2 h-4 w-4 animate-spin" />}
             </label>
             <select
@@ -721,7 +730,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
             <h4 className="font-medium text-gray-700 mb-2">Resumen de la programación</h4>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
-                <span className="text-gray-500">paciente:</span>
+                <span className="text-gray-500">Paciente:</span>
                 <p className="font-medium">
                   {formData.numero_documento ? 
                     pacientes.find(p => p.numero_documento === formData.numero_documento)?.nombre + " " + 
@@ -809,7 +818,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
                       </div>
                       {conflictInfo.paciente_nombre && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">paciente:</span>
+                          <span className="text-gray-600">Paciente:</span>
                           <span className="font-medium">{conflictInfo.paciente_nombre} {conflictInfo.paciente_apellido}</span>
                         </div>
                       )}

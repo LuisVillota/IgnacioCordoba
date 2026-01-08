@@ -1,7 +1,7 @@
 "use client"
 
 import { X, Calendar, Clock, Scissors, User, MapPin, AlertCircle, Clipboard } from "lucide-react"
-import type { Programacion } from "../pages/ProgramacionQuirurgicaPage"
+import type { Programacion } from "../types/programacion" 
 import { ProtectedRoute } from "./ProtectedRoute"
 
 interface ProgramacionModalProps {

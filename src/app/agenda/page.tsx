@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { ChevronLeft, ChevronRight, Plus, Edit2, Calendar, Clock, User, AlertCircle, RefreshCw, AlertTriangle, X } from "lucide-react"
-import { ProtectedRoute } from "../components/ProtectedRoute"
-import { CitaForm } from "../components/CitaForm"
-import { CitaModal } from "../components/CitaModal"
+import { ProtectedRoute } from "../../components/ProtectedRoute" 
+import { CitaForm } from "../../components/CitaForm" 
+import { CitaModal } from "../../components/CitaModal"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
+import type { paciente } from "../../types/paciente"
 
-export interface cita {
+interface cita {
   id: string
   id_paciente: string
   id_usuario: string
@@ -21,22 +22,6 @@ export interface cita {
   paciente_nombre?: string
   paciente_apellido?: string
   doctor_nombre?: string
-}
-
-export interface paciente {
-  id: string
-  nombres: string
-  apellidos: string
-  documento: string
-  telefono?: string
-  email?: string
-  tipo_documento?: string      
-  fecha_nacimiento?: string   
-  genero?: string              
-  direccion?: string          
-  ciudad?: string             
-  estado_paciente?: string     
-  fecha_registro?: string     
 }
 
 interface citaConflict {
@@ -176,9 +161,36 @@ const transformBackendpaciente = (backendpaciente: any): paciente => {
     id: backendpaciente.id?.toString() || '',
     nombres: backendpaciente.nombres || backendpaciente.nombre || '',
     apellidos: backendpaciente.apellidos || backendpaciente.apellido || '',
+    tipo_documento: backendpaciente.tipo_documento || 'CC',
     documento: backendpaciente.documento || backendpaciente.numero_documento || '',
+    fecha_nacimiento: backendpaciente.fecha_nacimiento || new Date().toISOString().split('T')[0],
+    genero: backendpaciente.genero || 'no especificado',
     telefono: backendpaciente.telefono || '',
     email: backendpaciente.email || '',
+    direccion: backendpaciente.direccion || '',
+    ciudad: backendpaciente.ciudad || '',
+    estado_paciente: backendpaciente.estado_paciente || 'activo',
+    fecha_registro: backendpaciente.fecha_registro || new Date().toISOString().split('T')[0]
+  }
+}
+
+// Función para crear paciente por defecto
+const crearPacientePorDefecto = (id: string, nombres?: string, apellidos?: string): paciente => {
+  const hoy = new Date().toISOString().split('T')[0]
+  return {
+    id: id,
+    nombres: nombres || '',
+    apellidos: apellidos || '',
+    tipo_documento: 'CC',
+    documento: '',
+    fecha_nacimiento: hoy,
+    genero: 'no especificado',
+    telefono: '',
+    email: '',
+    direccion: '',
+    ciudad: '',
+    estado_paciente: 'activo',
+    fecha_registro: hoy
   }
 }
 
@@ -248,10 +260,10 @@ function ConflictoHorarioModal({
             </p>
             
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-              <h4 className="font-semibold text-amber-800 mb-2">cita Existente:</h4>
+              <h4 className="font-semibold text-amber-800 mb-2">Cita Existente:</h4>
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">paciente:</span>
+                  <span className="text-gray-600">Paciente:</span>
                   <span className="font-medium">{pacienteExistente}</span>
                 </div>
                 <div className="flex justify-between">
@@ -527,7 +539,6 @@ export default function AgendaPage() {
     return null
   }
 
-
   const minutosDesdeHora = (hora: string): number => {
     const [h, m] = hora.split(":").map(Number)
     return h * 60 + m
@@ -573,7 +584,6 @@ export default function AgendaPage() {
     }
   }
 
-
   const guardarcitaSinConflicto = async (data: Omit<cita, "id">) => {
     try {
       const horaFormateada = cleanTimeFormat(data.hora)
@@ -592,13 +602,13 @@ export default function AgendaPage() {
         await api.updatecita(parseInt(editingId), citaData)
         await loadData()
         
-        toast.success('cita actualizada exitosamente')
+        toast.success('Cita actualizada exitosamente')
         setEditingId(null)
       } else {
         await api.createcita(citaData)
         await loadData()
         
-        toast.success('cita creada exitosamente')
+        toast.success('Cita creada exitosamente')
       }
       
       setShowForm(false)
@@ -618,7 +628,7 @@ export default function AgendaPage() {
     setConflictoHorario(null)
     setPendienteGuardar(null)
     
-    toast.warning("cita creada a pesar del conflicto de horario")
+    toast.warning("Cita creada a pesar del conflicto de horario")
   }
 
   const handleCancelConflicto = () => {
@@ -755,8 +765,8 @@ export default function AgendaPage() {
             <h1 className="text-3xl font-bold text-gray-800">Agenda y citas</h1>
             <p className="text-gray-600 mt-2">Gestiona las citas de los pacientes</p>
             <div className="flex items-center space-x-4 mt-1 text-sm">
-              <span className="text-gray-700">citas: {citas.length}</span>
-              <span className="text-gray-700">pacientes: {pacientes.length}</span>
+              <span className="text-gray-700">Citas: {citas.length}</span>
+              <span className="text-gray-700">Pacientes: {pacientes.length}</span>
             </div>
           </div>
           <div className="flex items-center space-x-3">
@@ -833,7 +843,7 @@ export default function AgendaPage() {
               onClick={() => setShowForm(true)}
               className="px-4 py-2 bg-[#1a6b32] text-white rounded-lg hover:bg-[#155529] transition"
             >
-              Crear Primera cita
+              Crear Primera Cita
             </button>
           </div>
         )}
@@ -846,7 +856,7 @@ export default function AgendaPage() {
                 <div className="text-sm text-gray-600">
                   <div className="flex items-center">
                     <Clock size={14} className="mr-1 text-gray-500" />
-                    <span>citas ordenadas por hora (más temprana primero)</span>
+                    <span>Citas ordenadas por hora (más temprana primero)</span>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -919,7 +929,7 @@ export default function AgendaPage() {
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-gray-800">citas de Hoy</h3>
+                <h3 className="font-semibold text-gray-800">Citas de Hoy</h3>
                 <span className="text-sm text-gray-500">{formatDate(new Date())}</span>
               </div>
               <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -966,7 +976,6 @@ export default function AgendaPage() {
                       </div>
                     )
                   })
-
                 )}
               </div>
             </div>
@@ -975,19 +984,19 @@ export default function AgendaPage() {
               <h3 className="font-semibold text-gray-800 mb-4">Estadísticas Rápidas</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="text-sm text-blue-700">citas Confirmadas</p>
+                  <p className="text-sm text-blue-700">Citas Confirmadas</p>
                   <p className="text-2xl font-bold text-blue-800">
                     {citas.filter(c => c.estado === 'confirmada').length}
                   </p>
                 </div>
                 <div className="bg-amber-50 p-3 rounded-lg">
-                  <p className="text-sm text-amber-700">citas Pendientes</p>
+                  <p className="text-sm text-amber-700">Citas Pendientes</p>
                   <p className="text-2xl font-bold text-amber-800">
                     {citas.filter(c => c.estado === 'pendiente').length}
                   </p>
                 </div>
                 <div className="bg-green-50 p-3 rounded-lg">
-                  <p className="text-sm text-green-700">citas Completadas</p>
+                  <p className="text-sm text-green-700">Citas Completadas</p>
                   <p className="text-2xl font-bold text-green-800">
                     {citas.filter(c => c.estado === 'completada').length}
                   </p>
@@ -1017,21 +1026,13 @@ export default function AgendaPage() {
         {selectedcita && !showForm && (
           <CitaModal
             cita={selectedcita}
-            paciente={getpacienteById(selectedcita.id_paciente) || {
-              id: selectedcita.id_paciente,
-              nombres: selectedcita.paciente_nombre || '',
-              apellidos: selectedcita.paciente_apellido || '',
-              documento: '',
-              telefono: '',
-              email: '',
-              tipo_documento: 'CC',
-              fecha_nacimiento: '',
-              genero: '',
-              direccion: '',
-              ciudad: '',
-              estado_paciente: 'activo',
-              fecha_registro: new Date().toISOString().split('T')[0]
-            }}
+            paciente={getpacienteById(selectedcita.id_paciente) || 
+              crearPacientePorDefecto(
+                selectedcita.id_paciente,
+                selectedcita.paciente_nombre,
+                selectedcita.paciente_apellido
+              )
+            }
             onClose={() => setSelectedcita(null)}
             onEdit={() => handleEdit(selectedcita)}
             onDelete={() => {

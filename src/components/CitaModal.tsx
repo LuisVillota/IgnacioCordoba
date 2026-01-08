@@ -1,11 +1,11 @@
 "use client"
 
 import { X, Clock, Calendar, User, FileText } from "lucide-react"
-import type { cita } from "../pages/AgendaPage"
-import type { paciente } from "../pages/AgendaPage"
+import type { Cita } from "../types/cita"
+import type { paciente } from "../types/paciente"
 
-interface citaModalProps {
-  cita: cita
+interface CitaModalProps {
+  cita: Cita
   paciente?: paciente
   onClose: () => void
   onEdit: () => void
@@ -19,7 +19,7 @@ const tiposDeVisita: Record<string, string> = {
   programacion_quirurgica: "Programación Quirúrgica",
 }
 
-export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: citaModalProps) {
+export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: CitaModalProps) {
   const estadoColors: Record<string, string> = {
     pendiente: "bg-[#669933]/20 text-[#1a6b32]",
     confirmada: "bg-[#99d6e8]/20 text-[#1a6b32]",
@@ -40,12 +40,12 @@ export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: citaMod
 
         {/* Content */}
         <div className="p-6 space-y-4">
-          {/* paciente */}
+          {/* Paciente */}
           {paciente && (
             <div className="flex items-start space-x-3 pb-4 border-b border-gray-200">
               <User className="text-[#1a6b32] mt-1" size={20} />
               <div>
-                <p className="text-xs font-semibold text-gray-600 uppercase">paciente</p>
+                <p className="text-xs font-semibold text-gray-600 uppercase">Paciente</p>
                 <p className="font-medium text-gray-800">
                   {paciente.nombres} {paciente.apellidos}
                 </p>

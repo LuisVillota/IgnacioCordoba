@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react"
 import { Search, Plus, Edit2, Eye, Loader2, RefreshCw } from "lucide-react"
-import { ProtectedRoute } from "../components/ProtectedRoute"
-import { PacienteForm } from "../components/PacienteForm"
-import { PacienteModal } from "../components/PacienteModal"
-import { useAuth } from "../hooks/useAuth"
-import { hasAnyPermission } from "../types/permissions"
-import { api, transformBackendToFrontend, handleApiError } from "../lib/api"
-import type { paciente } from "../types/paciente"
+import { ProtectedRoute } from "../../components/ProtectedRoute"
+import { PacienteForm } from "../../components/PacienteForm"
+import { PacienteModal } from "../../components/PacienteModal"
+import { useAuth } from "../../hooks/useAuth"
+import { hasAnyPermission } from "../../types/permissions"
+import { api, transformBackendToFrontend, handleApiError } from "../../lib/api"
+import type { paciente } from "../../types/paciente"
 
 // Función de transformación local para asegurar el tipo correcto
 const transformpacienteLocal = (backendpaciente: any): paciente => {
