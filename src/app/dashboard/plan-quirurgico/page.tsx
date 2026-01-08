@@ -6,9 +6,6 @@ import { Plus, Edit2, Eye, Calendar, Scale, User, FileText, RefreshCw, Download 
 import type { PlanQuirurgico } from "../../../types/planQuirurgico"
 import { PlanQuirurgicoForm } from "../../../components/PlanQuirurgicoForm"
 import { api } from "../../../lib/api"
-
-// ❌ QUITA ESTO: export const PlanQuirurgicoPage: React.FC = () => {
-// ✅ REEMPLAZA CON:
 export default function PlanQuirurgicoPage() {
   const [planesQuirurgicos, setPlanesQuirurgicos] = useState<PlanQuirurgico[]>([])
   const [loading, setLoading] = useState(true)
@@ -184,17 +181,19 @@ export default function PlanQuirurgicoPage() {
       
       // Mostrar indicador de carga
       const downloadButtons = document.querySelectorAll(`button[data-filename="${nombreArchivo}"]`);
-      if (downloadButtons.length > 0) {
-        downloadButtons.forEach(button => {
-          const originalHTML = button.innerHTML;
-          button.innerHTML = '<span class="animate-spin mr-2">⏳</span> Descargando...';
-          button.setAttribute('disabled', 'true');
-          button.setAttribute('data-original-html', originalHTML);
-        });
-      }
+      const originalContents: string[] = [];
+      
+      // Guardar contenido original de todos los botones
+      downloadButtons.forEach(button => {
+        originalContents.push(button.innerHTML);
+        button.innerHTML = '<span class="animate-spin mr-2">⏳</span> Descargando...';
+        (button as HTMLButtonElement).disabled = true;
+      });
       
       // Llamar a la API para descargar
       const result = await api.downloadPlanFile(nombreArchivo, planId);
+      
+      console.log("📥 Resultado de descarga:", result);
       
       if (result.error) {
         throw new Error(result.message || "Error desconocido al descargar");
@@ -202,8 +201,10 @@ export default function PlanQuirurgicoPage() {
       
       console.log("✅ Descarga completada exitosamente", result);
       
-      // Opcional: mostrar notificación de éxito
-      // alert(`Archivo "${nombreArchivo}" descargado exitosamente`);
+      // Mostrar mensaje de éxito
+      setTimeout(() => {
+        alert(`Archivo "${nombreArchivo}" descargado exitosamente`);
+      }, 500);
       
     } catch (error: any) {
       console.error("❌ Error al descargar archivo:", error);
@@ -211,11 +212,10 @@ export default function PlanQuirurgicoPage() {
     } finally {
       // Restaurar botones
       const downloadButtons = document.querySelectorAll(`button[data-filename="${nombreArchivo}"]`);
-      downloadButtons.forEach(button => {
-        const originalHTML = button.getAttribute('data-original-html') || 'Descargar';
-        button.innerHTML = originalHTML;
-        button.removeAttribute('disabled');
-        button.removeAttribute('data-original-html');
+      downloadButtons.forEach((button, index) => {
+        const htmlButton = button as HTMLButtonElement;
+        htmlButton.innerHTML = 'Descargar';
+        htmlButton.disabled = false;
       });
     }
   }

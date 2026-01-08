@@ -1,5 +1,5 @@
 from pydantic import BaseModel, validator
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, List
 from datetime import date, datetime
 import json
 
@@ -73,7 +73,7 @@ class PlanQuirurgicoBase(BaseModel):
     plan_conducta: Optional[str] = None
     
     # Otros campos
-    imagen_procedimiento: Optional[str] = None
+    imagen_procedimiento: Optional[str] = None  # JSON string de lista de archivos
     fecha_ultimo_procedimiento: Optional[str] = None
     descripcion_procedimiento: Optional[str] = None
     detalles: Optional[str] = None
@@ -134,7 +134,7 @@ class PlanQuirurgicoUpdate(BaseModel):
     plan_conducta: Optional[str] = None
     
     # Otros
-    imagen_procedimiento: Optional[str] = None
+    imagen_procedimiento: Optional[str] = None  # JSON string de lista de archivos
     descripcion_procedimiento: Optional[str] = None
     detalles: Optional[str] = None
     notas_doctor: Optional[str] = None
@@ -145,13 +145,13 @@ class PlanQuirurgicoInDB(PlanQuirurgicoBase):
     fecha_creacion: Optional[datetime] = None
     fecha_modificacion: Optional[datetime] = None
     
-    @validator('enfermedad_actual', 'antecedentes', 'notas_corporales', 'esquema_mejorado', pre=True)
+    @validator('enfermedad_actual', 'antecedentes', 'notas_corporales', 'esquema_mejorado', 'imagen_procedimiento', pre=True)
     def parse_json_fields(cls, v):
         if isinstance(v, str):
             try:
                 return json.loads(v)
             except:
-                return None
+                return v 
         return v
     
     class Config:

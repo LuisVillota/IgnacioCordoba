@@ -32,4 +32,5 @@ api_router.include_router(agenda_procedimiento.router, prefix="/agenda-procedimi
 api_router.include_router(cotizaciones.router, prefix="/cotizaciones", tags=["cotizaciones"])
 api_router.include_router(planes_quirurgicos.router, prefix="/planes-quirurgicos", tags=["planes-quirurgicos"])
 api_router.include_router(debug.router, prefix="/debug", tags=["debug"])
-api_router.include_router(upload.router, prefix="/upload", tags=["upload"])  # ✅ NUEVO
+api_router.include_router(upload.router, prefix="/upload", tags=["upload"])
+__all__ = ["api_router"]

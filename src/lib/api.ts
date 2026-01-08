@@ -701,6 +701,7 @@ export const api = {
         diagnostico: data.diagnostico || '',
         tratamiento: data.tratamiento || '',
         recomendaciones: data.recomendaciones || '',
+        fotos: data.fotos || ''
       };
       
       console.log("📤 Enviando al backend:", backendData);
