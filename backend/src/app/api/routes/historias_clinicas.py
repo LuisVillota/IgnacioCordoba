@@ -136,6 +136,10 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
                 if not cursor.fetchone():
                     raise HTTPException(status_code=404, detail="Paciente no encontrado")
                 
+                # 🔴 CORREGIDO: Incluir campo 'fotos' en el UPDATE
+                print(f"📝 [UPDATE] Actualizando historia {historia_id}")
+                print(f"📸 [UPDATE] Fotos recibidas: '{historia.fotos}'")
+                
                 cursor.execute("""
                     UPDATE historial_clinico SET
                         paciente_id = %s,
@@ -147,7 +151,8 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
                         exploracion_fisica = %s,
                         diagnostico = %s,
                         tratamiento = %s,
-                        recomendaciones = %s
+                        recomendaciones = %s,
+                        fotos = %s
                     WHERE id = %s
                 """, (
                     historia.paciente_id,
@@ -160,9 +165,19 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
                     historia.diagnostico or "",
                     historia.tratamiento or "",
                     historia.recomendaciones or "",
+                    historia.fotos or "",  # 🔴 CRÍTICO: Incluir fotos
                     historia_id
                 ))
+                affected_rows = cursor.rowcount
                 conn.commit()
+                
+                print(f"✅ [UPDATE] Historia actualizada. Filas afectadas: {affected_rows}")
+                
+                # Verificar que se guardó correctamente
+                cursor.execute("SELECT fotos FROM historial_clinico WHERE id = %s", (historia_id,))
+                verificacion = cursor.fetchone()
+                fotos_guardadas = verificacion.get('fotos', '') if verificacion else ''
+                print(f"🔍 [UPDATE] Fotos en BD después de actualizar: '{fotos_guardadas}'")
                 
                 return {
                     "success": True,
