@@ -2,9 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
-# 🔴 AGREGAR ESTOS MODELOS AL ARCHIVO
-
-class HistoriaClinicaBase(BaseModel):
+class HistorialClinicoBase(BaseModel):
     paciente_id: int
     motivo_consulta: Optional[str] = None
     antecedentes_medicos: Optional[str] = None
@@ -17,10 +15,10 @@ class HistoriaClinicaBase(BaseModel):
     recomendaciones: Optional[str] = None
     fotos: Optional[str] = None
 
-class HistoriaClinicaCreate(HistoriaClinicaBase):
+class HistorialClinicoCreate(HistorialClinicoBase):
     pass
 
-class HistoriaClinicaUpdate(BaseModel):
+class HistorialClinicoUpdate(BaseModel):
     paciente_id: Optional[int] = None
     motivo_consulta: Optional[str] = None
     antecedentes_medicos: Optional[str] = None
@@ -33,7 +31,7 @@ class HistoriaClinicaUpdate(BaseModel):
     recomendaciones: Optional[str] = None
     fotos: Optional[str] = None
 
-class HistoriaClinicaInDB(HistoriaClinicaBase):
+class HistorialClinicoInDB(HistorialClinicoBase):
     id: int
     fecha_creacion: Optional[datetime] = None
     fecha_modificacion: Optional[datetime] = None
