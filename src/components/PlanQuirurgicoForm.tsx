@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react"
 import { PlanQuirurgico } from "../types/planQuirurgico"
-import { Search } from "lucide-react"
+import { Search, Upload, X, Eye, Download } from "lucide-react"
 import { api } from "../lib/api"
 import { EsquemaViewer } from "../components/EsquemaViewer"
 
@@ -25,7 +25,6 @@ interface DibujoAccion {
 type ZoneMarkingsSVG = { [zoneId: string]: 'liposuction' | 'lipotransfer' | null };
 
 export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel }) => {
-
   
   // ---------------------------
   // Estado para selector de pacientes
@@ -40,6 +39,14 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // Estado para el visor de esquemas
   // ---------------------------
   const [showEsquemaViewer, setShowEsquemaViewer] = useState(false)
+
+  // ---------------------------
+  // Estado para archivos/imágenes
+  // ---------------------------
+  const [uploadingFiles, setUploadingFiles] = useState<{ [key: string]: boolean }>({})
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({})
+  const [archivosCargados, setArchivosCargados] = useState<string[]>([])
+  const [isLoadingArchivos, setIsLoadingArchivos] = useState(false)
 
   // ---------------------------
   // Datos paciente
@@ -217,9 +224,17 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     }
   }, [plan]);
 
+  // Cargar archivos cuando hay un plan existente
+  useEffect(() => {
+    if (plan?.id) {
+      cargarArchivosDelPlan(plan.id);
+    }
+  }, [plan?.id]);
+
   const bodySvgRef = useRef<HTMLObjectElement>(null);
   const facialSvgRef = useRef<HTMLObjectElement>(null);
   const saveDropdownRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ---------------------------
   // Efecto para sincronizar el ref con el estado
@@ -261,6 +276,253 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     
     initializeForm();
   }, [plan]);
+
+  // ---------------------------
+  // FUNCIONES PARA ARCHIVOS
+  // ---------------------------
+
+  const cargarArchivosDelPlan = async (planId: string) => {
+    if (!planId || planId === '') return;
+    
+    setIsLoadingArchivos(true);
+    try {
+      console.log("📥 Cargando archivos del plan:", planId);
+      
+      const result = await api.getPlanQuirurgico(planId);
+      
+      if (result.success && result.imagenes_adjuntas) {
+        setArchivosCargados(Array.isArray(result.imagenes_adjuntas) ? result.imagenes_adjuntas : []);
+        setImagenesAdjuntas(Array.isArray(result.imagenes_adjuntas) ? result.imagenes_adjuntas : []);
+        console.log(`✅ Cargados ${result.imagenes_adjuntas.length} archivos del plan`);
+      } else {
+        setArchivosCargados([]);
+        setImagenesAdjuntas([]);
+        console.log("ℹ️ No hay archivos adjuntos para este plan");
+      }
+    } catch (error) {
+      console.error("❌ Error cargando archivos del plan:", error);
+      setArchivosCargados([]);
+      setImagenesAdjuntas([]);
+    } finally {
+      setIsLoadingArchivos(false);
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    
+    Array.from(files).forEach(file => {
+      handleFileUpload(file);
+    });
+    
+    // Resetear el input para permitir seleccionar el mismo archivo nuevamente
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    // Verificar si ya tenemos un plan guardado
+    const planId = plan?.id;
+    
+    // Verificar que planId exista y tenga el formato correcto
+    if (!planId || planId === '' || planId === 'plan_') {
+      alert("Debe guardar el plan primero antes de subir archivos");
+      return;
+    }
+    
+    // Extraer el ID numérico del plan
+    let planIdNum: number | string;
+    
+    if (planId.startsWith('plan_')) {
+      planIdNum = planId.replace('plan_', '');
+    } else {
+      planIdNum = planId;
+    }
+    
+    // Convertir a número y validar
+    const planIdParsed = parseInt(planIdNum as string);
+    if (isNaN(planIdParsed) || planIdParsed <= 0) {
+      alert("ID de plan inválido. Guarde el plan primero.");
+      return;
+    }
+    
+    // Verificar tipo de archivo
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp', 
+      'application/pdf'
+    ];
+    
+    if (!allowedTypes.includes(file.type)) {
+      alert("Tipo de archivo no permitido. Solo se aceptan imágenes (JPG, PNG, GIF, BMP, WebP) y PDFs.");
+      return;
+    }
+    
+    // Verificar tamaño (15MB máximo para PDFs, 10MB para imágenes)
+    const maxSize = file.type === 'application/pdf' ? 15 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert(`El archivo es demasiado grande. Máximo ${maxSize / (1024 * 1024)}MB para ${file.type.includes('image') ? 'imágenes' : 'PDFs'}.`);
+      return;
+    }
+    
+    const fileName = file.name;
+    setUploadingFiles(prev => ({ ...prev, [fileName]: true }));
+    setUploadProgress(prev => ({ ...prev, [fileName]: 0 }));
+    
+    try {
+      console.log("📤 Subiendo archivo:", fileName, "para plan ID:", planIdParsed);
+      
+      // Simular progreso
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          const currentProgress = prev[fileName] || 0;
+          if (currentProgress < 90) {
+            return { ...prev, [fileName]: currentProgress + 10 };
+          }
+          clearInterval(progressInterval);
+          return prev;
+        });
+      }, 200);
+      
+      // Subir archivo usando la API
+      const result = await api.uploadPlanArchivo(planIdParsed, file);
+      
+      clearInterval(progressInterval);
+      setUploadProgress(prev => ({ ...prev, [fileName]: 100 }));
+      
+      if (result.success && result.url) {
+        console.log("✅ Archivo subido exitosamente:", result.url);
+        
+        // Agregar a la lista de archivos cargados
+        setArchivosCargados(prev => [...prev, result.url]);
+        setImagenesAdjuntas(prev => [...prev, result.url]);
+        
+        // Mostrar mensaje de éxito
+        setTimeout(() => {
+          setUploadingFiles(prev => {
+            const newState = { ...prev };
+            delete newState[fileName];
+            return newState;
+          });
+          setUploadProgress(prev => {
+            const newState = { ...prev };
+            delete newState[fileName];
+            return newState;
+          });
+        }, 1000);
+      } else {
+        throw new Error(result.message || "Error subiendo archivo");
+      }
+    } catch (error: any) {
+      console.error("❌ Error subiendo archivo:", error);
+      alert(`Error subiendo archivo: ${error.message || "Error desconocido"}`);
+      
+      setUploadingFiles(prev => {
+        const newState = { ...prev };
+        delete newState[fileName];
+        return newState;
+      });
+      setUploadProgress(prev => {
+        const newState = { ...prev };
+        delete newState[fileName];
+        return newState;
+      });
+    }
+  };
+
+  const handleDownloadFile = async (url: string, fileName: string) => {
+    const planId = plan?.id;
+    
+    if (!planId || planId === '') {
+      alert("No se puede descargar el archivo. Plan no identificado.");
+      return;
+    }
+    
+    try {
+      console.log("📥 Descargando archivo:", fileName);
+      
+      // Extraer el nombre del archivo de la URL
+      let nombreArchivo = fileName;
+      if (url.includes('/')) {
+        const urlParts = url.split('/');
+        nombreArchivo = urlParts[urlParts.length - 1];
+      }
+      
+      // Usar la función de la API para descargar
+      const result = await api.downloadPlanFile(nombreArchivo, planId);
+      
+      if (result.success) {
+        console.log("✅ Archivo descargado exitosamente");
+      } else {
+        // Si la API devuelve una URL directa, redirigir
+        if (url.includes('http')) {
+          window.open(url, '_blank');
+        } else {
+          alert(result.message || "Error descargando archivo");
+        }
+      }
+    } catch (error: any) {
+      console.error("❌ Error descargando archivo:", error);
+      
+      // Si hay error, intentar abrir directamente la URL si es completa
+      if (url.includes('http')) {
+        window.open(url, '_blank');
+      } else {
+        alert(`Error descargando archivo: ${error.message || "Error desconocido"}`);
+      }
+    }
+  };
+
+  const handleViewFile = (url: string) => {
+    if (url.includes('http')) {
+      window.open(url, '_blank');
+    } else {
+      // Si es una URL relativa, construirla completa
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://ignaciocordoba-backend.onrender.com";
+      const fullUrl = url.startsWith('/') ? `${apiUrl}${url}` : `${apiUrl}/${url}`;
+      window.open(fullUrl, '_blank');
+    }
+  };
+
+  const handleDeleteFile = async (url: string, index: number) => {
+    if (!window.confirm("¿Está seguro de eliminar este archivo?")) {
+      return;
+    }
+    
+    // Actualizar estados locales
+    setArchivosCargados(prev => prev.filter((_, i) => i !== index));
+    setImagenesAdjuntas(prev => prev.filter((_, i) => i !== index));
+    
+    // Nota: Para eliminar físicamente del servidor/Cloudinary,
+    // necesitaríamos un endpoint DELETE específico en el backend.
+    // Por ahora solo eliminamos de la lista local.
+    
+    console.log("🗑️ Archivo eliminado de la lista:", url);
+  };
+
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    
+    if (extension === 'pdf') {
+      return "📕";
+    } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension || '')) {
+      return "🖼️";
+    } else {
+      return "📄";
+    }
+  };
+
+  const getFileNameFromUrl = (url: string) => {
+    if (!url) return "Archivo";
+    
+    if (url.includes('/')) {
+      const parts = url.split('/');
+      return parts[parts.length - 1];
+    }
+    
+    return url;
+  };
 
   // ---------------------------
   // Función para cargar todos los pacientes
@@ -1080,15 +1342,15 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   }, []);
 
   // ---------------------------
-  // Manejar archivos
+  // Manejar archivos ANTIGUO (mantener para compatibilidad)
   // ---------------------------
-  const handleFiles = (files: FileList | null) => {
+  const handleFilesOld = (files: FileList | null) => {
     if (!files) return
     const arr = Array.from(files).map(f => f.name)
     setImagenesAdjuntas(prev => [...prev, ...arr])
   }
 
-  // Eliminar imagen adjunta
+  // Eliminar imagen adjunta ANTIGUA
   const eliminarImagenAdjunta = (index: number) => {
     setImagenesAdjuntas(prev => prev.filter((_, i) => i !== index))
   }
@@ -1167,7 +1429,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       conducta_quirurgica: conductaQuirurgicaLimpia,
       dibujos_esquema: [],
       notas_doctor: notasDoctor,
-      imagenes_adjuntas: imagenesAdjuntas,
+      imagenes_adjuntas: archivosCargados.length > 0 ? archivosCargados : imagenesAdjuntas,
       esquema_mejorado: {
         zoneMarkings,
         selectionHistory,
@@ -1520,9 +1782,137 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         />
       )}
 
-      {/* NOTAS Y ARCHIVOS ADJUNTOS */}
+      {/* =========================== */}
+      {/* SECCIÓN MEJORADA PARA ARCHIVOS */}
+      {/* =========================== */}
       <section className="p-4 border rounded bg-white">
-        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Notas y Archivos Adjuntos</h3>
+        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Archivos Adjuntos del Plan</h3>
+
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-3">
+            Suba imágenes del paciente, estudios previos, PDFs de consentimiento informado o cualquier documento relevante para el plan quirúrgico.
+            Formatos permitidos: JPG, PNG, GIF, BMP, WebP, PDF. Máximo 10MB por imagen, 15MB por PDF.
+          </p>
+          
+          {/* Área para subir archivos */}
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#1a6b32] transition-colors">
+            <input 
+              ref={fileInputRef}
+              type="file" 
+              multiple 
+              onChange={handleFileSelect} 
+              className="hidden" 
+              id="plan-file-upload"
+              accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf,image/*,application/pdf"
+            />
+            <label htmlFor="plan-file-upload" className="cursor-pointer block">
+              <div className="flex flex-col items-center justify-center gap-3">
+                <Upload className="text-gray-400" size={32} />
+                <div>
+                  <span className="font-medium text-gray-700">Haga clic para seleccionar archivos</span>
+                  <p className="text-sm text-gray-500 mt-1">o arrastre y suelte archivos aquí</p>
+                </div>
+                <span className="text-xs text-gray-400">
+                  Se permiten imágenes y PDFs (máx. 10MB imágenes, 15MB PDFs)
+                </span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {/* Lista de archivos cargados */}
+        <div className="mt-4">
+          <h4 className="font-medium text-gray-700 mb-3">Archivos cargados ({archivosCargados.length})</h4>
+          
+          {isLoadingArchivos ? (
+            <div className="text-center py-4">
+              <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#1a6b32] mb-2"></div>
+              <p className="text-sm text-gray-600">Cargando archivos...</p>
+            </div>
+          ) : archivosCargados.length === 0 ? (
+            <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+              <span className="text-3xl mb-2 block">📁</span>
+              <p className="text-gray-500">No hay archivos adjuntos</p>
+              <p className="text-sm text-gray-400 mt-1">Suba archivos usando el botón de arriba</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {archivosCargados.map((url, index) => {
+                const fileName = getFileNameFromUrl(url);
+                const fileIcon = getFileIcon(fileName);
+                const isUploading = uploadingFiles[fileName];
+                const uploadProgressValue = uploadProgress[fileName] || 0;
+                
+                return (
+                  <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <span className="text-xl">{fileIcon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-800 truncate" title={fileName}>
+                            {fileName}
+                          </span>
+                          {isUploading && (
+                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                              Subiendo...
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Archivo {index + 1} de {archivosCargados.length}
+                        </div>
+                        
+                        {/* Barra de progreso para archivos en subida */}
+                        {isUploading && (
+                          <div className="mt-2">
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${uploadProgressValue}%` }}
+                              ></div>
+                            </div>
+                            <div className="text-xs text-gray-500 text-right mt-1">
+                              {uploadProgressValue}%
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleViewFile(url)}
+                        className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full transition-colors"
+                        title="Ver archivo"
+                      >
+                        <Eye size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDownloadFile(url, fileName)}
+                        className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-full transition-colors"
+                        title="Descargar archivo"
+                      >
+                        <Download size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteFile(url, index)}
+                        className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full transition-colors"
+                        title="Eliminar archivo"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* NOTAS Y ARCHIVOS ADJUNTOS (MANTENER PARA COMPATIBILIDAD) */}
+      <section className="p-4 border rounded bg-white">
+        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Notas del Doctor</h3>
 
         <div className="mt-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Notas del doctor</label>
@@ -1533,59 +1923,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             value={notasDoctor} 
             onChange={e => setNotasDoctor(e.target.value)} 
           />
-        </div>
-
-        <div className="mt-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Archivos adjuntos</label>
-          <div className="flex flex-col space-y-4">
-            {/* Input para cargar archivos */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#1a6b32] transition-colors">
-              <input 
-                type="file" 
-                multiple 
-                onChange={e => handleFiles(e.target.files)} 
-                className="hidden" 
-                id="file-upload"
-              />
-              <label htmlFor="file-upload" className="cursor-pointer block">
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <span className="text-2xl">📎</span>
-                  <span className="font-medium text-gray-700">Haga clic para seleccionar archivos</span>
-                  <span className="text-sm text-gray-500">o arrastre y suelte archivos aquí</span>
-                  <span className="text-xs text-gray-400">Se permiten imágenes, PDFs y documentos</span>
-                </div>
-              </label>
-            </div>
-
-            {/* Lista de archivos cargados */}
-            {imagenesAdjuntas.length > 0 && (
-              <div className="mt-2">
-                <h4 className="font-medium text-gray-700 mb-2">Archivos cargados ({imagenesAdjuntas.length})</h4>
-                <ul className="space-y-2">
-                  {imagenesAdjuntas.map((img, index) => (
-                    <li key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
-                      <div className="flex items-center gap-3">
-                        <span className="text-blue-600">📄</span>
-                        <div>
-                          <span className="text-sm font-medium text-gray-800">{img}</span>
-                          <div className="text-xs text-gray-500">
-                            Archivo {index + 1} de {imagenesAdjuntas.length}
-                          </div>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => eliminarImagenAdjunta(index)}
-                        className="text-red-600 hover:text-red-800 p-1 rounded-full hover:bg-red-50"
-                        title="Eliminar archivo"
-                      >
-                        ✕
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
         </div>
       </section>
 
