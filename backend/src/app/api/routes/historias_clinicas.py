@@ -6,10 +6,11 @@ import uuid
 
 from app.core.database import get_connection
 from app.models.schemas.historial_clinico import (
-    HistorialClinicoCreate, HistorialClinicoUpdate, 
-    HistorialClinicoInDB, FileUploadResponse
+    HistoriaClinicaCreate as HistorialClinicoCreate,
+    HistoriaClinicaUpdate as HistorialClinicoUpdate,
+    HistoriaClinicaInDB as HistorialClinicoInDB,
+    FileUploadResponse
 )
-
 router = APIRouter()
 
 UPLOAD_DIR = "uploads"
