@@ -1401,6 +1401,53 @@ export const api = {
     });
   },
 
+  uploadPlanArchivo: async (planId: number, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    
+    try {
+      console.log("📤 Subiendo archivo para plan:", planId);
+      console.log("📁 Archivo:", file.name, file.type, file.size);
+      
+      const response = await fetch(`${API_URL}/api/planes-quirurgicos/${planId}/archivo`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+      
+      console.log("📥 Response:", response.status, response.statusText);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(errorData.detail || `Error ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log("✅ Archivo subido:", result);
+      
+      // Si la URL es relativa (almacenamiento local), convertir a absoluta
+      let finalUrl = result.url;
+      if (finalUrl && finalUrl.startsWith('/uploads/')) {
+        finalUrl = `${API_URL}${finalUrl}`;
+      }
+      
+      return {
+        success: result.success,
+        url: finalUrl,
+        filename: result.filename,
+        message: result.message
+      };
+      
+    } catch (error) {
+      console.error('❌ Error subiendo archivo:', error);
+      throw error;
+    }
+  },
+  
   downloadPlanFile: async (nombreArchivo: string, planId: string) => {
     const callKey = `downloadPlanFile_${planId}_${nombreArchivo}_${Date.now()}`;
     
