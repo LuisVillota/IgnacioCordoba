@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 import pymysql
 import os
 from datetime import datetime
-import uuid
 
 from app.core.database import get_connection
 from app.models.schemas.historial_clinico import (
@@ -14,6 +13,9 @@ router = APIRouter()
 
 UPLOAD_DIR = "uploads"
 HISTORIAS_DIR = os.path.join(UPLOAD_DIR, "historias")
+
+# Asegurar que el directorio existe
+os.makedirs(HISTORIAS_DIR, exist_ok=True)
 
 @router.get("/", response_model=dict)
 def get_historias_clinicas(limit: int = 100, offset: int = 0):
@@ -81,10 +83,12 @@ def create_historia_clinica(historia: HistorialClinicoCreate):
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
+                # Verificar que el paciente existe
                 cursor.execute("SELECT id FROM paciente WHERE id = %s", (historia.paciente_id,))
                 if not cursor.fetchone():
                     raise HTTPException(status_code=404, detail="Paciente no encontrado")
                 
+                # Crear historia clínica (sin fotos inicialmente)
                 cursor.execute("""
                     INSERT INTO historial_clinico (
                         paciente_id, motivo_consulta, antecedentes_medicos,
@@ -104,7 +108,7 @@ def create_historia_clinica(historia: HistorialClinicoCreate):
                     historia.diagnostico or "",
                     historia.tratamiento or "",
                     historia.recomendaciones or "",
-                    ""
+                    historia.fotos or ""
                 ))
                 historia_id = cursor.lastrowid
                 conn.commit()
@@ -128,14 +132,17 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
+                # Verificar que la historia existe
                 cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
                 if not cursor.fetchone():
                     raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
                 
+                # Verificar que el paciente existe
                 cursor.execute("SELECT id FROM paciente WHERE id = %s", (historia.paciente_id,))
                 if not cursor.fetchone():
                     raise HTTPException(status_code=404, detail="Paciente no encontrado")
                 
+                # Actualizar historia clínica
                 cursor.execute("""
                     UPDATE historial_clinico SET
                         paciente_id = %s,
@@ -147,7 +154,8 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
                         exploracion_fisica = %s,
                         diagnostico = %s,
                         tratamiento = %s,
-                        recomendaciones = %s
+                        recomendaciones = %s,
+                        fotos = %s
                     WHERE id = %s
                 """, (
                     historia.paciente_id,
@@ -160,6 +168,7 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
                     historia.diagnostico or "",
                     historia.tratamiento or "",
                     historia.recomendaciones or "",
+                    historia.fotos or "",
                     historia_id
                 ))
                 conn.commit()
@@ -182,10 +191,26 @@ def delete_historia_clinica(historia_id: int):
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
-                if not cursor.fetchone():
+                # Verificar que la historia existe
+                cursor.execute("SELECT fotos FROM historial_clinico WHERE id = %s", (historia_id,))
+                historia = cursor.fetchone()
+                if not historia:
                     raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
                 
+                # Eliminar archivos físicos si existen
+                if historia['fotos']:
+                    fotos = historia['fotos'].split(',')
+                    for foto_url in fotos:
+                        foto_url = foto_url.strip()
+                        if foto_url.startswith('/uploads/'):
+                            file_path = foto_url[1:]  # Remover el '/' inicial
+                            if os.path.exists(file_path):
+                                try:
+                                    os.remove(file_path)
+                                except Exception as e:
+                                    print(f"Error eliminando archivo {file_path}: {e}")
+                
+                # Eliminar registro de la base de datos
                 cursor.execute("DELETE FROM historial_clinico WHERE id = %s", (historia_id,))
                 conn.commit()
                 
@@ -202,39 +227,25 @@ def delete_historia_clinica(historia_id: int):
             raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/upload/historia/{historia_id}", response_model=FileUploadResponse)
+@router.post("/{historia_id}/foto", response_model=FileUploadResponse)
 async def upload_historia_foto(
     historia_id: int,
     file: UploadFile = File(...)
 ):
     """
-    🔴 ENDPOINT CORREGIDO PARA SUBIR FOTOS
-    Sube una foto para una historia clínica y la guarda en la base de datos
+    Endpoint dedicado para subir fotos a una historia clínica específica.
+    La URL generada se retorna para que el frontend la agregue a la lista de fotos.
     """
-    print(f"📸 Iniciando subida de foto para historia {historia_id}")
-    print(f"📁 Archivo recibido: {file.filename}, tipo: {file.content_type}")
-    
-    conn = None
     try:
-        # 1️⃣ VERIFICAR QUE LA HISTORIA EXISTA
-        try:
-            conn = get_connection()
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT id, fotos FROM historial_clinico WHERE id = %s", (historia_id,))
-                resultado = cursor.fetchone()
-                if not resultado:
-                    raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
-                
-                fotos_actuales = resultado.get('fotos', '') or ''
-                print(f"📋 Fotos actuales en BD: '{fotos_actuales}'")
-        except Exception as db_error:
-            print(f"❌ Error verificando historia: {db_error}")
-            raise HTTPException(status_code=500, detail=f"Error base de datos: {str(db_error)}")
-        finally:
-            if conn:
-                conn.close()
+        # 1. Verificar que la historia existe
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+        conn.close()
         
-        # 2️⃣ VALIDAR TIPO DE ARCHIVO
+        # 2. Validar tipo de archivo
         allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
         file_ext = os.path.splitext(file.filename or "unknown.jpg")[1].lower()
         if file_ext not in allowed_extensions:
@@ -243,7 +254,7 @@ async def upload_historia_foto(
                 detail="Tipo de archivo no permitido. Use JPG, PNG, GIF, BMP o WebP."
             )
         
-        # 3️⃣ VALIDAR TAMAÑO
+        # 3. Validar tamaño del archivo
         max_size = 10 * 1024 * 1024  # 10MB
         content = await file.read()
         if len(content) > max_size:
@@ -252,105 +263,33 @@ async def upload_historia_foto(
                 detail="El archivo es demasiado grande. Máximo 10MB."
             )
         
-        # 4️⃣ GENERAR NOMBRE ÚNICO PARA EL ARCHIVO
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        unique_id = uuid.uuid4().hex[:8]
-        filename = f"{historia_id}_{timestamp}_{unique_id}{file_ext}"
-        
-        # 5️⃣ CREAR DIRECTORIO SI NO EXISTE
-        os.makedirs(HISTORIAS_DIR, exist_ok=True)
+        # 4. Generar nombre único para el archivo
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        filename = f"historia_{historia_id}_{timestamp}{file_ext}"
         file_path = os.path.join(HISTORIAS_DIR, filename)
         
-        print(f"💾 Guardando archivo en: {file_path}")
-        
-        # 6️⃣ GUARDAR ARCHIVO EN DISCO
+        # 5. Guardar el archivo
         with open(file_path, "wb") as buffer:
             buffer.write(content)
         
-        # 7️⃣ VERIFICAR QUE SE GUARDÓ
+        # 6. Verificar que se guardó correctamente
         if not os.path.exists(file_path):
             raise HTTPException(
                 status_code=500, 
                 detail="Error al guardar el archivo en el servidor"
             )
         
-        file_size = os.path.getsize(file_path)
-        print(f"✅ Archivo guardado exitosamente ({file_size} bytes)")
-        
-        # 8️⃣ CONSTRUIR URL (RELATIVA)
+        # 7. Generar URL pública
         file_url = f"/uploads/historias/{filename}"
-        print(f"🔗 URL generada: {file_url}")
         
-        # 9️⃣ ACTUALIZAR BASE DE DATOS
-        conn2 = None
-        try:
-            conn2 = get_connection()
-            with conn2.cursor() as cursor:
-                # Obtener fotos actuales nuevamente
-                cursor.execute("SELECT fotos FROM historial_clinico WHERE id = %s", (historia_id,))
-                resultado = cursor.fetchone()
-                fotos_actuales = resultado.get('fotos', '') if resultado else ''
-                
-                # Limpiar fotos_actuales (eliminar espacios y comas extra)
-                if fotos_actuales:
-                    fotos_actuales = fotos_actuales.strip()
-                
-                # Construir nueva lista de URLs
-                if fotos_actuales and fotos_actuales != '':
-                    # Dividir por comas, limpiar y filtrar vacíos
-                    urls_existentes = [url.strip() for url in fotos_actuales.split(',') if url.strip()]
-                    # Agregar nueva URL
-                    urls_existentes.append(file_url)
-                    nuevas_fotos = ','.join(urls_existentes)
-                else:
-                    nuevas_fotos = file_url
-                
-                print(f"📝 Actualizando BD con URLs: '{nuevas_fotos}'")
-                
-                # Actualizar en base de datos
-                cursor.execute(
-                    "UPDATE historial_clinico SET fotos = %s WHERE id = %s",
-                    (nuevas_fotos, historia_id)
-                )
-                affected_rows = cursor.rowcount
-                conn2.commit()
-                
-                print(f"✅ BD actualizada. Filas afectadas: {affected_rows}")
-                
-                if affected_rows == 0:
-                    print("⚠️ ADVERTENCIA: No se actualizó ninguna fila")
-                
-                # 🔴 VERIFICAR QUE SE GUARDÓ CORRECTAMENTE
-                cursor.execute("SELECT fotos FROM historial_clinico WHERE id = %s", (historia_id,))
-                verificacion = cursor.fetchone()
-                fotos_guardadas = verificacion.get('fotos', '') if verificacion else ''
-                print(f"🔍 Verificación - Fotos en BD después de guardar: '{fotos_guardadas}'")
-                
-                if file_url not in fotos_guardadas:
-                    print(f"❌ ERROR CRÍTICO: La URL {file_url} NO se guardó en la BD!")
-                    raise HTTPException(
-                        status_code=500,
-                        detail="La foto se subió pero no se guardó en la base de datos"
-                    )
-                
-        except Exception as update_error:
-            print(f"❌ Error actualizando BD: {update_error}")
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error actualizando base de datos: {str(update_error)}"
-            )
-        finally:
-            if conn2:
-                conn2.close()
+        print(f"✅ Foto guardada exitosamente: {file_path}")
+        print(f"🔗 URL pública: {file_url}")
         
-        # 🔟 RETORNAR RESPUESTA EXITOSA
-        print(f"🎉 Proceso completado exitosamente")
+        # 8. Retornar la URL (el frontend la agregará a la lista)
         return FileUploadResponse(
             success=True,
-            message="Foto subida y guardada exitosamente",
-            url=file_url, 
+            message="Foto subida exitosamente",
+            url=file_url,
             filename=filename
         )
         
@@ -358,9 +297,5 @@ async def upload_historia_foto(
         raise
     except Exception as e:
         import traceback
-        print(f"❌ Error inesperado: {e}")
         traceback.print_exc()
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Error subiendo archivo: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error subiendo archivo: {str(e)}")

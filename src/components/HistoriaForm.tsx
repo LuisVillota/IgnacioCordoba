@@ -52,7 +52,6 @@ export function HistoriaForm({ historia, pacienteId, onSave, onClose, loading = 
 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
-  const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   
@@ -76,10 +75,17 @@ export function HistoriaForm({ historia, pacienteId, onSave, onClose, loading = 
   }
 
   const handleFileSelect = async (files: FileList) => {
-    const newFiles: File[] = []
+    if (!historia?.id) {
+      alert("Primero debes guardar la historia clínica antes de subir fotos")
+      return
+    }
+
+    setUploadingPhotos(true)
     
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
+      
+      // Validaciones
       if (file.size > 10 * 1024 * 1024) {
         alert(`El archivo ${file.name} es demasiado grande (máximo 10MB)`)
         continue
@@ -91,118 +97,89 @@ export function HistoriaForm({ historia, pacienteId, onSave, onClose, loading = 
         continue
       }
       
-      newFiles.push(file)
-      
-      // Crear previsualización local
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string
-        setPhotoUrls(prev => [...prev, dataUrl])
+      try {
+        console.log(`📤 Subiendo foto: ${file.name}`)
+        const uploadResponse = await api.uploadHistoriaFoto(parseInt(historia.id), file)
+        
+        if (uploadResponse.url) {
+          // Agregar la URL devuelta por el backend
+          setPhotoUrls(prev => [...prev, uploadResponse.url!])
+          console.log(`✅ Foto subida: ${uploadResponse.url}`)
+        }
+      } catch (error) {
+        console.error('❌ Error subiendo foto:', error)
+        alert(`Error subiendo ${file.name}`)
       }
-      reader.readAsDataURL(file)
     }
     
-    setPhotoFiles(prev => [...prev, ...newFiles])
+    setUploadingPhotos(false)
   }
 
-  const removePhoto = (index: number) => {
+  const removePhoto = async (index: number) => {
     const newPhotoUrls = photoUrls.filter((_, i) => i !== index)
-    const newPhotoFiles = photoFiles.filter((_, i) => i !== index)
     setPhotoUrls(newPhotoUrls)
-    setPhotoFiles(newPhotoFiles)
+    
+    // Si estamos editando, actualizar inmediatamente en el backend
+    if (historia?.id) {
+      try {
+        const fotosString = newPhotoUrls.join(',')
+        await api.updateHistoriaClinica(parseInt(historia.id), {
+          ...formData,
+          fotos: fotosString
+        })
+        console.log('✅ Foto eliminada de la base de datos')
+      } catch (error) {
+        console.error('❌ Error eliminando foto:', error)
+        alert('Error al eliminar la foto')
+        // Restaurar la foto en caso de error
+        setPhotoUrls(photoUrls)
+      }
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     // Prevenir doble envío
-    if (formSubmitted.current) {
+    if (formSubmitted.current || isSubmitting) {
       console.log("⚠️ Formulario ya enviado, ignorando...")
       return
     }
     
     if (!validateForm()) return
     
-    // Evitar múltiples envíos
-    if (isSubmitting) return
-    
     formSubmitted.current = true
     setIsSubmitting(true)
     
     try {
-      console.log("🔄 Iniciando guardado de historia...")
+      console.log("🔄 Guardando historia clínica...")
       
-      // 1. Primero crear/actualizar la historia clínica SIN FOTOS
-      let historiaId: number
+      // Preparar datos con las fotos actuales
+      const fotosString = photoUrls.join(',')
       const historiaData = {
-        ...formData,
-        fotos: "" // Las fotos se suben después
-      }
-      
-      if (historia) {
-        console.log(`🔄 Actualizando historia existente ID: ${historia.id}`)
-        const response = await api.updateHistoriaClinica(parseInt(historia.id), historiaData)
-        historiaId = parseInt(historia.id)
-        console.log(`✅ Historia ${historia.id} actualizada:`, response)
-      } else {
-        console.log(`🔄 Creando nueva historia...`)
-        const response = await api.createHistoriaClinica(historiaData)
-        historiaId = response.historia_id || response.id
-        console.log(`✅ Nueva historia creada ID: ${historiaId}:`, response)
-      }
-      
-      // 2. Subir fotos nuevas si hay - UNA SOLA VEZ
-      let allPhotoUrls = [...photoUrls.filter(url => !url.startsWith('data:'))] // Mantener URLs existentes
-      
-      if (photoFiles.length > 0 && historiaId) {
-        setUploadingPhotos(true)
-        console.log(`📸 Subiendo ${photoFiles.length} fotos nuevas...`)
-        
-        for (const [index, file] of photoFiles.entries()) {
-          try {
-            console.log(`📤 Subiendo foto ${index + 1}/${photoFiles.length}: ${file.name}`)
-            const uploadResponse = await api.uploadHistoriaFoto(historiaId, file)
-            if (uploadResponse.url) {
-              allPhotoUrls.push(uploadResponse.url)
-              console.log(`✅ Foto ${index + 1} subida: ${uploadResponse.url}`)
-            }
-          } catch (uploadError) {
-            console.error('❌ Error subiendo foto:', uploadError)
-            // Continuar con las demás fotos
-          }
-        }
-        setUploadingPhotos(false)
-      }
-      
-      // 3. Actualizar el registro CON LAS FOTOS - UNA SOLA VEZ
-      const fotosString = allPhotoUrls.join(',')
-      console.log(`🔄 Actualizando historia ${historiaId} con fotos:`, fotosString)
-      
-      // Solo actualizar si hay fotos nuevas o se está editando
-      if (fotosString || historia) {
-        await api.updateHistoriaClinica(historiaId, {
-          ...historiaData,
-          fotos: fotosString
-        })
-        console.log(`✅ URLs de fotos actualizadas`)
-      }
-      
-      // 4. Notificar éxito
-      console.log(`✅ Historia guardada exitosamente`)
-      
-      // Actualizar formData con fotos finales
-      const finalFormData = {
         ...formData,
         fotos: fotosString
       }
       
-      // Notificar al componente padre
-      onSave(finalFormData)
+      if (historia) {
+        // Actualizar historia existente
+        console.log(`🔄 Actualizando historia ID: ${historia.id}`)
+        await api.updateHistoriaClinica(parseInt(historia.id), historiaData)
+        console.log(`✅ Historia ${historia.id} actualizada`)
+      } else {
+        // Crear nueva historia
+        console.log(`🔄 Creando nueva historia...`)
+        const response = await api.createHistoriaClinica(historiaData)
+        console.log(`✅ Nueva historia creada ID: ${response.historia_id}`)
+      }
       
-      // Cerrar el formulario después de un breve delay
+      // Notificar al componente padre
+      onSave(historiaData)
+      
+      // Cerrar el formulario
       setTimeout(() => {
         onClose()
-      }, 500)
+      }, 300)
       
     } catch (error) {
       console.error('❌ Error guardando historia:', error)
@@ -355,12 +332,20 @@ export function HistoriaForm({ historia, pacienteId, onSave, onClose, loading = 
               Fotos Clínicas ({photoUrls.length} en total)
             </label>
             
-            {/* Input de subida */}
+            {!historia?.id && (
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  ℹ️ Primero guarda la historia clínica para poder subir fotos
+                </p>
+              </div>
+            )}
+            
+            {/* Input de subida - solo habilitado si hay historia guardada */}
             <div className="mb-4">
-              <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer ${
-                isDisabled 
-                  ? 'bg-gray-100 border-gray-300' 
-                  : 'bg-gray-50 border-gray-300 hover:bg-gray-100 hover:border-[#1a6b32]'
+              <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg ${
+                isDisabled || !historia?.id
+                  ? 'bg-gray-100 border-gray-300 cursor-not-allowed' 
+                  : 'bg-gray-50 border-gray-300 hover:bg-gray-100 hover:border-[#1a6b32] cursor-pointer'
               }`}>
                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
                   {uploadingPhotos ? (
@@ -381,7 +366,7 @@ export function HistoriaForm({ historia, pacienteId, onSave, onClose, loading = 
                   multiple
                   accept="image/*"
                   onChange={(e) => e.target.files && handleFileSelect(e.target.files)}
-                  disabled={isDisabled}
+                  disabled={isDisabled || !historia?.id}
                 />
               </label>
             </div>
@@ -389,7 +374,7 @@ export function HistoriaForm({ historia, pacienteId, onSave, onClose, loading = 
             {/* Previsualización de fotos */}
             {photoUrls.length > 0 && (
               <div className="mt-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">Fotos:</p>
+                <p className="text-sm font-medium text-gray-700 mb-2">Fotos guardadas:</p>
                 <div className="grid grid-cols-3 gap-2">
                   {photoUrls.map((url, index) => (
                     <div key={index} className="relative">
@@ -397,6 +382,10 @@ export function HistoriaForm({ historia, pacienteId, onSave, onClose, loading = 
                         src={url}
                         alt={`Foto clínica ${index + 1}`}
                         className="w-full h-24 object-cover rounded-lg"
+                        onError={(e) => {
+                          e.currentTarget.src = '/placeholder-image.jpg'
+                          e.currentTarget.alt = 'Imagen no disponible'
+                        }}
                       />
                       <button
                         type="button"
@@ -420,7 +409,7 @@ export function HistoriaForm({ historia, pacienteId, onSave, onClose, loading = 
               disabled={isDisabled}
               className="flex-1 bg-[#1a6b32] hover:bg-[#155529] text-white font-medium py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
-              {isSubmitting || uploadingPhotos ? (
+              {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   {historia ? "Actualizando..." : "Guardando..."}
