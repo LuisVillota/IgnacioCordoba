@@ -18,23 +18,12 @@ class HistorialClinicoBase(BaseModel):
 class HistorialClinicoCreate(HistorialClinicoBase):
     pass
 
-class HistorialClinicoUpdate(BaseModel):
-    paciente_id: Optional[int] = None
-    motivo_consulta: Optional[str] = None
-    antecedentes_medicos: Optional[str] = None
-    antecedentes_quirurgicos: Optional[str] = None
-    antecedentes_alergicos: Optional[str] = None
-    antecedentes_farmacologicos: Optional[str] = None
-    exploracion_fisica: Optional[str] = None
-    diagnostico: Optional[str] = None
-    tratamiento: Optional[str] = None
-    recomendaciones: Optional[str] = None
-    fotos: Optional[str] = None
+class HistorialClinicoUpdate(HistorialClinicoBase):
+    pass
 
 class HistorialClinicoInDB(HistorialClinicoBase):
     id: int
     fecha_creacion: Optional[datetime] = None
-    fecha_modificacion: Optional[datetime] = None
     
     class Config:
         from_attributes = True
