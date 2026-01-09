@@ -767,56 +767,30 @@ export const api = {
     
     try {
       console.log("📤 Subiendo foto para historia:", historiaId);
-      console.log("📁 Detalles del archivo:", {
-        nombre: file.name,
-        tipo: file.type,
-        tamaño: file.size,
-        ultimaModificacion: new Date(file.lastModified).toISOString()
-      });
+      console.log("📁 Archivo:", file.name, file.type, file.size);
       
-      // ✅ CORRECCIÓN: Usar el endpoint correcto
       const response = await fetch(`${API_URL}/api/historias-clinicas/${historiaId}/foto`, {
         method: 'POST',
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          // NO incluir Content-Type para FormData - el navegador lo maneja automáticamente
         },
         body: formData,
       });
       
-      console.log("📥 Upload response status:", response.status, response.statusText);
+      console.log("📥 Response:", response.status, response.statusText);
       
       if (!response.ok) {
-        let errorDetail = `Error ${response.status}: ${response.statusText}`;
-        try {
-          const errorData = await response.json();
-          errorDetail = errorData.detail || errorData.message || JSON.stringify(errorData);
-          console.error("❌ Error detallado:", errorData);
-        } catch {
-          try {
-            const text = await response.text();
-            if (text) {
-              errorDetail = text;
-              console.error("❌ Error texto:", text);
-            }
-          } catch {
-            // Ignorar
-          }
-        }
-        
-        throw new Error(errorDetail);
+        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(errorData.detail || `Error ${response.status}`);
       }
       
       const result = await response.json();
-      console.log("✅ Foto subida exitosamente:", result);
+      console.log("✅ Foto subida:", result);
       
-      // ✅ El backend devuelve 'url' directamente
+      // Si la URL es relativa (almacenamiento local), convertir a absoluta
       let finalUrl = result.url;
-      
-      // Si la URL es relativa, convertirla a absoluta
       if (finalUrl && finalUrl.startsWith('/uploads/')) {
         finalUrl = `${API_URL}${finalUrl}`;
-        console.log("🔗 URL convertida a absoluta:", finalUrl);
       }
       
       return {
