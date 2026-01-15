@@ -46,7 +46,7 @@ export function UsuarioForm({ usuario, onSave, onClose }: UsuarioFormProps) {
 const handleSubmit = (e: React.FormEvent) => {
   e.preventDefault()
 
-  // 🔴 VALIDACIÓN CRÍTICA
+  //  VALIDACIÓN CRÍTICA
   if (!isEdit && formData.password.trim() === "") {
     alert("La contraseña es obligatoria para crear un usuario")
     return

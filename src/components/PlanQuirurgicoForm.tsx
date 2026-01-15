@@ -440,14 +440,24 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     }
     
     try {
-      console.log("📥 Descargando archivo:", fileName);
+      console.log("📥 Descargando archivo:", fileName, "desde URL:", url);
       
-      // Extraer el nombre del archivo de la URL
+      // Extraer solo el nombre del archivo para el backend
       let nombreArchivo = fileName;
-      if (url.includes('/')) {
+      
+      // Si la URL es de Cloudinary, extraer el nombre del archivo
+      if (url.includes('cloudinary.com')) {
+        const urlParts = url.split('/');
+        const planesIndex = urlParts.indexOf('planes');
+        if (planesIndex !== -1 && planesIndex + 1 < urlParts.length) {
+          nombreArchivo = urlParts[planesIndex + 1];
+        }
+      } else if (url.includes('/')) {
         const urlParts = url.split('/');
         nombreArchivo = urlParts[urlParts.length - 1];
       }
+      
+      console.log("📤 Enviando a API:", { nombreArchivo, planId });
       
       // Usar la función de la API para descargar
       const result = await api.downloadPlanFile(nombreArchivo, planId);
@@ -455,8 +465,9 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       if (result.success) {
         console.log("✅ Archivo descargado exitosamente");
       } else {
-        // Si la API devuelve una URL directa, redirigir
+        // Si falla pero tenemos una URL, intentar abrirla directamente
         if (url.includes('http')) {
+          console.log("🔄 Abriendo URL directamente:", url);
           window.open(url, '_blank');
         } else {
           alert(result.message || "Error descargando archivo");
@@ -1375,7 +1386,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // Guardar plan quirúrgico
   // ---------------------------
   const handleSubmit = () => {
-    // Validar que se haya seleccionado un paciente (solo para nuevo plan)
     if (!plan && !datospaciente.id) {
       alert("Debe seleccionar un paciente antes de guardar")
       return
@@ -1416,6 +1426,9 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       ...conductaQuirurgica,
       duracion_estimada: limpiarValorNumerico(conductaQuirurgica.duracion_estimada),
     };
+
+    //  IMPORTANTE: Extraer solo el ID numérico para el plan
+    const planIdNum = plan?.id ? plan.id.replace('plan_', '') : '';
 
     const nuevoPlan: PlanQuirurgico = {
       id: plan?.id ?? `plan_${Date.now()}`,
