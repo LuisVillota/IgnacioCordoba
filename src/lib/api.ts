@@ -1062,53 +1062,30 @@ export const api = {
     }
   },
 
-  getEstadisticasSalaEspera: async (): Promise<any> => {
-    try {
-      console.log("📊 Obteniendo estadísticas de sala de espera...");
-      const response = await fetch(`${API_URL}/api/sala-espera/estadisticas`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
-        },
-      });
-      
-      if (!response.ok) {
-        let errorMessage = `Error HTTP ${response.status}`;
+getEstadisticasSalaEspera: async (): Promise<any> => {
+  try {
+    console.log("📊 Obteniendo estadísticas de sala de espera...");
+    const response = await fetch(`${API_URL}/api/sala-espera/estadisticas`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {}),
+      },
+    });
+    
+    if (!response.ok) {
+      let errorMessage = `Error HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        console.error('❌ Error obteniendo estadísticas:', errorData);
+        errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+      } catch {
         try {
-          const errorData = await response.json();
-          console.error('❌ Error obteniendo estadísticas:', errorData);
-          errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+          const text = await response.text();
+          if (text) errorMessage = text;
         } catch {
-          try {
-            const text = await response.text();
-            if (text) errorMessage = text;
-          } catch {
-            // Si falla todo
-          }
+          // Si falla todo
         }
-        return {
-          success: false,
-          estadisticas: {
-            total: 0,
-            pendientes: 0,
-            llegadas: 0,
-            confirmadas: 0,
-            en_consulta: 0,
-            completadas: 0,
-            no_asistieron: 0,
-            con_cita_hoy: 0,
-            sin_cita_hoy: 0,
-            tiempo_promedio_espera: 15,
-            tiempo_promedio_consulta: 25
-          }
-        };
       }
-      
-      const data = await response.json();
-      console.log("✅ Estadísticas obtenidas:", data);
-      return data;
-    } catch (error) {
-      console.error('❌ Error obteniendo estadísticas:', error);
       return {
         success: false,
         estadisticas: {
@@ -1126,7 +1103,43 @@ export const api = {
         }
       };
     }
-  },
+    
+    const data = await response.json();
+    console.log("✅ Estadísticas obtenidas:", data);
+    
+    // 🔧 Asegurar que tiempo_promedio_espera y tiempo_promedio_consulta sean números
+    if (data && data.success && data.estadisticas) {
+      return {
+        success: true,
+        estadisticas: {
+          ...data.estadisticas,
+          tiempo_promedio_espera: parseFloat(data.estadisticas.tiempo_promedio_espera) || 15,
+          tiempo_promedio_consulta: parseFloat(data.estadisticas.tiempo_promedio_consulta) || 25
+        }
+      };
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('❌ Error obteniendo estadísticas:', error);
+    return {
+      success: false,
+      estadisticas: {
+        total: 0,
+        pendientes: 0,
+        llegadas: 0,
+        confirmadas: 0,
+        en_consulta: 0,
+        completadas: 0,
+        no_asistieron: 0,
+        con_cita_hoy: 0,
+        sin_cita_hoy: 0,
+        tiempo_promedio_espera: 15,
+        tiempo_promedio_consulta: 25
+      }
+    };
+  }
+},
 
   agregarpacienteSalaEspera: async (pacienteId: string, citaId?: string): Promise<any> => {
     try {
@@ -1455,16 +1468,36 @@ export const api = {
       try {
         console.log("📥 Descargando archivo:", { nombreArchivo, planId });
         
+        // 🔴 CORRECCIÓN: Si es una URL de Cloudinary, no llamar al backend
+        if (nombreArchivo.includes('cloudinary.com') || nombreArchivo.startsWith('http')) {
+          console.log("☁️ Archivo en Cloudinary, abriendo directamente:", nombreArchivo);
+          
+          // Para Cloudinary, simplemente abrir en nueva pestaña
+          window.open(nombreArchivo, '_blank');
+          
+          return { 
+            success: true, 
+            filename: nombreArchivo.split('/').pop() || 'archivo',
+            message: "Archivo de Cloudinary abierto en nueva pestaña"
+          };
+        }
+        
         // Obtener el token de autenticación
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         
         // Extraer el ID numérico del plan (sin el prefijo 'plan_')
         const planIdClean = planId.replace('plan_', '');
         
+        // Extraer solo el nombre del archivo de la URL si es necesario
+        let nombreArchivoParaBackend = nombreArchivo;
+        if (nombreArchivo.includes('/')) {
+          nombreArchivoParaBackend = nombreArchivo.split('/').pop() || nombreArchivo;
+        }
+        
         // Crear la URL completa
         const url = `${API_URL}/api/planes-quirurgicos/${planIdClean}/descargar-archivo`;
         
-        console.log("📤 Enviando solicitud a:", url);
+        console.log("📤 Enviando solicitud a:", url, "con nombre:", nombreArchivoParaBackend);
         
         const response = await fetch(url, {
           method: 'POST',
@@ -1472,7 +1505,7 @@ export const api = {
             'Content-Type': 'application/json',
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ nombreArchivo }),
+          body: JSON.stringify({ nombreArchivo: nombreArchivoParaBackend }),
         });
         
         console.log("📥 Respuesta de descarga:", {
@@ -1496,13 +1529,43 @@ export const api = {
           throw new Error(errorMessage);
         }
         
-        // Verificar si es un JSON (error) o un archivo
+        // Verificar si es un JSON (error o mensaje de Cloudinary)
         const contentType = response.headers.get('content-type');
         
         if (contentType && contentType.includes('application/json')) {
-          // Es un error en formato JSON
-          const errorData = await response.json();
-          throw new Error(errorData.detail || errorData.message || 'Error desconocido');
+          // Es una respuesta JSON
+          const responseData = await response.json();
+          
+          // Si es de Cloudinary con URL, abrirla
+          if (responseData.url && responseData.url.includes('http')) {
+            console.log("☁️ Redirigiendo a Cloudinary:", responseData.url);
+            window.open(responseData.url, '_blank');
+            
+            return {
+              success: true,
+              filename: nombreArchivoParaBackend,
+              message: "Archivo de Cloudinary abierto en nueva pestaña"
+            };
+          }
+          
+          // Si tiene mensaje de "Descargue desde la URL proporcionada"
+          if (responseData.message && responseData.message.includes("Descargue desde la URL")) {
+            console.log("ℹ️ Backend indica que el archivo está en URL externa");
+            
+            // Intentar extraer URL del mensaje o abrir nombreArchivo si es URL
+            if (nombreArchivo.includes('http')) {
+              window.open(nombreArchivo, '_blank');
+              return {
+                success: true,
+                filename: nombreArchivoParaBackend,
+                message: "Archivo externo abierto en nueva pestaña"
+              };
+            }
+            
+            throw new Error(responseData.message);
+          }
+          
+          throw new Error(responseData.detail || responseData.message || 'Error desconocido');
         }
         
         // Es un archivo, proceder con la descarga
@@ -1511,10 +1574,20 @@ export const api = {
         // Crear URL para el blob
         const blobUrl = window.URL.createObjectURL(blob);
         
+        // Extraer nombre de archivo del Content-Disposition o usar el proporcionado
+        let downloadName = nombreArchivoParaBackend;
+        const contentDisposition = response.headers.get('content-disposition');
+        if (contentDisposition) {
+          const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+          if (matches != null && matches[1]) {
+            downloadName = matches[1].replace(/['"]/g, '');
+          }
+        }
+        
         // Crear elemento <a> temporal para descargar
         const a = document.createElement('a');
         a.href = blobUrl;
-        a.download = nombreArchivo;
+        a.download = downloadName;
         document.body.appendChild(a);
         a.click();
         
@@ -1524,16 +1597,28 @@ export const api = {
           document.body.removeChild(a);
         }, 100);
         
-        console.log("✅ Archivo descargado exitosamente:", nombreArchivo);
+        console.log("✅ Archivo descargado exitosamente:", downloadName);
         
         return { 
           success: true, 
-          filename: nombreArchivo,
+          filename: downloadName,
           size: blob.size
         };
         
       } catch (error: any) {
         console.error("❌ Error descargando archivo:", error);
+        
+        // Si el error es sobre URL de Cloudinary, intentar abrir directamente
+        if (error.message.includes("Descargue desde la URL") && nombreArchivo.includes('http')) {
+          console.log("🔄 Intentando abrir URL directamente:", nombreArchivo);
+          window.open(nombreArchivo, '_blank');
+          
+          return {
+            success: true,
+            filename: nombreArchivo.split('/').pop() || 'archivo',
+            message: "Archivo abierto directamente desde URL"
+          };
+        }
         
         return {
           success: false,
@@ -1585,13 +1670,28 @@ export const api = {
       try {
         console.log(`📥 [GET] Obteniendo plan quirúrgico ID: ${id}`);
         
-        // Limpiar el ID si viene con prefijo 'plan_'
-        const planIdClean = id.replace('plan_', '');
+        // 🔴 CORRECCIÓN: Extraer solo el ID numérico del plan
+        let planIdClean = id;
+        if (id.startsWith('plan_')) {
+          planIdClean = id.replace('plan_', '');
+        }
+        
+        // Validar que el ID sea un número
+        const planIdNum = parseInt(planIdClean);
+        if (isNaN(planIdNum) || planIdNum <= 0) {
+          console.error(`❌ [GET] ID de plan inválido: ${id}`);
+          return {
+            success: false,
+            error: true,
+            message: "ID de plan inválido",
+            data: null
+          };
+        }
         
         // Obtener el plan específico
-        const response = await fetchAPI(`/api/planes-quirurgicos/${planIdClean}`);
+        const response = await fetchAPI(`/api/planes-quirurgicos/${planIdNum}`);
         
-        console.log(`📥 [GET] Respuesta para plan ID ${planIdClean}:`, response);
+        console.log(`📥 [GET] Respuesta para plan ID ${planIdNum}:`, response);
         
         // Si hay error, devolverlo directamente
         if (response && response.error === true) {
@@ -1617,7 +1717,11 @@ export const api = {
         
         if (planData && typeof planData === 'object' && Object.keys(planData).length > 0) {
           planTransformado = transformBackendToFrontend.planQuirurgico(planData);
-          console.log(`✅ [GET] Plan ${id} transformado exitosamente`, planTransformado);
+          console.log(`✅ [GET] Plan ${id} transformado exitosamente`, {
+            id: planTransformado.id,
+            paciente: planTransformado.datos_paciente?.nombre_completo,
+            totalArchivos: planTransformado.imagenes_adjuntas?.length || 0
+          });
         } else {
           console.warn(`⚠️ [GET] Plan ${id} tiene datos vacíos o inválidos`);
           return {
@@ -1658,7 +1762,7 @@ export const api = {
       
       console.log("📤 Datos para enviar al backend:", backendData);
       
-      // 🔴 CORRECCIÓN CRÍTICA: Asegurar que paciente_id sea un NÚMERO VÁLIDO
+      //  CORRECCIÓN CRÍTICA: Asegurar que paciente_id sea un NÚMERO VÁLIDO
       if (!backendData.paciente_id || backendData.paciente_id <= 0) {
         console.error("❌ Error: paciente_id inválido:", backendData.paciente_id);
         return {
@@ -1688,9 +1792,9 @@ export const api = {
         
         // Si result ya tiene error, devolverlo
         if (result.error === true) {
-          // 🔴 CORRECCIÓN ESPECÍFICA PARA "paciente no encontrado"
+          //  CORRECCIÓN ESPECÍFICA PARA "paciente no encontrado"
           if (result.message && result.message.includes("paciente no encontrado")) {
-            console.error("🔴 Error específico: paciente con ID", backendData.paciente_id, "no encontrado en la BD");
+            console.error(" Error específico: paciente con ID", backendData.paciente_id, "no encontrado en la BD");
             
             // Verificar si el paciente existe realmente
             try {
@@ -1737,19 +1841,24 @@ export const api = {
     });
   },
 
-  // 🔴 AGREGAR TAMBIÉN EN LA FUNCIÓN updatePlanQuirurgico:
   updatePlanQuirurgico: (id: string, data: any) => {
     const callKey = `updatePlanQuirurgico_${id}_${Date.now()}`;
     
     return preventDuplicateCall(callKey, async () => {
       console.log("📤 Actualizando plan quirúrgico ID:", id, "datos:", data);
       
+      //  IMPORTANTE: Extraer solo el ID numérico del plan
+      let planIdNum = id;
+      if (id.startsWith('plan_')) {
+        planIdNum = id.replace('plan_', '');
+      }
+      
       // Transformar datos para el backend
       const backendData = transformBackendToFrontend.planQuirurgicoToBackend(data);
       
       console.log("📤 Datos para enviar al backend:", backendData);
       
-      // 🔴 CORRECCIÓN CRÍTICA: Asegurar que paciente_id sea un NÚMERO VÁLIDO
+      //  CORRECCIÓN CRÍTICA: Asegurar que paciente_id sea un NÚMERO VÁLIDO
       if (!backendData.paciente_id || backendData.paciente_id <= 0) {
         console.error("❌ Error: paciente_id inválido:", backendData.paciente_id);
         return {
@@ -1761,17 +1870,18 @@ export const api = {
       }
       
       backendData.paciente_id = parseInt(String(backendData.paciente_id));
-                  
+                    
       try {
-        const result = await fetchAPI(`/api/planes-quirurgicos/${id}`, {
+        //  IMPORTANTE: Usar solo el ID numérico en la URL
+        const result = await fetchAPI(`/api/planes-quirurgicos/${planIdNum}`, {
           method: 'PUT',
           body: JSON.stringify(backendData)
         });
         
         if (result && result.error === true) {
-          // 🔴 CORRECCIÓN ESPECÍFICA PARA "paciente no encontrado"
+          // Manejar error de paciente no encontrado
           if (result.message && result.message.includes("paciente no encontrado")) {
-            console.error("🔴 Error específico: paciente con ID", backendData.paciente_id, "no encontrado en la BD");
+            console.error(" Error específico: paciente con ID", backendData.paciente_id, "no encontrado en la BD");
             
             // Verificar si el paciente existe realmente
             try {
@@ -1808,7 +1918,7 @@ export const api = {
     });
   },
 
-  // 🔴 AGREGAR ESTA FUNCIÓN PARA VERIFICAR paciente:
+  //  AGREGAR ESTA FUNCIÓN PARA VERIFICAR paciente:
   verificarpaciente: async (pacienteId: string | number) => {
     try {
       const pacienteIdNum = typeof pacienteId === 'string' ? parseInt(pacienteId) : pacienteId;
@@ -2077,7 +2187,7 @@ export const transformBackendToFrontend = {
       tipo: item.tipo || 'procedimiento'
     })) : [];
     
-    // 🔴 CORRECCIÓN: Procesar servicios incluidos CORRECTAMENTE
+    //  CORRECCIÓN: Procesar servicios incluidos CORRECTAMENTE
     let serviciosIncluidos = [];
     
     if (backendCotizacion.servicios_incluidos && Array.isArray(backendCotizacion.servicios_incluidos)) {
@@ -2125,7 +2235,7 @@ export const transformBackendToFrontend = {
       fecha_creacion: fechaCreacion || new Date().toISOString().split('T')[0],
       estado: estadoMap[backendCotizacion.estado_id] || backendCotizacion.estado_nombre || 'pendiente',
       items: items,
-      servicios_incluidos: serviciosIncluidos, // 🔴 Esto debe estar aquí
+      servicios_incluidos: serviciosIncluidos, //  Esto debe estar aquí
       serviciosIncluidos: serviciosIncluidos, // Para compatibilidad
       total: totalCalculado,
       subtotalProcedimientos: subtotalProcedimientos,
@@ -2280,7 +2390,7 @@ export const transformBackendToFrontend = {
     const paciente_id = backendPlan.paciente_id ? String(backendPlan.paciente_id) : '';
     const usuario_id = backendPlan.usuario_id ? String(backendPlan.usuario_id) : '1';
     
-    // 🔴 DATOS PERSONALES - PRIORIZAR JOIN CON paciente
+    //  DATOS PERSONALES - PRIORIZAR JOIN CON paciente
     const nombre_completo = backendPlan.nombre_completo_paciente || 
                           backendPlan.nombre_completo || 
                           'paciente no identificado';
@@ -2885,14 +2995,8 @@ export const transformBackendToFrontend = {
       precio: parseFloat(frontendOtroAdicional.precio) || 0,
     };
   },
-
   planQuirurgicoToBackend: (frontendPlan: any) => {
-    console.log("🚀 Transformando plan quirúrgico para backend:", {
-      id: frontendPlan.id,
-      paciente_id: frontendPlan.id_paciente,
-      hasEsquema: !!frontendPlan.esquema_mejorado
-    });
-    
+
     // Calcular IMC
     const peso = frontendPlan.datos_paciente?.peso ? parseFloat(frontendPlan.datos_paciente.peso) : null;
     const altura = frontendPlan.datos_paciente?.altura ? parseFloat(frontendPlan.datos_paciente.altura) : null;
@@ -2916,10 +3020,19 @@ export const transformBackendToFrontend = {
     
     // Calcular edad si no está presente
     let edad_calculada = frontendPlan.datos_paciente?.edad || frontendPlan.historia_clinica?.edad_calculada || 0;
-    let edad = edad_calculada; // Nuevo campo 'edad' (distinto de edad_calculada)
+    let edad = edad_calculada;
     
     if (!edad_calculada && frontendPlan.historia_clinica?.fecha_nacimiento) {
-      const fechaNacimiento = new Date(frontendPlan.historia_clinica.fecha_nacimiento);
+      const fechaNacimientoStr = frontendPlan.historia_clinica.fecha_nacimiento;
+      let fechaNacimiento: Date;
+      
+      //  CORREGIR: Formatear correctamente la fecha
+      if (fechaNacimientoStr.includes('T')) {
+        fechaNacimiento = new Date(fechaNacimientoStr);
+      } else {
+        fechaNacimiento = new Date(fechaNacimientoStr + 'T00:00:00');
+      }
+      
       const hoy = new Date();
       edad_calculada = hoy.getFullYear() - fechaNacimiento.getFullYear();
       edad = edad_calculada;
@@ -2936,7 +3049,7 @@ export const transformBackendToFrontend = {
       }
     }
     
-    // Obtener datos del paciente si existen
+    // Obtener datos del paciente
     const pacienteNombre = frontendPlan.datos_paciente?.nombre_completo || 
                           frontendPlan.historia_clinica?.nombre_completo || '';
     const pacienteIdentificacion = frontendPlan.datos_paciente?.identificacion || 
@@ -2954,51 +3067,90 @@ export const transformBackendToFrontend = {
     const notas_corporales = frontendPlan.historia_clinica?.notas_corporales || {};
     const esquema_mejorado = frontendPlan.esquema_mejorado || {};
     
+    //  CORREGIR: Formatear fechas correctamente
+    const fechaConsulta = frontendPlan.datos_paciente?.fecha_consulta;
+    const horaConsulta = frontendPlan.datos_paciente?.hora_consulta;
+    
+    let fechaConsultaFormateada = null;
+    let horaConsultaFormateada = null;
+    
+    if (fechaConsulta) {
+      // Asegurar que sea solo YYYY-MM-DD
+      if (fechaConsulta.includes('T')) {
+        fechaConsultaFormateada = fechaConsulta.split('T')[0];
+      } else {
+        fechaConsultaFormateada = fechaConsulta;
+      }
+    }
+    
+    if (horaConsulta) {
+      // Asegurar que sea formato HH:mm
+      if (horaConsulta.includes('T')) {
+        // Extraer solo la parte de la hora
+        const dateObj = new Date(horaConsulta);
+        horaConsultaFormateada = dateObj.toTimeString().substring(0, 5);
+      } else if (horaConsulta.includes(':')) {
+        horaConsultaFormateada = horaConsulta.substring(0, 5);
+      } else {
+        horaConsultaFormateada = '00:00';
+      }
+    }
+    
+    //  CORREGIR: Formatear fecha de nacimiento
+    let fechaNacimientoFormateada = null;
+    if (frontendPlan.historia_clinica?.fecha_nacimiento) {
+      const fechaNac = frontendPlan.historia_clinica.fecha_nacimiento;
+      if (fechaNac.includes('T')) {
+        fechaNacimientoFormateada = fechaNac.split('T')[0];
+      } else {
+        fechaNacimientoFormateada = fechaNac;
+      }
+    }
+    
     return {
-      // 1. IDs básicos (2 campos)
+      // 1. IDs básicos
       paciente_id: parseInt(frontendPlan.id_paciente) || 0,
       usuario_id: parseInt(frontendPlan.id_usuario || '1'),
       
-      // 2. Datos quirúrgicos básicos (6 campos)
+      // 2. Datos quirúrgicos básicos
       procedimiento_desc: frontendPlan.historia_clinica?.diagnostico || 
                         frontendPlan.historia_clinica?.motivo_consulta || '',
       anestesiologo: frontendPlan.conducta_quirurgica?.tipo_anestesia || '',
       materiales_requeridos: frontendPlan.historia_clinica?.diagnostico || '',
       notas_preoperatorias: frontendPlan.notas_doctor || '',
       riesgos: frontendPlan.historia_clinica?.diagnostico || '',
-      hora: frontendPlan.conducta_quirurgica?.duracion_estimada ? 
-            `00:${frontendPlan.conducta_quirurgica.duracion_estimada}:00` : null,
+      hora: horaConsultaFormateada, //  USAR HORA FORMATEADA
       
-      // 3. Fecha programada (1 campo)
-      fecha_programada: frontendPlan.datos_paciente?.fecha_consulta || null,
+      // 3. Fecha programada
+      fecha_programada: fechaConsultaFormateada,
       
-      // 4. Datos personales básicos (5 campos)
+      // 4. Datos personales básicos
       nombre_completo: pacienteNombre,
       peso: peso,
       altura: altura,
-      fecha_nacimiento: frontendPlan.historia_clinica?.fecha_nacimiento || null,
+      fecha_nacimiento: fechaNacimientoFormateada, //  USAR FECHA FORMATEADA
       imc: imc,
       
-      // 5. Imagen y procedimiento (4 campos)
+      // 5. Imagen y procedimiento
       imagen_procedimiento: imagen_procedimiento,
-      fecha_ultimo_procedimiento: null, // No disponible en frontend
+      fecha_ultimo_procedimiento: null,
       descripcion_procedimiento: frontendPlan.historia_clinica?.plan_conducta || '',
       detalles: frontendPlan.historia_clinica?.motivo_consulta || '',
       
-      // 6. Notas y tiempo cirugía (2 campos)
-      notas_doctor: frontendPlan.notas_doctor || '', // CAMBIADO: notas_del_doctor → notas_doctor
+      // 6. Notas y tiempo cirugía
+      notas_doctor: frontendPlan.notas_doctor || '',
       tiempo_cirugia_minutos: frontendPlan.conducta_quirurgica?.duracion_estimada || null,
       
-      // 7. Entidad y datos contacto (7 campos)
+      // 7. Entidad y datos contacto
       entidad: frontendPlan.historia_clinica?.entidad || '',
-      edad: edad, // NUEVO CAMPO: edad (no confundir con edad_calculada)
-      telefono: frontendPlan.historia_clinica?.telefono || '', // CAMBIADO: telefono_fijo → telefono
+      edad: edad,
+      telefono: frontendPlan.historia_clinica?.telefono || '',
       celular: frontendPlan.historia_clinica?.celular || '',
       direccion: frontendPlan.historia_clinica?.direccion || '',
       email: frontendPlan.historia_clinica?.email || '',
       motivo_consulta: frontendPlan.historia_clinica?.motivo_consulta || '',
       
-      // 8. Antecedentes (texto plano) (6 campos)
+      // 8. Antecedentes (texto plano)
       farmacologicos: frontendPlan.historia_clinica?.antecedentes?.farmacologicos || '',
       traumaticos: frontendPlan.historia_clinica?.antecedentes?.traumaticos || '',
       quirurgicos: frontendPlan.historia_clinica?.antecedentes?.quirurgicos || '',
@@ -3006,7 +3158,7 @@ export const transformBackendToFrontend = {
       toxicos: frontendPlan.historia_clinica?.antecedentes?.toxicos || '',
       habitos: frontendPlan.historia_clinica?.antecedentes?.habitos || '',
       
-      // 9. Examen físico (texto plano) (7 campos)
+      // 9. Examen físico (texto plano)
       cabeza: frontendPlan.historia_clinica?.notas_corporales?.cabeza || '',
       mamas: frontendPlan.historia_clinica?.notas_corporales?.mamas || '',
       tcs: frontendPlan.historia_clinica?.notas_corporales?.tcs || '',
@@ -3015,20 +3167,20 @@ export const transformBackendToFrontend = {
       extremidades: frontendPlan.historia_clinica?.notas_corporales?.extremidades || '',
       pies_faneras: frontendPlan.historia_clinica?.notas_corporales?.pies_faneras || '',
       
-      // 10. Identificación y consulta (6 campos)
+      // 10. Identificación y consulta
       identificacion: pacienteIdentificacion,
-      fecha_consulta: frontendPlan.datos_paciente?.fecha_consulta || new Date().toISOString().split('T')[0],
-      hora_consulta: frontendPlan.datos_paciente?.hora_consulta || new Date().toTimeString().slice(0, 5),
+      fecha_consulta: fechaConsultaFormateada,
+      hora_consulta: horaConsultaFormateada,
       categoriaIMC: categoriaIMC,
       edad_calculada: edad_calculada,
       ocupacion: frontendPlan.historia_clinica?.ocupacion || '',
       
-      // 11. Campos JSON (3 campos)
+      // 11. Campos JSON
       enfermedad_actual: enfermedad_actual,
       antecedentes: antecedentes,
       notas_corporales: notas_corporales,
       
-      // 12. Datos quirúrgicos específicos (7 campos)
+      // 12. Datos quirúrgicos específicos
       duracion_estimada: frontendPlan.conducta_quirurgica?.duracion_estimada || null,
       tipo_anestesia: frontendPlan.conducta_quirurgica?.tipo_anestesia || '',
       requiere_hospitalizacion: frontendPlan.conducta_quirurgica?.requiere_hospitalizacion || false,
@@ -3037,10 +3189,9 @@ export const transformBackendToFrontend = {
       firma_cirujano: frontendPlan.conducta_quirurgica?.firma_cirujano || '',
       firma_paciente: frontendPlan.conducta_quirurgica?.firma_paciente || '',
       
-      // 13. NUEVOS CAMPOS AGREGADOS (3 campos)
+      // 13. Campos adicionales
       plan_conducta: frontendPlan.historia_clinica?.plan_conducta || '',
       esquema_mejorado: esquema_mejorado
-      // fecha_modificacion se maneja automáticamente en el backend
     };
   },
 };

@@ -187,7 +187,7 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
                 notas_corporales_str = json_to_str(plan.notas_corporales)
                 esquema_mejorado_str = json_to_str(plan.esquema_mejorado)
                 
-                # Insertar plan quirúrgico
+                # Insertar plan quirúrgico - CORREGIDO
                 cursor.execute("""
                     INSERT INTO plan_quirurgico (
                         paciente_id, usuario_id, procedimiento_desc, anestesiologo,
@@ -204,7 +204,7 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
                         notas_corporales, duracion_estimada, tipo_anestesia,
                         requiere_hospitalizacion, tiempo_hospitalizacion,
                         reseccion_estimada, firma_cirujano, firma_paciente,
-                        esquema_mejorado, plan_conducta
+                        plan_conducta, esquema_mejorado
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
@@ -230,8 +230,8 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
                     antecedentes_str, notas_corporales_str, plan.duracion_estimada,
                     plan.tipo_anestesia, plan.requiere_hospitalizacion,
                     plan.tiempo_hospitalizacion, plan.reseccion_estimada,
-                    plan.firma_cirujano, plan.firma_paciente, esquema_mejorado_str,
-                    plan.plan_conducta
+                    plan.firma_cirujano, plan.firma_paciente, plan.plan_conducta,
+                    esquema_mejorado_str
                 ))
                 
                 plan_id = cursor.lastrowid
@@ -247,6 +247,8 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
         raise
     except Exception as e:
         print(f"❌ Error creando plan: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{plan_id}", response_model=dict)
@@ -267,7 +269,7 @@ def update_plan_quirurgico(plan_id: int, plan: PlanQuirurgicoUpdate):
                 notas_corporales_str = json_to_str(plan.notas_corporales)
                 esquema_mejorado_str = json_to_str(plan.esquema_mejorado)
                 
-                # Actualizar plan
+                # Actualizar plan - CORREGIDO
                 cursor.execute("""
                     UPDATE plan_quirurgico SET
                         procedimiento_desc = %s, anestesiologo = %s,
@@ -317,6 +319,8 @@ def update_plan_quirurgico(plan_id: int, plan: PlanQuirurgicoUpdate):
         raise
     except Exception as e:
         print(f"❌ Error actualizando plan: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{plan_id}", response_model=dict)
