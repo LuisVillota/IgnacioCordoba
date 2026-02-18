@@ -32,12 +32,20 @@ export function PacienteForm({ paciente, onSave, onClose }: pacienteFormProps) {
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
+    // Validar campos obligatorios
     if (!formData.nombres.trim()) newErrors.nombres = "El nombre es requerido"
     if (!formData.apellidos.trim()) newErrors.apellidos = "El apellido es requerido"
     if (!formData.documento.trim()) newErrors.documento = "El documento es requerido"
     if (!formData.telefono.trim()) newErrors.telefono = "El teléfono es requerido"
-    if (!formData.email.trim()) newErrors.email = "El email es requerido"
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = "Email inválido"
+    
+    // Validar email solo si tiene contenido y es inválido
+    if (formData.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(formData.email.trim())) {
+        newErrors.email = "Email inválido"
+      }
+    }
+    // Si el email está vacío, no es obligatorio, no se agrega error
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -157,14 +165,17 @@ export function PacienteForm({ paciente, onSave, onClose }: pacienteFormProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email <span className="text-xs text-gray-500 font-normal">(Opcional)</span>
+            </label>
             <input
-              type="email"
+              type="text"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${
                 errors.email ? "border-red-500" : "border-gray-300"
               }`}
+              placeholder="ejemplo@correo.com"
             />
             {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
           </div>

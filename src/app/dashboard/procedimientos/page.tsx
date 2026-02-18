@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Edit2, Loader2, RefreshCw } from "lucide-react"
+import { Plus, Edit2, Loader2, RefreshCw, Trash2 } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { ProcedimientoForm } from "../../../components/ProcedimientoForm"
 import { ProcedimientoModal } from "../../../components/ProcedimientoModal"
@@ -230,6 +230,46 @@ export default function ProcedimientosPage() {
     setShowForm(true)
   }
 
+  const handleDelete = async (item: ItemBase) => {
+    if (!confirm(`¿Estás seguro de que deseas eliminar "${item.nombre}"? Esta acción no se puede deshacer.`)) {
+      return
+    }
+
+    try {
+      const idNumber = parseInt(item.id.trim())
+      if (isNaN(idNumber)) {
+        alert("ID inválido para eliminar")
+        return
+      }
+
+      switch (tab) {
+        case "procedimientos":
+          await api.deleteCatalogoProcedimiento(idNumber)
+          break
+        case "adicionales":
+          await api.deleteAdicional(idNumber)
+          break
+        case "otros":
+          await api.deleteOtroAdicional(idNumber)
+          break
+      }
+
+      // Eliminar localmente para una respuesta más rápida
+      setData(prevData => prevData.filter(i => i.id !== item.id))
+      
+      // Si el elemento seleccionado es el que se está eliminando, deseleccionarlo
+      if (selected?.id === item.id) {
+        setSelected(null)
+      }
+
+      alert(`${tab === "procedimientos" ? "Procedimiento" : tab === "adicionales" ? "Adicional" : "Otro adicional"} eliminado exitosamente`)
+    } catch (err: any) {
+      alert(`Error al eliminar: ${handleApiError(err)}`)
+      // Refrescar datos en caso de error para mantener consistencia
+      await refreshData()
+    }
+  }
+
   const openNewForm = () => {
     setSelected(null)
     setEditingId(null)
@@ -383,6 +423,17 @@ export default function ProcedimientosPage() {
                               disabled={refreshing}
                             >
                               <Edit2 size={18} />
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDelete(item)
+                              }}
+                              className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                              title="Eliminar"
+                              disabled={refreshing}
+                            >
+                              <Trash2 size={18} />
                             </button>
                           </div>
                         </td>

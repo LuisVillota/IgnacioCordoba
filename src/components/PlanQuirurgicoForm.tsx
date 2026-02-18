@@ -5,6 +5,7 @@ import { PlanQuirurgico } from "../types/planQuirurgico"
 import { Search, Upload, X, Eye, Download } from "lucide-react"
 import { api } from "../lib/api"
 import { EsquemaViewer } from "../components/EsquemaViewer"
+import { CotizacionForm } from "../components/CotizacionForm"
 
 type ProcedureType = 'liposuction' | 'lipotransfer';
 
@@ -39,6 +40,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // Estado para el visor de esquemas
   // ---------------------------
   const [showEsquemaViewer, setShowEsquemaViewer] = useState(false)
+
+  // ---------------------------
+  // NUEVO: Estado para el modal de cotización
+  // ---------------------------
+  const [showCotizacionModal, setShowCotizacionModal] = useState(false)
+  const [planPendienteGuardar, setPlanPendienteGuardar] = useState<PlanQuirurgico | null>(null)
 
   // ---------------------------
   // Estado para archivos/imágenes
@@ -194,12 +201,9 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
   const [showTextModal, setShowTextModal] = useState(false);
   
-  // NUEVO: Estado para controlar el modo de selección de zonas
   const [isZoneSelectionMode, setIsZoneSelectionMode] = useState(false);
-  // NUEVO: Estado para controlar la visibilidad de los botones de procedimientos adicionales
   const [showAdditionalButtons, setShowAdditionalButtons] = useState(false);
   
-  // Para zonas marcadas
   const [zoneMarkings, setZoneMarkings] = useState<ZoneMarkingsSVG>(() => {
     if (plan?.esquema_mejorado?.zoneMarkings) {
       return plan.esquema_mejorado.zoneMarkings;
@@ -207,7 +211,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     return {};
   });
 
-  // Inicializar el historial de selección si hay datos en el plan
   useEffect(() => {
     if (plan?.esquema_mejorado?.selectedProcedure) {
       const procedure = plan.esquema_mejorado.selectedProcedure;
@@ -224,7 +227,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     }
   }, [plan]);
 
-  // Cargar archivos cuando hay un plan existente
   useEffect(() => {
     if (plan?.id) {
       cargarArchivosDelPlan(plan.id);
@@ -236,21 +238,13 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   const saveDropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ---------------------------
-  // Efecto para sincronizar el ref con el estado
-  // ---------------------------
   useEffect(() => {
     selectedProcedureRef.current = selectedProcedure;
   }, [selectedProcedure]);
 
-  // ---------------------------
-  // Efecto para inicializar fecha y hora automáticamente si no hay plan
-  // Y cargar pacientes automáticamente
-  // ---------------------------
   useEffect(() => {
     const initializeForm = async () => {
       if (!plan) {
-        // Cargar pacientes automáticamente cuando se crea un nuevo plan
         await cargarpacientes();
         
         const now = new Date();
@@ -263,10 +257,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           hora_consulta: hora
         }));
       } else if (plan.datos_paciente?.id) {
-        // Si ya hay un plan, cargar el paciente específico
         await cargarpacientes();
         
-        // Buscar el paciente en la lista cargada
         const paciente = pacientes.find(p => p.id.toString() === plan.datos_paciente.id);
         if (paciente) {
           setpacienteSeleccionado(paciente);
@@ -286,18 +278,14 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     
     setIsLoadingArchivos(true);
     try {
-      console.log("📥 Cargando archivos del plan:", planId);
-      
       const result = await api.getPlanQuirurgico(planId);
       
       if (result.success && result.imagenes_adjuntas) {
         setArchivosCargados(Array.isArray(result.imagenes_adjuntas) ? result.imagenes_adjuntas : []);
         setImagenesAdjuntas(Array.isArray(result.imagenes_adjuntas) ? result.imagenes_adjuntas : []);
-        console.log(`✅ Cargados ${result.imagenes_adjuntas.length} archivos del plan`);
       } else {
         setArchivosCargados([]);
         setImagenesAdjuntas([]);
-        console.log("ℹ️ No hay archivos adjuntos para este plan");
       }
     } catch (error) {
       console.error("❌ Error cargando archivos del plan:", error);
@@ -316,23 +304,19 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       handleFileUpload(file);
     });
     
-    // Resetear el input para permitir seleccionar el mismo archivo nuevamente
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
   const handleFileUpload = async (file: File) => {
-    // Verificar si ya tenemos un plan guardado
     const planId = plan?.id;
     
-    // Verificar que planId exista y tenga el formato correcto
     if (!planId || planId === '' || planId === 'plan_') {
       alert("Debe guardar el plan primero antes de subir archivos");
       return;
     }
     
-    // Extraer el ID numérico del plan
     let planIdNum: number | string;
     
     if (planId.startsWith('plan_')) {
@@ -341,14 +325,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       planIdNum = planId;
     }
     
-    // Convertir a número y validar
     const planIdParsed = parseInt(planIdNum as string);
     if (isNaN(planIdParsed) || planIdParsed <= 0) {
       alert("ID de plan inválido. Guarde el plan primero.");
       return;
     }
     
-    // Verificar tipo de archivo
     const allowedTypes = [
       'image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp', 
       'application/pdf'
@@ -359,7 +341,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       return;
     }
     
-    // Verificar tamaño (15MB máximo para PDFs, 10MB para imágenes)
     const maxSize = file.type === 'application/pdf' ? 15 * 1024 * 1024 : 10 * 1024 * 1024;
     if (file.size > maxSize) {
       alert(`El archivo es demasiado grande. Máximo ${maxSize / (1024 * 1024)}MB para ${file.type.includes('image') ? 'imágenes' : 'PDFs'}.`);
@@ -371,9 +352,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     setUploadProgress(prev => ({ ...prev, [fileName]: 0 }));
     
     try {
-      console.log("📤 Subiendo archivo:", fileName, "para plan ID:", planIdParsed);
-      
-      // Simular progreso
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
           const currentProgress = prev[fileName] || 0;
@@ -385,20 +363,15 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         });
       }, 200);
       
-      // Subir archivo usando la API
       const result = await api.uploadPlanArchivo(planIdParsed, file);
       
       clearInterval(progressInterval);
       setUploadProgress(prev => ({ ...prev, [fileName]: 100 }));
       
       if (result.success && result.url) {
-        console.log("✅ Archivo subido exitosamente:", result.url);
-        
-        // Agregar a la lista de archivos cargados
         setArchivosCargados(prev => [...prev, result.url]);
         setImagenesAdjuntas(prev => [...prev, result.url]);
         
-        // Mostrar mensaje de éxito
         setTimeout(() => {
           setUploadingFiles(prev => {
             const newState = { ...prev };
@@ -440,12 +413,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     }
     
     try {
-      console.log("📥 Descargando archivo:", fileName, "desde URL:", url);
-      
-      // Extraer solo el nombre del archivo para el backend
       let nombreArchivo = fileName;
       
-      // Si la URL es de Cloudinary, extraer el nombre del archivo
       if (url.includes('cloudinary.com')) {
         const urlParts = url.split('/');
         const planesIndex = urlParts.indexOf('planes');
@@ -457,17 +426,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         nombreArchivo = urlParts[urlParts.length - 1];
       }
       
-      console.log("📤 Enviando a API:", { nombreArchivo, planId });
-      
-      // Usar la función de la API para descargar
       const result = await api.downloadPlanFile(nombreArchivo, planId);
       
       if (result.success) {
         console.log("✅ Archivo descargado exitosamente");
       } else {
-        // Si falla pero tenemos una URL, intentar abrirla directamente
         if (url.includes('http')) {
-          console.log("🔄 Abriendo URL directamente:", url);
           window.open(url, '_blank');
         } else {
           alert(result.message || "Error descargando archivo");
@@ -476,7 +440,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     } catch (error: any) {
       console.error("❌ Error descargando archivo:", error);
       
-      // Si hay error, intentar abrir directamente la URL si es completa
       if (url.includes('http')) {
         window.open(url, '_blank');
       } else {
@@ -489,7 +452,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     if (url.includes('http')) {
       window.open(url, '_blank');
     } else {
-      // Si es una URL relativa, construirla completa
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://ignaciocordoba-backend.onrender.com";
       const fullUrl = url.startsWith('/') ? `${apiUrl}${url}` : `${apiUrl}/${url}`;
       window.open(fullUrl, '_blank');
@@ -501,13 +463,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       return;
     }
     
-    // Actualizar estados locales
     setArchivosCargados(prev => prev.filter((_, i) => i !== index));
     setImagenesAdjuntas(prev => prev.filter((_, i) => i !== index));
-    
-    // Nota: Para eliminar físicamente del servidor/Cloudinary,
-    // necesitaríamos un endpoint DELETE específico en el backend.
-    // Por ahora solo eliminamos de la lista local.
     
     console.log("🗑️ Archivo eliminado de la lista:", url);
   };
@@ -543,7 +500,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     try {
       const pacientesData = await api.getTodospacientes();
       
-      // Si la función devuelve un array directamente
       let pacientesArray = [];
       
       if (Array.isArray(pacientesData)) {
@@ -557,17 +513,13 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         return;
       }
       
-      // Mapear los campos
       const pacientesMapeados = pacientesArray.map((paciente: any) => {
-        // Crear nombre_completo
         const nombreCompleto = paciente.nombre_completo || 
           `${paciente.nombre || ''} ${paciente.apellido || ''}`.trim() || 
           'Nombre no disponible';
         
-        // Usar numero_documento como documento
         const documento = paciente.numero_documento || paciente.documento || '';
         
-        // Calcular edad
         let edad = paciente.edad || 0;
         if (!edad && paciente.fecha_nacimiento) {
           try {
@@ -610,7 +562,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       
       setpacientes(pacientesMapeados);
       
-      // Si ya hay un paciente seleccionado, mantenerlo
       if (datospaciente.id && pacientesMapeados.length > 0) {
         const pacienteExistente = pacientesMapeados.find((p: any) => 
           p.id.toString() === datospaciente.id.toString()
@@ -620,7 +571,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         }
       }
       
-      // Si no hay plan y no hay paciente seleccionado, mostrar selector
       if (!plan && !pacienteSeleccionado && pacientesMapeados.length > 0) {
         setShowSelectorpacientes(true);
       }
@@ -628,7 +578,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     } catch (error) {
       console.error("Error cargando pacientes:", error);
       
-      // Mostrar mensaje de error
       let errorMessage = "Error al cargar los pacientes";
       if (error instanceof Error) {
         if (error.message.includes("Failed to fetch") || error.message.includes("Network")) {
@@ -640,47 +589,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       
       alert(errorMessage);
       setpacientes([]);
-      
-      // Datos de ejemplo para desarrollo
-      if (process.env.NODE_ENV === 'development') {
-        console.log("Usando datos de ejemplo para desarrollo");
-        const pacientesEjemplo = [
-          {
-            id: "1",
-            nombre_completo: "María Pérez",
-            documento: "12345678",
-            edad: 35,
-            telefono: "3001234567",
-            email: "maria@ejemplo.com",
-            direccion: "Calle 123 #45-67",
-            fecha_nacimiento: "1989-05-15",
-            genero: "Femenino"
-          },
-          {
-            id: "2", 
-            nombre_completo: "Juan Rodríguez",
-            documento: "87654321",
-            edad: 42,
-            telefono: "3109876543",
-            email: "juan@ejemplo.com",
-            direccion: "Av. Principal #89-10",
-            fecha_nacimiento: "1982-08-22",
-            genero: "Masculino"
-          },
-          {
-            id: "3",
-            nombre_completo: "Ana Gómez",
-            documento: "23456789",
-            edad: 28,
-            telefono: "3204567890",
-            email: "ana@ejemplo.com",
-            direccion: "Carrera 56 #12-34",
-            fecha_nacimiento: "1996-03-10",
-            genero: "Femenino"
-          }
-        ];
-        setpacientes(pacientesEjemplo);
-      }
     } finally {
       setCargandopacientes(false);
     }
@@ -703,14 +611,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     );
   });
   
-  // ---------------------------
-  // Función para seleccionar un paciente
-  // ---------------------------
   const seleccionarpaciente = async (paciente: any) => {
     try {
       setpacienteSeleccionado(paciente);
       
-      // Calcular edad si no está en los datos
       let edad = paciente.edad || 0;
       if (!edad && paciente.fecha_nacimiento) {
         const fechaNacimiento = new Date(paciente.fecha_nacimiento);
@@ -727,7 +631,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         }
       }
       
-      // Actualizar datos del paciente en el formulario
       setDatospaciente(prev => ({
         ...prev,
         id: paciente.id.toString(),
@@ -736,7 +639,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         edad: edad
       }));
       
-      // Actualizar también la historia clínica con datos básicos
       setHistoriaClinica((prev: typeof historiaClinica) => ({
         ...prev,
         nombre_completo: paciente.nombre_completo || `${paciente.nombre} ${paciente.apellido}`.trim(),
@@ -750,7 +652,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         genero: paciente.genero || ''
       }));
       
-      // Cerrar el selector
       setShowSelectorpacientes(false);
       
     } catch (error) {
@@ -785,16 +686,14 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   }, [datospaciente.peso, datospaciente.altura])
 
   // ===========================
-  // FUNCIONES DEL ESQUEMA - CON NUEVAS FUNCIONALIDADES
+  // FUNCIONES DEL ESQUEMA
   // ===========================
 
-  // NUEVO: Función para alternar el modo de selección de zonas
   const toggleZoneSelectionMode = () => {
     const newZoneMode = !isZoneSelectionMode;
     setIsZoneSelectionMode(newZoneMode);
     setShowAdditionalButtons(newZoneMode);
     
-    // Desactivar otros modos cuando se activa selección de zonas
     if (newZoneMode) {
       if (isDrawingMode) {
         setIsDrawingMode(false);
@@ -811,7 +710,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     }
   };
 
-  // NUEVO: Función para manejar los botones adicionales (1-7)
   const handleAdditionalButtonClick = (buttonNumber: number) => {
     alert(`Funcionalidad del botón ${buttonNumber} - Por implementar`);
   };
@@ -1007,7 +905,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   };
 
   const getSVGPoint = (e: MouseEvent, svgDoc: Document) => {
-    // CORRECCIÓN: Usar type assertion a unknown primero, luego a SVGSVGElement
     const svg = svgDoc.documentElement as unknown as SVGSVGElement;
     const pt = svg.createSVGPoint();
 
@@ -1046,13 +943,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       svgDoc.documentElement.insertBefore(defs, svgDoc.documentElement.firstChild);
     }
 
-    // Limpiar patrones existentes
     const existingPatterns = defs.querySelectorAll('pattern[id*="liposuction"], pattern[id*="lipotransfer"]');
     existingPatterns.forEach(pattern => {
       pattern.remove();
     });
 
-    // Patrón de liposucción - LÍNEAS DIAGONALES ROJAS
     const lipoPattern = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'pattern');
     lipoPattern.setAttribute('id', 'liposuction-pattern');
     lipoPattern.setAttribute('patternUnits', 'userSpaceOnUse');
@@ -1071,14 +966,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     lipoPattern.appendChild(lipoLine);
     defs.appendChild(lipoPattern);
 
-    // Patrón de lipotransferencia - CUADRÍCULA AZUL
     const transferPattern = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'pattern');
     transferPattern.setAttribute('id', 'lipotransfer-pattern');
     transferPattern.setAttribute('patternUnits', 'userSpaceOnUse');
     transferPattern.setAttribute('width', '10');
     transferPattern.setAttribute('height', '10');
     
-    // Línea horizontal azul
     const transferLineH = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
     transferLineH.setAttribute('x1', '0');
     transferLineH.setAttribute('y1', '0');
@@ -1087,7 +980,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     transferLineH.setAttribute('stroke', '#0000FF');
     transferLineH.setAttribute('stroke-width', '1');
     
-    // Línea vertical azul
     const transferLineV = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
     transferLineV.setAttribute('x1', '0');
     transferLineV.setAttribute('y1', '0');
@@ -1104,31 +996,25 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   };
 
   const applyProcedurePattern = useCallback((element: SVGElement, procedure: 'liposuction' | 'lipotransfer') => {
-    // Verificar que los patrones existan
     const svgDoc = element.ownerDocument;
     
-    // Guardar el fill original si no está ya guardado
     const currentFill = element.getAttribute('fill');
     if (!element.hasAttribute('data-original-fill')) {
       element.setAttribute('data-original-fill', currentFill || 'none');
     }
     
-    // Guardar la opacidad original
     const currentOpacity = element.style.fillOpacity || element.getAttribute('fill-opacity') || '0.09';
     if (!element.hasAttribute('data-original-opacity')) {
       element.setAttribute('data-original-opacity', currentOpacity);
     }
     
-    // Limpiar y aplicar nuevo patrón
     element.style.fill = '';
     
-    // Crear ID único para la zona si no existe
     if (!element.hasAttribute('data-zone-id')) {
       const zoneId = `zone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       element.setAttribute('data-zone-id', zoneId);
     }
     
-    // Aplicar el patrón correcto
     if (procedure === 'liposuction') {
       element.setAttribute('fill', 'url(#liposuction-pattern)');
       element.setAttribute('data-procedure', 'liposuction');
@@ -1139,7 +1025,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       element.style.fillOpacity = '1';
     }
     
-    // Actualizar estado de zonas marcadas
     const zoneId = element.getAttribute('data-zone-id');
     if (zoneId) {
       setZoneMarkings(prev => ({
@@ -1167,7 +1052,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     
     element.removeAttribute('data-procedure');
     
-    // Actualizar estado de zonas marcadas
     const zoneId = element.getAttribute('data-zone-id');
     if (zoneId) {
       setZoneMarkings(prev => {
@@ -1185,7 +1069,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       const svgDoc = objectElement.contentDocument;
       if (!svgDoc) return;
 
-      // Agregar al array de documentos
       setSvgDocuments(prev => {
         const exists = prev.some(doc => doc === svgDoc);
         if (!exists) {
@@ -1194,45 +1077,37 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         return prev;
       });
 
-      // Crear patrones
       createPatterns(svgDoc);
 
-      // CORRECCIÓN: Usar type assertion a unknown primero, luego a SVGSVGElement
       const svgElement = svgDoc.documentElement as unknown as SVGSVGElement;
       
       svgElement.style.userSelect = 'none';
       svgElement.style.webkitUserSelect = 'none';
       
-      // Configurar eventos
       svgElement.addEventListener('mousedown', (e) => startDrawing(e as MouseEvent, svgDoc));
       svgElement.addEventListener('mousemove', (e) => continueDrawing(e as MouseEvent, svgDoc));
       svgElement.addEventListener('mouseup', (e) => stopDrawing(e as MouseEvent, svgDoc));
       svgElement.addEventListener('mouseleave', (e) => stopDrawing(e as MouseEvent, svgDoc));
 
-      // Encontrar zonas de forma más agresiva
       const possibleZoneElements = svgDoc.querySelectorAll('path, rect, circle, ellipse, polygon, g');
       
       possibleZoneElements.forEach((element: Element) => {
         const svgElement = element as SVGElement;
         
-        // Marcar todos los elementos posibles como zonas
         if (!svgElement.classList.contains('zone')) {
           svgElement.classList.add('zone');
           svgElement.style.cursor = 'pointer';
           svgElement.style.pointerEvents = 'auto';
           
-          // Asegurar que tenga algún fill para ser visible
           if (!svgElement.getAttribute('fill') && !svgElement.hasAttribute('data-original-fill')) {
             svgElement.setAttribute('data-original-fill', 'none');
           }
           
-          // Guardar la opacidad original
           const originalOpacity = svgElement.style.fillOpacity || svgElement.getAttribute('fill-opacity') || '0.09';
           if (!svgElement.hasAttribute('data-original-opacity')) {
             svgElement.setAttribute('data-original-opacity', originalOpacity);
           }
           
-          // Crear ID único para la zona
           if (!svgElement.hasAttribute('data-zone-id')) {
             const zoneId = `zone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             svgElement.setAttribute('data-zone-id', zoneId);
@@ -1250,15 +1125,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             const currentProcedure = svgElement.getAttribute('data-procedure');
             
             if (currentProcedure) {
-              // Si ya tiene un procedimiento, removerlo
               removeProcedurePattern(svgElement);
               
-              // Remover del historial
               setSelectionHistory(prev => prev.filter(item => 
                 !(item.type === 'zone' && item.element === svgElement)
               ));
             } else {
-              // Usar el valor actual del ref
               applyProcedurePattern(svgElement, currentProcedureFromRef);
               
               setSelectionHistory(prev => [...prev, {
@@ -1271,7 +1143,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         }
       });
 
-      // Deshabilitar interacción con textos existentes
       const textElements = svgDoc.querySelectorAll('text');
       textElements.forEach(text => {
         text.style.pointerEvents = 'none';
@@ -1279,7 +1150,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         text.style.webkitUserSelect = 'none';
       });
 
-      // Aplicar clases según modo actual
       if (isDrawingMode) {
         svgElement.classList.add('drawing-mode');
       }
@@ -1290,7 +1160,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
 
     objectElement.addEventListener('load', handleLoad);
     
-    // Si ya está cargado
     if (objectElement.contentDocument) {
       handleLoad();
     }
@@ -1300,7 +1169,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     };
   }, [isDrawingMode, isTextMode, applyProcedurePattern]);
 
-  // Inicializar los SVG cuando los refs estén listos
   useEffect(() => {
     if (bodySvgRef.current) {
       initializeSchema(bodySvgRef.current);
@@ -1310,7 +1178,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     }
   }, [initializeSchema]);
 
-  // Actualizar clases cuando cambian los modos
   useEffect(() => {
     svgDocuments.forEach(doc => {
       const svgElement = doc.documentElement as unknown as SVGSVGElement;
@@ -1326,7 +1193,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     });
   }, [isDrawingMode, isTextMode, svgDocuments]);
 
-  // Teclas de acceso rápido
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter' && showTextModal) {
@@ -1340,7 +1206,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [showTextModal, textInput]);
 
-  // Cerrar dropdown al hacer click fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (saveDropdownRef.current && !saveDropdownRef.current.contains(event.target as Node)) {
@@ -1352,21 +1217,16 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ---------------------------
-  // Manejar archivos ANTIGUO (mantener para compatibilidad)
-  // ---------------------------
   const handleFilesOld = (files: FileList | null) => {
     if (!files) return
     const arr = Array.from(files).map(f => f.name)
     setImagenesAdjuntas(prev => [...prev, ...arr])
   }
 
-  // Eliminar imagen adjunta ANTIGUA
   const eliminarImagenAdjunta = (index: number) => {
     setImagenesAdjuntas(prev => prev.filter((_, i) => i !== index))
   }
 
-  // Calcular edad desde fecha nacimiento si se ingresa en historia
   useEffect(() => {
     const dob = historiaClinica.fecha_nacimiento
     if (!dob) return
@@ -1376,31 +1236,35 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     setDatospaciente(prev => ({ ...prev, edad: age }))
   }, [historiaClinica.fecha_nacimiento])
 
-  // Guardar esquema
   const handleSaveSchema = async (format: 'png' | 'pdf') => {
     setShowSaveDropdown(false);
     alert(`Funcionalidad de exportar a ${format.toUpperCase()} será implementada con html2canvas y jsPDF`);
   };
 
   // ---------------------------
-  // Guardar plan quirúrgico
+  // NUEVA LÓGICA: Construir el plan y abrir cotización antes de guardar
   // ---------------------------
-  const handleSubmit = () => {
+  const construirPlan = (): PlanQuirurgico | null => {
     if (!plan && !datospaciente.id) {
       alert("Debe seleccionar un paciente antes de guardar")
-      return
+      return null
     }
 
-    // Función para limpiar y convertir valores numéricos
+    if (!datospaciente.nombre_completo) {
+      alert("El nombre completo del paciente es requerido")
+      return null
+    }
+    if (!datospaciente.identificacion) {
+      alert("La identificación del paciente es requerida")
+      return null
+    }
+
     const limpiarValorNumerico = (valor: any): number | null => {
-      if (valor === null || valor === undefined || valor === '') {
-        return null;
-      }
+      if (valor === null || valor === undefined || valor === '') return null;
       const num = parseFloat(valor.toString());
       return isNaN(num) ? null : num;
     };
 
-    // Preparar datos limpios
     const datospacienteLimpios = {
       id: datospaciente.id,
       identificacion: datospaciente.identificacion,
@@ -1427,10 +1291,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       duracion_estimada: limpiarValorNumerico(conductaQuirurgica.duracion_estimada),
     };
 
-    //  IMPORTANTE: Extraer solo el ID numérico para el plan
-    const planIdNum = plan?.id ? plan.id.replace('plan_', '') : '';
-
-    const nuevoPlan: PlanQuirurgico = {
+    return {
       id: plan?.id ?? `plan_${Date.now()}`,
       id_paciente: datospaciente.id || plan?.id_paciente || "",
       id_usuario: plan?.id_usuario ?? "1",
@@ -1451,9 +1312,61 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         selectedProcedure
       }
     }
-
-    onGuardar(nuevoPlan)
   }
+
+  // Interceptar el click de guardar: construir plan y abrir cotización
+  const handleClickGuardar = () => {
+    const nuevoPlan = construirPlan()
+    if (!nuevoPlan) return
+
+    // Guardamos el plan en estado temporal y abrimos el modal de cotización
+    setPlanPendienteGuardar(nuevoPlan)
+    setShowCotizacionModal(true)
+  }
+
+  // Llamado cuando se guarda exitosamente la cotización desde el modal
+  const handleCotizacionGuardada = async (cotizacionData: any) => {
+    // 1. Cerrar el modal de cotización
+    setShowCotizacionModal(false)
+
+    if (!planPendienteGuardar) return
+
+    try {
+      // 2. Guardar la cotización en el backend
+      const { api: apiInstance } = await import("../lib/api")
+      
+      if (cotizacionData._backendData) {
+        if (cotizacionData._isEditing && cotizacionData._cotizacionId) {
+          await apiInstance.updateCotizacion(cotizacionData._cotizacionId, cotizacionData._backendData)
+        } else {
+          await apiInstance.createCotizacion(cotizacionData._backendData)
+        }
+      }
+    } catch (error) {
+      console.error("Error guardando cotización:", error)
+      // Aun si falla la cotización, procedemos a guardar el plan
+    }
+
+    // 3. Guardar el plan quirúrgico
+    onGuardar(planPendienteGuardar)
+    setPlanPendienteGuardar(null)
+  }
+
+  // Llamado cuando se cierra/cancela el modal de cotización sin guardar
+  const handleCotizacionCancelada = () => {
+    setShowCotizacionModal(false)
+    setPlanPendienteGuardar(null)
+  }
+
+  // Datos del paciente formateados para pasar al CotizacionForm
+  const pacienteParaCotizacion = pacienteSeleccionado
+    ? {
+        id: parseInt(pacienteSeleccionado.id),
+        nombre: pacienteSeleccionado.nombre || datospaciente.nombre_completo.split(' ')[0],
+        apellido: pacienteSeleccionado.apellido || datospaciente.nombre_completo.split(' ').slice(1).join(' '),
+        numero_documento: pacienteSeleccionado.numero_documento || datospaciente.identificacion,
+      }
+    : null
 
   // ---------------------------
   // RENDER
@@ -1461,7 +1374,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   return (
     <div className="space-y-8">
 
-      {/* BOTÓN CANCELAR (solo si viene de onCancel) */}
+      {/* BOTÓN CANCELAR */}
       {onCancel && (
         <div className="mb-4">
           <button
@@ -1473,11 +1386,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </div>
       )}
 
-      {/* SELECTOR DE paciente (solo cuando se crea nuevo o no hay selección) */}
+      {/* SELECTOR DE PACIENTE */}
       {(!plan || !pacienteSeleccionado) && (
         <section className="p-4 border rounded bg-white">
           <h3 className="font-bold text-lg text-[#1a6b32] mb-3">
-            {plan ? "paciente del Plan" : "Seleccionar paciente"}
+            {plan ? "Paciente del Plan" : "Seleccionar Paciente"}
           </h3>
           
           {pacienteSeleccionado ? (
@@ -1485,7 +1398,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               <div className="flex justify-between items-center">
                 <div>
                   <div className="font-semibold text-green-800">
-                    paciente seleccionado: {pacienteSeleccionado.nombre_completo}
+                    Paciente seleccionado: {pacienteSeleccionado.nombre_completo}
                   </div>
                   <div className="text-sm text-green-700">
                     Documento: {pacienteSeleccionado.numero_documento || pacienteSeleccionado.documento} | 
@@ -1513,12 +1426,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               >
                 <div className="flex flex-col items-center justify-center gap-2">
                   <span className="text-2xl">👤</span>
-                  <span className="font-medium text-gray-700">Seleccionar paciente</span>
+                  <span className="font-medium text-gray-700">Seleccionar Paciente</span>
                   <span className="text-sm text-gray-500">Haz clic para elegir un paciente de la lista</span>
                 </div>
               </button>
               
-              {/* Mostrar cargando si está cargando pacientes */}
               {cargandopacientes && (
                 <div className="mt-4 text-center">
                   <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#1a6b32] mb-2"></div>
@@ -1528,25 +1440,17 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             </div>
           )}
 
-          {/* Modal/Selector de pacientes */}
           {showSelectorpacientes && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
-              {/* Encabezado */}
               <div className="p-4 border-b flex justify-between items-center bg-[#1a6b32] text-white">
                 <div>
-                  <h3 className="text-lg font-semibold">Seleccionar paciente</h3>
+                  <h3 className="text-lg font-semibold">Seleccionar Paciente</h3>
                   <p className="text-sm opacity-90">Seleccione un paciente para el plan quirúrgico</p>
                 </div>
-                <button
-                  onClick={() => setShowSelectorpacientes(false)}
-                  className="text-white hover:text-gray-200 text-xl"
-                >
-                  ✕
-                </button>
+                <button onClick={() => setShowSelectorpacientes(false)} className="text-white hover:text-gray-200 text-xl">✕</button>
               </div>
               
-              {/* Barra de búsqueda */}
               <div className="p-4 border-b">
                 <div className="relative">
                   <Search className="absolute left-3 top-3 text-gray-400" size={20} />
@@ -1560,7 +1464,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                 </div>
               </div>
               
-              {/* Contenido principal */}
               <div className="flex-1 overflow-hidden">
                 {cargandopacientes ? (
                   <div className="flex items-center justify-center h-64">
@@ -1574,17 +1477,13 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                     <div className="text-center">
                       <span className="text-3xl mb-3 block">😕</span>
                       <p className="text-gray-600">No hay pacientes registrados</p>
-                      <button
-                        onClick={cargarpacientes}
-                        className="mt-3 px-4 py-2 bg-[#1a6b32] text-white rounded hover:bg-[#155228]"
-                      >
+                      <button onClick={cargarpacientes} className="mt-3 px-4 py-2 bg-[#1a6b32] text-white rounded hover:bg-[#155228]">
                         Reintentar
                       </button>
                     </div>
                   </div>
                 ) : (
                   <div className="h-full overflow-y-auto">
-                    {/* Tabla */}
                     <div className="min-w-full">
                       <table className="w-full">
                         <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
@@ -1616,18 +1515,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                                     {paciente.nombre_completo || `${paciente.nombre} ${paciente.apellido}`.trim()}
                                   </p>
                                 </td>
-                                <td className="px-6 py-4 text-sm text-gray-600">
-                                  {paciente.numero_documento || paciente.documento}
-                                </td>
-                                <td className="px-6 py-4 text-sm text-gray-600">
-                                  {paciente.telefono || "No registrado"}
-                                </td>
-                                <td className="px-6 py-4 text-sm text-gray-600">
-                                  {paciente.edad || 'No especificada'} años
-                                </td>
-                                <td className="px-6 py-4 text-sm text-gray-600">
-                                  {paciente.email || "No registrado"}
-                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-600">{paciente.numero_documento || paciente.documento}</td>
+                                <td className="px-6 py-4 text-sm text-gray-600">{paciente.telefono || "No registrado"}</td>
+                                <td className="px-6 py-4 text-sm text-gray-600">{paciente.edad || 'No especificada'} años</td>
+                                <td className="px-6 py-4 text-sm text-gray-600">{paciente.email || "No registrado"}</td>
                                 <td className="px-6 py-4 text-sm">
                                   <div className="flex items-center justify-center">
                                     <button
@@ -1648,7 +1539,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                 )}
               </div>
               
-              {/* Pie de página */}
               <div className="p-4 border-t flex justify-between items-center">
                 <div className="text-sm text-gray-600">
                   {pacientes.length > 0 && (
@@ -1660,10 +1550,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowSelectorpacientes(false)}
-                    className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-                  >
+                  <button onClick={() => setShowSelectorpacientes(false)} className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50">
                     Cancelar
                   </button>
                   <button
@@ -1682,85 +1569,38 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </section>
       )}
 
-      {/* DATOS DEL paciente */}
+      {/* DATOS DEL PACIENTE */}
       <section className="p-4 border rounded bg-white">
-        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Datos del paciente</h3>
+        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Datos del Paciente</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Identificación</label>
-            <input 
-              className="w-full border p-2 rounded bg-gray-50" 
-              placeholder="Identificación" 
-              value={datospaciente.identificacion}
-              readOnly
-            />
+            <input className="w-full border p-2 rounded bg-gray-50" placeholder="Identificación" value={datospaciente.identificacion} readOnly />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de consulta</label>
-            <input 
-              className="w-full border p-2 rounded" 
-              type="date" 
-              value={datospaciente.fecha_consulta || new Date().toISOString().split('T')[0]}
-              onChange={e => setDatospaciente(prev => ({ ...prev, fecha_consulta: e.target.value }))}
-            />
+            <input className="w-full border p-2 rounded" type="date" value={datospaciente.fecha_consulta || new Date().toISOString().split('T')[0]} onChange={e => setDatospaciente(prev => ({ ...prev, fecha_consulta: e.target.value }))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Hora de consulta</label>
-            <input 
-              className="w-full border p-2 rounded" 
-              type="time" 
-              value={datospaciente.hora_consulta || new Date().toTimeString().slice(0, 5)}
-              onChange={e => setDatospaciente(prev => ({ ...prev, hora_consulta: e.target.value }))}
-            />
+            <input className="w-full border p-2 rounded" type="time" value={datospaciente.hora_consulta || new Date().toTimeString().slice(0, 5)} onChange={e => setDatospaciente(prev => ({ ...prev, hora_consulta: e.target.value }))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
-            <input 
-              className="w-full border p-2 rounded bg-gray-50" 
-              placeholder="Nombre completo" 
-              value={datospaciente.nombre_completo}
-              readOnly
-            />
+            <input className="w-full border p-2 rounded bg-gray-50" placeholder="Nombre completo" value={datospaciente.nombre_completo} readOnly />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg)</label>
-            <input 
-              className="w-full border p-2 rounded" 
-              type="number" 
-              step="0.1"
-              placeholder="Peso (kg)" 
-              value={datospaciente.peso}
-              onChange={e => setDatospaciente(prev => ({ ...prev, peso: e.target.value }))} 
-            />
+            <input className="w-full border p-2 rounded" type="number" step="0.1" placeholder="Peso (kg)" value={datospaciente.peso} onChange={e => setDatospaciente(prev => ({ ...prev, peso: e.target.value }))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Altura (m)</label>
-            <input 
-              className="w-full border p-2 rounded" 
-              type="number" 
-              step="0.01"
-              placeholder="Altura (m)" 
-              value={datospaciente.altura}
-              onChange={e => setDatospaciente(prev => ({ ...prev, altura: e.target.value }))} 
-            />
+            <input className="w-full border p-2 rounded" type="number" step="0.01" placeholder="Altura (m)" value={datospaciente.altura} onChange={e => setDatospaciente(prev => ({ ...prev, altura: e.target.value }))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
-            <input 
-              className="w-full border p-2 rounded" 
-              type="date" 
-              placeholder="Fecha de nacimiento"
-              value={historiaClinica.fecha_nacimiento}
-              onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, fecha_nacimiento: e.target.value }))}
-            />
+            <input className="w-full border p-2 rounded" type="date" placeholder="Fecha de nacimiento" value={historiaClinica.fecha_nacimiento} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, fecha_nacimiento: e.target.value }))} />
           </div>
-          
           <div className="p-3 bg-gray-50 rounded border">
             <div className="text-sm font-semibold">IMC: {datospaciente.imc ? datospaciente.imc.toFixed(1) : "—"}</div>
             <div className="text-xs text-gray-600">Categoría: {datospaciente.categoriaIMC || "—"}</div>
@@ -1769,9 +1609,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </div>
       </section>
 
-      {/* =========================== */}
-      {/* ESQUEMA MEJORADO - VERSIÓN CON EDITOR SEPARADO */}
-      {/* =========================== */}
+      {/* EDITOR DE ESQUEMAS */}
       <section className="p-4 border rounded bg-white">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Editor de Esquemas</h3>
@@ -1787,7 +1625,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </p>
       </section>
       
-      {/* VISOR DE ESQUEMAS - MODAL */}
       {showEsquemaViewer && (
         <EsquemaViewer 
           onClose={() => setShowEsquemaViewer(false)} 
@@ -1795,9 +1632,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         />
       )}
 
-      {/* =========================== */}
-      {/* SECCIÓN MEJORADA PARA ARCHIVOS */}
-      {/* =========================== */}
+      {/* ARCHIVOS ADJUNTOS */}
       <section className="p-4 border rounded bg-white">
         <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Archivos Adjuntos del Plan</h3>
 
@@ -1807,17 +1642,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             Formatos permitidos: JPG, PNG, GIF, BMP, WebP, PDF. Máximo 10MB por imagen, 15MB por PDF.
           </p>
           
-          {/* Área para subir archivos */}
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#1a6b32] transition-colors">
-            <input 
-              ref={fileInputRef}
-              type="file" 
-              multiple 
-              onChange={handleFileSelect} 
-              className="hidden" 
-              id="plan-file-upload"
-              accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf,image/*,application/pdf"
-            />
+            <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect} className="hidden" id="plan-file-upload" accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf,image/*,application/pdf" />
             <label htmlFor="plan-file-upload" className="cursor-pointer block">
               <div className="flex flex-col items-center justify-center gap-3">
                 <Upload className="text-gray-400" size={32} />
@@ -1825,15 +1651,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                   <span className="font-medium text-gray-700">Haga clic para seleccionar archivos</span>
                   <p className="text-sm text-gray-500 mt-1">o arrastre y suelte archivos aquí</p>
                 </div>
-                <span className="text-xs text-gray-400">
-                  Se permiten imágenes y PDFs (máx. 10MB imágenes, 15MB PDFs)
-                </span>
+                <span className="text-xs text-gray-400">Se permiten imágenes y PDFs (máx. 10MB imágenes, 15MB PDFs)</span>
               </div>
             </label>
           </div>
         </div>
 
-        {/* Lista de archivos cargados */}
         <div className="mt-4">
           <h4 className="font-medium text-gray-700 mb-3">Archivos cargados ({archivosCargados.length})</h4>
           
@@ -1862,58 +1685,24 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
                       <span className="text-xl">{fileIcon}</span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-800 truncate" title={fileName}>
-                            {fileName}
-                          </span>
-                          {isUploading && (
-                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                              Subiendo...
-                            </span>
-                          )}
+                          <span className="text-sm font-medium text-gray-800 truncate" title={fileName}>{fileName}</span>
+                          {isUploading && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Subiendo...</span>}
                         </div>
-                        <div className="text-xs text-gray-500">
-                          Archivo {index + 1} de {archivosCargados.length}
-                        </div>
-                        
-                        {/* Barra de progreso para archivos en subida */}
+                        <div className="text-xs text-gray-500">Archivo {index + 1} de {archivosCargados.length}</div>
                         {isUploading && (
                           <div className="mt-2">
                             <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${uploadProgressValue}%` }}
-                              ></div>
+                              <div className="bg-green-600 h-2 rounded-full transition-all duration-300" style={{ width: `${uploadProgressValue}%` }}></div>
                             </div>
-                            <div className="text-xs text-gray-500 text-right mt-1">
-                              {uploadProgressValue}%
-                            </div>
+                            <div className="text-xs text-gray-500 text-right mt-1">{uploadProgressValue}%</div>
                           </div>
                         )}
                       </div>
                     </div>
-                    
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleViewFile(url)}
-                        className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full transition-colors"
-                        title="Ver archivo"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDownloadFile(url, fileName)}
-                        className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-full transition-colors"
-                        title="Descargar archivo"
-                      >
-                        <Download size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteFile(url, index)}
-                        className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full transition-colors"
-                        title="Eliminar archivo"
-                      >
-                        <X size={18} />
-                      </button>
+                      <button onClick={() => handleViewFile(url)} className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full transition-colors" title="Ver archivo"><Eye size={18} /></button>
+                      <button onClick={() => handleDownloadFile(url, fileName)} className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-full transition-colors" title="Descargar archivo"><Download size={18} /></button>
+                      <button onClick={() => handleDeleteFile(url, index)} className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full transition-colors" title="Eliminar archivo"><X size={18} /></button>
                     </div>
                   </div>
                 );
@@ -1923,19 +1712,12 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </div>
       </section>
 
-      {/* NOTAS Y ARCHIVOS ADJUNTOS (MANTENER PARA COMPATIBILIDAD) */}
+      {/* NOTAS DEL DOCTOR */}
       <section className="p-4 border rounded bg-white">
         <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Notas del Doctor</h3>
-
         <div className="mt-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Notas del doctor</label>
-          <textarea 
-            className="w-full border p-2 rounded" 
-            rows={4}
-            placeholder="Escriba aquí las observaciones, notas o comentarios importantes..." 
-            value={notasDoctor} 
-            onChange={e => setNotasDoctor(e.target.value)} 
-          />
+          <textarea className="w-full border p-2 rounded" rows={4} placeholder="Escriba aquí las observaciones, notas o comentarios importantes..." value={notasDoctor} onChange={e => setNotasDoctor(e.target.value)} />
         </div>
       </section>
 
@@ -1945,16 +1727,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo QX (Horas)</label>
-            <input 
-              className="w-full border p-2 rounded" 
-              type="number" 
-              placeholder="Ej: 120" 
-              value={conductaQuirurgica.duracion_estimada} 
-              onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, duracion_estimada: e.target.value}))} 
-              min="0"
-            />
+            <input className="w-full border p-2 rounded" type="number" placeholder="Ej: 120" value={conductaQuirurgica.duracion_estimada} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, duracion_estimada: e.target.value}))} min="0" />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de anestesia</label>
             <select className="w-full border p-2 rounded" value={conductaQuirurgica.tipo_anestesia} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tipo_anestesia: e.target.value}))}>
@@ -1965,58 +1739,29 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               <option value="ninguna">Ninguna</option>
             </select>
           </div>
-          
           <div className="flex items-center">
             <label className="flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                checked={conductaQuirurgica.requiere_hospitalizacion} 
-                onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, requiere_hospitalizacion: e.target.checked}))} 
-              /> 
+              <input type="checkbox" checked={conductaQuirurgica.requiere_hospitalizacion} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, requiere_hospitalizacion: e.target.checked}))} /> 
               Requiere hospitalización
             </label>
           </div>
-          
           {conductaQuirurgica.requiere_hospitalizacion && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo hospitalización</label>
-              <input 
-                className="w-full border p-2 rounded" 
-                placeholder="Tiempo hospitalización" 
-                value={conductaQuirurgica.tiempo_hospitalizacion} 
-                onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tiempo_hospitalizacion: e.target.value}))} 
-              />
+              <input className="w-full border p-2 rounded" placeholder="Tiempo hospitalización" value={conductaQuirurgica.tiempo_hospitalizacion} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tiempo_hospitalizacion: e.target.value}))} />
             </div>
           )}
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Resección estimada</label>
-            <input 
-              className="w-full border p-2 rounded" 
-              placeholder="Resección estimada" 
-              value={conductaQuirurgica.reseccion_estimada} 
-              onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, reseccion_estimada: e.target.value}))} 
-            />
+            <input className="w-full border p-2 rounded" placeholder="Resección estimada" value={conductaQuirurgica.reseccion_estimada} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, reseccion_estimada: e.target.value}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Firma cirujano (URL opcional)</label>
-            <input 
-              className="w-full border p-2 rounded" 
-              placeholder="Firma cirujano (dataURL opcional)" 
-              value={conductaQuirurgica.firma_cirujano} 
-              onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, firma_cirujano: e.target.value}))} 
-            />
+            <input className="w-full border p-2 rounded" placeholder="Firma cirujano (dataURL opcional)" value={conductaQuirurgica.firma_cirujano} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, firma_cirujano: e.target.value}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Firma paciente (URL opcional)</label>
-            <input 
-              className="w-full border p-2 rounded" 
-              placeholder="Firma paciente (dataURL opcional)" 
-              value={conductaQuirurgica.firma_paciente} 
-              onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, firma_paciente: e.target.value}))} 
-            />
+            <input className="w-full border p-2 rounded" placeholder="Firma paciente (dataURL opcional)" value={conductaQuirurgica.firma_paciente} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, firma_paciente: e.target.value}))} />
           </div>
         </div>
       </section>
@@ -2030,32 +1775,26 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             <label className="block text-sm font-medium text-gray-700 mb-1">Ocupación</label>
             <input className="w-full border p-2 rounded" placeholder="Ocupación" value={historiaClinica.ocupacion} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, ocupacion: e.target.value}))} />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Entidad</label>
             <input className="w-full border p-2 rounded" placeholder="Entidad" value={historiaClinica.entidad} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, entidad: e.target.value}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
             <input className="w-full border p-2 rounded" type="date" placeholder="Fecha de nacimiento" value={historiaClinica.fecha_nacimiento} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, fecha_nacimiento: e.target.value}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
             <input className="w-full border p-2 rounded" placeholder="Teléfono" value={historiaClinica.telefono} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, telefono: e.target.value}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Celular</label>
             <input className="w-full border p-2 rounded" placeholder="Celular" value={historiaClinica.celular} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, celular: e.target.value}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
             <input className="w-full border p-2 rounded" placeholder="Dirección" value={historiaClinica.direccion} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, direccion: e.target.value}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input className="w-full border p-2 rounded" placeholder="Email" value={historiaClinica.email} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, email: e.target.value}))} />
@@ -2064,30 +1803,14 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
 
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Motivo de consulta</label>
-          <textarea 
-            className="w-full border p-2 rounded" 
-            rows={3}
-            placeholder="Motivo de consulta" 
-            value={historiaClinica.motivo_consulta} 
-            onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, motivo_consulta: e.target.value}))} 
-          />
+          <textarea className="w-full border p-2 rounded" rows={3} placeholder="Motivo de consulta" value={historiaClinica.motivo_consulta} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, motivo_consulta: e.target.value}))} />
         </div>
 
         <h4 className="font-semibold mt-3 mb-2">Enfermedad actual</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           {Object.keys(historiaClinica.enfermedad_actual).map((k: any) => (
             <label key={k} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
-              <input 
-                type="checkbox" 
-                checked={(historiaClinica.enfermedad_actual as any)[k]} 
-                onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({
-                  ...prev, 
-                  enfermedad_actual: {
-                    ...prev.enfermedad_actual, 
-                    [k]: e.target.checked
-                  }
-                }))} 
-              />
+              <input type="checkbox" checked={(historiaClinica.enfermedad_actual as any)[k]} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, enfermedad_actual: { ...prev.enfermedad_actual, [k]: e.target.checked } }))} />
               <span className="text-sm capitalize">{k.replace(/_/g, ' ')}</span>
             </label>
           ))}
@@ -2099,50 +1822,33 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
             <label className="block text-sm font-medium text-gray-700 mb-1">Farmacológicos</label>
             <input className="w-full border p-2 rounded" placeholder="Farmacológicos" value={historiaClinica.antecedentes.farmacologicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, farmacologicos: e.target.value}}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Traumáticos</label>
             <input className="w-full border p-2 rounded" placeholder="Traumáticos" value={historiaClinica.antecedentes.traumaticos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, traumaticos: e.target.value}}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Quirúrgicos</label>
             <input className="w-full border p-2 rounded" placeholder="Quirúrgicos" value={historiaClinica.antecedentes.quirurgicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, quirurgicos: e.target.value}}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Alérgicos</label>
             <input className="w-full border p-2 rounded" placeholder="Alérgicos" value={historiaClinica.antecedentes.alergicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, alergicos: e.target.value}}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tóxicos</label>
             <input className="w-full border p-2 rounded" placeholder="Tóxicos" value={historiaClinica.antecedentes.toxicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, toxicos: e.target.value}}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Hábitos</label>
             <input className="w-full border p-2 rounded" placeholder="Hábitos" value={historiaClinica.antecedentes.habitos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, habitos: e.target.value}}))} />
           </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Ginecológicos</label>
             <input className="w-full border p-2 rounded" placeholder="Ginecológicos" value={historiaClinica.antecedentes.ginecologicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes: {...prev.antecedentes, ginecologicos: e.target.value}}))} />
           </div>
-          
           <div className="flex items-center p-2">
             <label className="flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                checked={historiaClinica.antecedentes.fuma === "si"} 
-                onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({
-                  ...prev, 
-                  antecedentes: {
-                    ...prev.antecedentes, 
-                    fuma: e.target.checked ? "si" : "no"
-                  }
-                }))} 
-              /> 
+              <input type="checkbox" checked={historiaClinica.antecedentes.fuma === "si"} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, antecedentes: { ...prev.antecedentes, fuma: e.target.checked ? "si" : "no" } }))} /> 
               Fuma
             </label>
           </div>
@@ -2153,54 +1859,27 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           {Object.keys(historiaClinica.notas_corporales).map((k: any) => (
             <div key={k}>
               <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">{k}</label>
-              <textarea 
-                className="w-full border p-2 rounded" 
-                rows={2}
-                placeholder={k} 
-                value={(historiaClinica.notas_corporales as any)[k]} 
-                onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({
-                  ...prev, 
-                  notas_corporales: {
-                    ...prev.notas_corporales, 
-                    [k]: e.target.value
-                  }
-                }))} 
-              />
+              <textarea className="w-full border p-2 rounded" rows={2} placeholder={k} value={(historiaClinica.notas_corporales as any)[k]} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({ ...prev, notas_corporales: { ...prev.notas_corporales, [k]: e.target.value } }))} />
             </div>
           ))}
         </div>
 
         <div className="mt-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Diagnóstico</label>
-          <input 
-            className="w-full border p-2 rounded" 
-            placeholder="Diagnóstico" 
-            value={historiaClinica.diagnostico} 
-            onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, diagnostico: e.target.value}))} 
-          />
+          <input className="w-full border p-2 rounded" placeholder="Diagnóstico" value={historiaClinica.diagnostico} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, diagnostico: e.target.value}))} />
         </div>
 
         <div className="mt-3">
           <label className="block text-sm font-medium text-gray-700 mb-1">Plan de conducta</label>
-          <textarea 
-            className="w-full border p-2 rounded" 
-            rows={3}
-            placeholder="Plan de conducta" 
-            value={historiaClinica.plan_conducta} 
-            onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, plan_conducta: e.target.value}))} 
-          />
+          <textarea className="w-full border p-2 rounded" rows={3} placeholder="Plan de conducta" value={historiaClinica.plan_conducta} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, plan_conducta: e.target.value}))} />
         </div>
-
       </section>
 
       {/* BOTÓN GUARDAR */}
       <div className="flex justify-between items-center pt-4 border-t">
         <div>
           {onCancel && (
-            <button 
-              onClick={onCancel} 
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-            >
+            <button onClick={onCancel} className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
               Cancelar
             </button>
           )}
@@ -2208,24 +1887,45 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         
         <div className="flex gap-3">
           <button 
-            onClick={() => {
-              // Validar campos requeridos
-              if (!datospaciente.nombre_completo) {
-                alert("El nombre completo del paciente es requerido")
-                return
-              }
-              if (!datospaciente.identificacion) {
-                alert("La identificación del paciente es requerida")
-                return
-              }
-              handleSubmit()
-            }} 
-            className="bg-[#1a6b32] text-white px-6 py-3 rounded-lg hover:bg-[#155228]"
+            onClick={handleClickGuardar}
+            className="bg-[#1a6b32] text-white px-6 py-3 rounded-lg hover:bg-[#155228] flex items-center gap-2"
           >
+            <span>📋</span>
             {plan ? "Actualizar Plan Quirúrgico" : "Guardar Plan Quirúrgico"}
           </button>
         </div>
       </div>
+
+      {/* ============================================ */}
+      {/* MODAL DE COTIZACIÓN — se muestra ANTES de guardar el plan */}
+      {/* ============================================ */}
+      {showCotizacionModal && (
+        <div className="fixed inset-0 z-[60]">
+          {/* Overlay con mensaje informativo */}
+          <div className="fixed top-0 left-0 right-0 z-[70] flex justify-center pt-4 pointer-events-none">
+            <div className="bg-[#1a6b32] text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 pointer-events-auto">
+              <span className="text-lg">📋</span>
+              <div>
+                <p className="font-semibold text-sm">Crear Cotización</p>
+                <p className="text-xs opacity-90">Complete la cotización para guardar el plan quirúrgico</p>
+              </div>
+            </div>
+          </div>
+
+          <CotizacionForm
+            onSave={handleCotizacionGuardada}
+            onClose={handleCotizacionCancelada}
+            // Pre-cargar el paciente si está disponible
+            cotizacion={
+              pacienteParaCotizacion
+                ? {
+                    paciente_id: pacienteParaCotizacion.id,
+                  } as any
+                : undefined
+            }
+          />
+        </div>
+      )}
 
     </div>
   )

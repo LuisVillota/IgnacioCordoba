@@ -3,6 +3,7 @@ const TIMEOUT_MS = 60000;
 const callsInProgress = new Set<string>();
 const apiCache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_DURATION = 30000; 
+
 const getCachedData = (key: string) => {
   const cached = apiCache.get(key);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
@@ -14,6 +15,28 @@ const getCachedData = (key: string) => {
 
 const setCachedData = (key: string, data: any) => {
   apiCache.set(key, { data, timestamp: Date.now() });
+};
+
+// Función para eliminar archivo
+export const deletePlanFile = async (nombreArchivo: string, planId: string) => {
+  try {
+    const response = await fetch(`/api/planes/${planId}/archivos/${encodeURIComponent(nombreArchivo)}`, {
+      method: 'DELETE',
+    });
+    return await response.json();
+  } catch (error) {
+    return { error: true, message: error instanceof Error ? error.message : 'Error desconocido' };
+  }
+};
+
+// Función para visualizar archivo (si es necesario)
+export const viewPlanFile = async (nombreArchivo: string, planId: string) => {
+  try {
+    const response = await fetch(`/api/planes/${planId}/archivos/${encodeURIComponent(nombreArchivo)}?view=true`);
+    return await response.json();
+  } catch (error) {
+    return { error: true, message: error instanceof Error ? error.message : 'Error desconocido' };
+  }
 };
 
 export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
@@ -77,15 +100,30 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     if (!response.ok) {
       console.log(`⚠️ API Error ${response.status}:`, responseData);
       
-      let errorMessage = `Error HTTP ${response.status}`;
       if (typeof responseData === 'string') {
-        errorMessage = responseData;
+        return {
+          success: false,
+          error: true,
+          status: response.status,
+          message: responseData,
+          isValidationError: response.status === 400 || response.status === 422,
+          isConflictError: response.status === 409,
+          isNotFoundError: response.status === 404
+        };
       } else if (responseData && typeof responseData === 'object') {
         if (responseData.detail) {
           if (typeof responseData.detail === 'string') {
-            errorMessage = responseData.detail;
+            return {
+              success: false,
+              error: true,
+              status: response.status,
+              message: responseData.detail,
+              isValidationError: response.status === 400 || response.status === 422,
+              isConflictError: response.status === 409,
+              isNotFoundError: response.status === 404
+            };
           } else if (Array.isArray(responseData.detail)) {
-            errorMessage = responseData.detail.map((err: any) => {
+            const errorMessage = responseData.detail.map((err: any) => {
               if (typeof err === 'string') return err;
               if (err && typeof err === 'object' && err.msg && err.loc) {
                 const field = Array.isArray(err.loc) ? err.loc.slice(1).join('.') : err.loc;
@@ -93,16 +131,49 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
               }
               return JSON.stringify(err);
             }).join(', ');
+            return {
+              success: false,
+              error: true,
+              status: response.status,
+              message: errorMessage,
+              isValidationError: response.status === 400 || response.status === 422
+            };
           } else if (responseData.detail && typeof responseData.detail === 'object') {
-            errorMessage = responseData.detail.message || JSON.stringify(responseData.detail);
+            return {
+              success: false,
+              error: true,
+              status: response.status,
+              message: responseData.detail.message || JSON.stringify(responseData.detail),
+              isValidationError: response.status === 400 || response.status === 422
+            };
           }
         } else if (responseData.message) {
-          errorMessage = responseData.message;
+          return {
+            success: false,
+            error: true,
+            status: response.status,
+            message: responseData.message,
+            isValidationError: response.status === 400 || response.status === 422,
+            isConflictError: response.status === 409,
+            isNotFoundError: response.status === 404
+          };
         } else if (responseData.error) {
           if (typeof responseData.error === 'string') {
-            errorMessage = responseData.error;
+            return {
+              success: false,
+              error: true,
+              status: response.status,
+              message: responseData.error,
+              isValidationError: response.status === 400 || response.status === 422
+            };
           } else if (responseData.error && typeof responseData.error === 'object') {
-            errorMessage = responseData.error.message || JSON.stringify(responseData.error);
+            return {
+              success: false,
+              error: true,
+              status: response.status,
+              message: responseData.error.message || JSON.stringify(responseData.error),
+              isValidationError: response.status === 400 || response.status === 422
+            };
           }
         } else {
           const errorKeys = Object.keys(responseData).filter(key => 
@@ -112,9 +183,21 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
           );
           
           if (errorKeys.length > 0) {
-            errorMessage = responseData[errorKeys[0]];
+            return {
+              success: false,
+              error: true,
+              status: response.status,
+              message: responseData[errorKeys[0]],
+              isValidationError: response.status === 400 || response.status === 422
+            };
           } else {
-            errorMessage = JSON.stringify(responseData);
+            return {
+              success: false,
+              error: true,
+              status: response.status,
+              message: JSON.stringify(responseData),
+              isValidationError: response.status === 400 || response.status === 422
+            };
           }
         }
       }
@@ -122,7 +205,7 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
         success: false,
         error: true,
         status: response.status,
-        message: errorMessage,
+        message: `Error HTTP ${response.status}`,
         data: responseData,
         isValidationError: response.status === 400 || response.status === 422,
         isConflictError: response.status === 409,
@@ -156,20 +239,7 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
   }
 };
 
-// Helper para convertir archivo a base64
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
-  });
-};
-
 const preventDuplicateCall = async (callType: string, callFn: () => Promise<any>): Promise<any> => {
-  // Crear una clave única para esta llamada
-  const callKey = `${callType}_${Date.now()}`;
-  
   // Verificar si ya hay una llamada similar en progreso
   if (callsInProgress.has(callType)) {
     console.warn(`⚠️ Ya hay una llamada ${callType} en proceso, ignorando llamada duplicada`);
@@ -245,22 +315,19 @@ export const api = {
   debugUsuariosTabla: () => fetchAPI('/api/debug/usuarios-tabla'),
 
     // ===== pacientes =====
-  getpacientes: (limit?: number, offset?: number) => {
+  getpacientes: async (limit?: number, offset?: number) => {
     const cacheKey = `pacientes_${limit}_${offset}`;
     const cached = getCachedData(cacheKey);
     
     if (cached) {
-      return Promise.resolve(cached);
+      return cached;
     }
     
-    return fetchAPI(`/api/pacientes?limit=${limit || 100}&offset=${offset || 0}`)
-      .then(response => {
-        // Solo cachear si fue exitoso
-        if (!response.error) {
-          setCachedData(cacheKey, response);
-        }
-        return response;
-      });
+    const response = await fetchAPI(`/api/pacientes?limit=${limit || 100}&offset=${offset || 0}`);
+    if (!response.error) {
+      setCachedData(cacheKey, response);
+    }
+    return response;
   },
   getpaciente: (id: number) => fetchAPI(`/api/pacientes/${id}`),
   createpaciente: (data: any) => 
@@ -728,8 +795,12 @@ export const api = {
       console.log(`📥 Delete response: ${response.status} ${response.statusText}`)
       
       if (!response.ok) {
-        let errorMessage = `Error HTTP ${response.status}`;
+        if (response.status === 404) {
+          console.log(`ℹ️ Historia ${id} no encontrada (posiblemente ya eliminada)`)
+          return { success: true, message: "Historia ya eliminada" }
+        }
         
+        let errorMessage = `Error HTTP ${response.status}`;
         try {
           const errorData = await response.json();
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
@@ -740,11 +811,6 @@ export const api = {
           } catch {
             // Si falla todo
           }
-        }
-        
-        if (response.status === 404) {
-          console.log(`ℹ️ Historia ${id} no encontrada (posiblemente ya eliminada)`)
-          return { success: true, message: "Historia ya eliminada" }
         }
         
         throw new Error(errorMessage);
@@ -1713,7 +1779,7 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         }
         
         // Transformar los datos para el frontend
-        let planTransformado = {};
+        let planTransformado: ReturnType<typeof transformBackendToFrontend.planQuirurgico> | null = null;
         
         if (planData && typeof planData === 'object' && Object.keys(planData).length > 0) {
           planTransformado = transformBackendToFrontend.planQuirurgico(planData);
@@ -1734,7 +1800,7 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         
         return {
           success: true,
-          ...planTransformado
+          ...planTransformado!
         };
         
       } catch (error: any) {
@@ -1752,7 +1818,7 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
 // En el objeto api, agregar o actualizar la función createPlanQuirurgico:
 
   createPlanQuirurgico: (data: any) => {
-    const callKey = `createPlanQuirurgico_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const callKey = `createPlanQuirurgico_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
     
     return preventDuplicateCall(callKey, async () => {
       console.log("📤 Creando plan quirúrgico con datos:", data);
@@ -2019,7 +2085,28 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
   clearAllCalls: () => {
     console.log("🧹 Limpiando todas las llamadas en progreso");
     callsInProgress.clear();
-  }
+  },
+  
+  // Agregar deletePlanFile al objeto api
+  deletePlanFile: async (nombreArchivo: string, planId: string) => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const planIdClean = planId.replace('plan_', '');
+      const response = await fetch(`${API_URL}/api/planes-quirurgicos/${planIdClean}/archivo/${encodeURIComponent(nombreArchivo)}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        return { error: true, message: err.detail || `Error ${response.status}` };
+      }
+      return await response.json();
+    } catch (error) {
+      return { error: true, message: error instanceof Error ? error.message : 'Error desconocido' };
+    }
+  },
 };
 
 // Helper para manejar errores
@@ -2833,9 +2920,6 @@ export const transformBackendToFrontend = {
       es_valido: estado_id !== undefined
     });
     
-    // Determinar si es creación (sin id) o actualización (con id)
-    const esCreacion = !frontendCotizacion.id || frontendCotizacion.id === '';
-    
     // Procesar items
     const items = Array.isArray(frontendCotizacion.items) ? frontendCotizacion.items.map((item: any) => ({
       tipo: item.tipo || 'procedimiento',
@@ -3368,6 +3452,8 @@ export const cotizacionHelpers = {
     fecha.setDate(fecha.getDate() + diasValidez);
     return fecha.toISOString().split('T')[0];
   },
+
+  
 
   // Función auxiliar para calcular total rápido
   calcularTotalRapido: (subtotalProcedimientos: number, subtotalAdicionales: number, subtotalOtrosAdicionales: number): number => {

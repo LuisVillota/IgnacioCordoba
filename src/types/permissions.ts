@@ -185,6 +185,11 @@ export const rolePermissions: Record<string, Permission[]> = {
     
     // Reportes
     "ver_reportes",
+    
+    // Reportes
+    "ver_historia_clinica",
+    "crear_historia_clinica",
+    "editar_historia_clinica",
   ],
 }
 

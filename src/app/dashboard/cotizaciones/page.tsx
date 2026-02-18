@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Edit2, Eye, Loader2 } from "lucide-react"
+import { Plus, Edit2, Eye, Loader2, Trash2 } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { CotizacionForm } from "../../../components/CotizacionForm"
 import { CotizacionModal } from "../../../components/CotizacionModal"
@@ -28,6 +28,7 @@ export default function CotizacionesPage() {
   const [activeModal, setActiveModal] = useState<ModalType>('none')
   const [selectedCotizacion, setSelectedCotizacion] = useState<Cotizacion | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   
   useEffect(() => {
     fetchData()
@@ -137,6 +138,25 @@ export default function CotizacionesPage() {
     } catch (err: any) {
       console.error("❌ Error guardando cotización:", err);
       alert(`Error: ${err.message || 'Error desconocido'}`);
+    }
+  };
+
+  // Función para eliminar cotización
+  const handleDelete = async (cotizacion: Cotizacion) => {
+    if (!window.confirm(`¿Estás seguro de eliminar la cotización CZ-${cotizacion.id}?`)) {
+      return;
+    }
+
+    try {
+      setDeletingId(cotizacion.id);
+      await api.deleteCotizacion(parseInt(cotizacion.id));
+      alert("✅ Cotización eliminada exitosamente");
+      await refreshData();
+    } catch (err: any) {
+      console.error("❌ Error eliminando cotización:", err);
+      alert(`Error: ${err.message || 'Error desconocido'}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -308,6 +328,38 @@ export default function CotizacionesPage() {
                                   <Edit2 size={18} />
                                 </button>
                               </ProtectedRoute>
+                              
+                              {/* Botón de eliminar - SOLUCIÓN ALTERNATIVA */}
+                              <button
+                                onClick={() => handleDelete(cot)}
+                                disabled={refreshing || deletingId === cot.id}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Eliminar"
+                              >
+                                {deletingId === cot.id ? (
+                                  <Loader2 size={18} className="animate-spin" />
+                                ) : (
+                                  <Trash2 size={18} />
+                                )}
+                              </button>
+                              
+                              {/* O si prefieres mantener ProtectedRoute, usa esta versión: */}
+                              {/* 
+                              <ProtectedRoute permissions={["editar_cotizacion"]}>
+                                <button
+                                  onClick={() => handleDelete(cot)}
+                                  disabled={refreshing || deletingId === cot.id}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Eliminar"
+                                >
+                                  {deletingId === cot.id ? (
+                                    <Loader2 size={18} className="animate-spin" />
+                                  ) : (
+                                    <Trash2 size={18} />
+                                  )}
+                                </button>
+                              </ProtectedRoute>
+                              */}
                             </div>
                           </td>
                         </tr>
@@ -351,7 +403,7 @@ export default function CotizacionesPage() {
             onClose={handleCloseAllModals}
             onEdit={handleEditFromModal}
           />
-        )}
+        )} 
       </div>
     </ProtectedRoute>
   )

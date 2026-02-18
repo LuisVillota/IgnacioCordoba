@@ -33,15 +33,15 @@ const menuItemsByRole: Record<string, Array<{ icon: any; label: string; href: st
     { icon: Scissors, label: "Programación", href: "programacion", path: "/dashboard/programacion-quirurgica" },
     { icon: AlertCircle, label: "Sala de Espera", href: "sala-espera", path: "/dashboard/sala-espera" },
     { icon: BarChart3, label: "Procedimientos", href: "procedimientos", path: "/dashboard/procedimientos" },
+    { icon: CreditCard, label: "Órdenes para Exámenes", href: "ordenExamen", path: "/dashboard/ordenes-examenes" },
+    { icon: Scissors, label: "Plan Quirúrgico", href: "plan", path: "/dashboard/plan-quirurgico" },
   ],
   secretaria: [
     { icon: Home, label: "Inicio", href: "home", path: "/dashboard" },
     { icon: Users, label: "Pacientes", href: "pacientes", path: "/dashboard/pacientes" },
     { icon: Calendar, label: "Agenda", href: "agenda", path: "/dashboard/agenda" },
-    { icon: FileText, label: "Cotizaciones", href: "cotizaciones", path: "/dashboard/cotizaciones" },
     { icon: AlertCircle, label: "Sala de Espera", href: "sala-espera", path: "/dashboard/sala-espera" },
     { icon: CreditCard, label: "Órdenes para Exámenes", href: "ordenExamen", path: "/dashboard/ordenes-examenes" },
-    { icon: BarChart3, label: "Procedimientos", href: "procedimientos", path: "/dashboard/procedimientos" },
   ],
   doctor: [
     { icon: Home, label: "Inicio", href: "home", path: "/dashboard" },
@@ -55,6 +55,10 @@ const menuItemsByRole: Record<string, Array<{ icon: any; label: string; href: st
     { icon: Home, label: "Inicio", href: "home", path: "/dashboard" },
     { icon: Scissors, label: "Programación", href: "programacion", path: "/dashboard/programacion-quirurgica" },
     { icon: AlertCircle, label: "Sala de Espera", href: "sala-espera", path: "/dashboard/sala-espera" },
+    { icon: Users, label: "Pacientes", href: "pacientes", path: "/dashboard/pacientes" },
+    { icon: Calendar, label: "Agenda", href: "agenda", path: "/dashboard/agenda" },
+    { icon: Stethoscope, label: "Historia Clínica", href: "historia", path: "/dashboard/historias-clinicas" },
+    { icon: Scissors, label: "Plan Quirúrgico", href: "plan", path: "/dashboard/plan-quirurgico" },
   ],
 }
 
