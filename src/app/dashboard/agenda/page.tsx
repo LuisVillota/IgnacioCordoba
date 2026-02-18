@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight, Plus, Edit2, Calendar, Clock, User, AlertCircle, RefreshCw, AlertTriangle, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Edit2, Calendar, Clock, User, AlertCircle, RefreshCw, AlertTriangle, X, Trash2, AlertCircle as AlertCircleIcon } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute" 
 import { CitaForm } from "../../../components/CitaForm" 
 import { CitaModal } from "../../../components/CitaModal"
@@ -13,7 +13,7 @@ interface cita {
   id: string
   id_paciente: string
   id_usuario: string
-  tipo_cita: "consulta" | "control" | "valoracion" | "programacion_quirurgica"
+  tipo_cita:  "control" | "valoracion" | "programacion_quirurgica" | "visitador_medico" | "valoracion_virtual" | "control_virtual" | "control_postquirurgico"
   fecha: string
   hora: string
   duracion: number
@@ -32,21 +32,40 @@ interface citaConflict {
 
 const tiposDeVisita = {
   consulta: { label: "Consulta", duracion: 60 },
-  control: { label: "Control", duracion: 30 },
-  valoracion: { label: "Valoración", duracion: 45 },
-  programacion_quirurgica: { label: "Programación Quirúrgica", duracion: 60 },
+  control: { label: "Control", duracion: 10 },
+  valoracion: { label: "Valoración", duracion: 30 },
+  programacion_quirurgica: { label: "Programación Quirúrgica", duracion: 20 },
+  visitador_medico: { label: "Visitador Médico", duracion: 10 },
+  valoracion_virtual: { label: "Valoración Virtual", duracion: 30 },
+  control_virtual: { label: "Control Virtual", duracion: 10 },
+  control_postquirurgico: { label: "Control Post-Quirúrgico", duracion: 10 },
 }
 
 const formatDate = (date: Date | string): string => {
   if (!date) return ''
   
   try {
-    const d = new Date(date)
+    let d: Date
+    
+    if (typeof date === 'string') {
+      // Si es string en formato YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return date
+      }
+      
+      // Si tiene hora, tomar solo la parte de fecha
+      const datePart = date.split('T')[0] || date.split(' ')[0]
+      d = new Date(datePart + 'T00:00:00')
+    } else {
+      d = date
+    }
+    
     if (isNaN(d.getTime())) return ''
     
     const year = d.getFullYear()
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
+    
     return `${year}-${month}-${day}`
   } catch {
     return ''
@@ -132,7 +151,11 @@ const transformBackendcita = (backendcita: any): cita => {
   let tipo_cita: cita["tipo_cita"] = "consulta"
   if (backendcita.tipo) {
     const tipoLower = backendcita.tipo.toLowerCase()
-    if (tipoLower.includes('control')) tipo_cita = "control"
+    if (tipoLower.includes('control') && tipoLower.includes('post') && tipoLower.includes('quirurg')) tipo_cita = "control_postquirurgico"
+    else if (tipoLower.includes('control') && tipoLower.includes('virtual')) tipo_cita = "control_virtual"
+    else if (tipoLower.includes('valoracion') && tipoLower.includes('virtual')) tipo_cita = "valoracion_virtual"
+    else if (tipoLower.includes('visitador') && tipoLower.includes('medico')) tipo_cita = "visitador_medico"
+    else if (tipoLower.includes('control')) tipo_cita = "control"
     else if (tipoLower.includes('valora')) tipo_cita = "valoracion"
     else if (tipoLower.includes('program') || tipoLower.includes('quirur')) tipo_cita = "programacion_quirurgica"
     else if (tipoLower.includes('consulta')) tipo_cita = "consulta"
@@ -145,7 +168,7 @@ const transformBackendcita = (backendcita: any): cita => {
     tipo_cita: tipo_cita,
     fecha: fecha,
     hora: hora,
-    duracion: backendcita.duracion || backendcita.duracion_minutos || 30,
+    duracion: backendcita.duracion || backendcita.duracion_minutos || tiposDeVisita[tipo_cita]?.duracion || 30,
     estado: estado,
     observaciones: backendcita.observaciones || backendcita.notas || '',
     paciente_nombre: backendcita.paciente_nombre || backendcita.nombres || backendcita.nombre || '',
@@ -338,6 +361,706 @@ function ConflictoHorarioModal({
   )
 }
 
+// Modal para mostrar todas las citas de un día con vista tipo Google Calendar - CON INTERVALOS DE 10 MINUTOS CORREGIDO
+function DiaCitasModal({ 
+  fecha, 
+  citas,
+  pacientes,
+  onClose,
+  onEdit,
+  onNuevaCita
+}: { 
+  fecha: string
+  citas: cita[]
+  pacientes: paciente[]
+  onClose: () => void
+  onEdit: (cita: cita) => void
+  onNuevaCita: (fecha: string, hora?: string) => void
+}) {
+  // Usar fecha local corregida
+  const fechaCorregida = new Date(fecha + 'T00:00:00')
+  const diaSemana = fechaCorregida.toLocaleDateString('es-ES', { weekday: 'long' })
+  const diaMes = fechaCorregida.getDate()
+  const mes = fechaCorregida.toLocaleDateString('es-ES', { month: 'long' })
+  const año = fechaCorregida.getFullYear()
+  
+  // Crear intervalos de 10 minutos desde 7:00 AM hasta 8:00 PM
+  const horasInicio = 7; // 7:00 AM
+  const horasFin = 20; // 8:00 PM
+  const totalHoras = horasFin - horasInicio;
+  const intervalosPorHora = 6; // 60 minutos / 10 = 6 intervalos por hora
+  const totalIntervalos = totalHoras * intervalosPorHora;
+  
+  const intervalosDelDia = Array.from({ length: totalIntervalos }, (_, i) => {
+    const minutosTotales = i * 10; // Cada intervalo es de 10 minutos
+    const horas = Math.floor(minutosTotales / 60) + horasInicio;
+    const minutos = minutosTotales % 60;
+    
+    const horaStr = horas.toString().padStart(2, '0');
+    const minutosStr = minutos.toString().padStart(2, '0');
+    
+    return {
+      hora: `${horaStr}:${minutosStr}`,
+      horaCompleta: horas,
+      minutos: minutos,
+      esHoraCompleta: minutos === 0, // Para resaltar las horas en punto
+      esMediaHora: minutos === 30, // Para marcar las medias horas
+    };
+  });
+
+  // Función para calcular la posición vertical de una cita
+  const calcularPosicionCita = (hora: string) => {
+    const [horas, minutos] = hora.split(':').map(Number);
+    const minutosDesdeInicio = (horas - horasInicio) * 60 + minutos;
+    
+    // Convertir a píxeles (cada 10 minutos = 40px)
+    return minutosDesdeInicio * 0.4; // 4px por minuto, 40px por 10 minutos
+  };
+
+  // Función para calcular la altura de una cita
+  const calcularAlturaCita = (duracion: number) => {
+    // 4px por minuto de duración
+    return duracion * 0.4;
+  };
+
+  // Función para formatear la hora para mostrar
+  const formatHoraDisplay = (hora: string) => {
+    const [horas, minutos] = hora.split(':').map(Number);
+    const ampm = horas >= 12 ? 'PM' : 'AM';
+    const horas12 = horas % 12 || 12;
+    if (minutos === 0) {
+      return `${horas12} ${ampm}`;
+    }
+    return `${horas12}:${minutos.toString().padStart(2, '0')} ${ampm}`;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-gray-800 capitalize">
+                {diaSemana}, {diaMes} de {mes} de {año}
+              </h3>
+              <p className="text-gray-600 mt-1">
+                {citas.length} {citas.length === 1 ? 'cita' : 'citas'} programada{citas.length === 1 ? '' : 's'}
+              </p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => onNuevaCita(fecha)}
+                className="flex items-center space-x-2 px-4 py-2 bg-[#1a6b32] hover:bg-[#155529] text-white rounded-lg transition"
+              >
+                <Plus size={20} />
+                <span>Nueva cita</span>
+              </button>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 transition p-2"
+              >
+                <X size={24} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* CONTENEDOR PRINCIPAL CON SCROLL */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="flex">
+            {/* Columna de horas - CON INTERVALOS DE 10 MINUTOS */}
+            <div className="w-24 flex-shrink-0 border-r bg-white sticky left-0 z-10">
+              <div className="h-full">
+                {intervalosDelDia.map((intervalo, index) => (
+                  <div
+                    key={`${intervalo.hora}-${index}`}
+                    className={`flex items-center justify-center border-b border-gray-100 ${
+                      intervalo.esHoraCompleta ? 'font-semibold bg-gray-50' : ''
+                    }`}
+                    style={{ 
+                      height: '40px', // Altura fija para cada intervalo de 10 minutos
+                      borderBottomWidth: intervalo.esHoraCompleta ? '2px' : '1px',
+                      borderBottomStyle: intervalo.esHoraCompleta ? 'solid' : 'dashed'
+                    }}
+                  >
+                    <div className="text-xs text-gray-600">
+                      {intervalo.esHoraCompleta ? formatHoraDisplay(intervalo.hora) : ''}
+                      {!intervalo.esHoraCompleta && intervalo.esMediaHora && (
+                        <span className="text-gray-400">•</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Área principal del calendario - CON ALTURA FIJA Y INTERVALOS DE 10 MINUTOS */}
+            <div className="flex-1 relative">
+              {/* Contenedor principal con altura calculada */}
+              <div 
+                className="absolute inset-0"
+                style={{ 
+                  height: `${totalIntervalos * 40}px` // 40px por cada intervalo de 10 minutos
+                }}
+              >
+                {/* Líneas de tiempo para cada intervalo de 10 minutos */}
+                {intervalosDelDia.map((intervalo, index) => (
+                  <div
+                    key={`line-${intervalo.hora}-${index}`}
+                    className={`absolute left-0 right-0 ${
+                      intervalo.esHoraCompleta 
+                        ? 'border-b-2 border-gray-300' 
+                        : 'border-b border-gray-100 border-dashed'
+                    }`}
+                    style={{ 
+                      top: `${index * 40}px`, 
+                      height: '40px',
+                    }}
+                  >
+                    {/* Slot para hacer clic y crear cita en este intervalo exacto */}
+                    <button
+                      onClick={() => onNuevaCita(fecha, intervalo.hora)}
+                      className="w-full h-full hover:bg-gray-50/50 transition-colors group relative"
+                      title={`Crear cita a las ${intervalo.hora}`}
+                    >
+                      {/* Mostrar guía visual para intervalos */}
+                      {!intervalo.esHoraCompleta && (
+                        <div className="absolute left-0 right-0 top-1/2 transform -translate-y-1/2 h-px bg-gray-200 opacity-50"></div>
+                      )}
+                      
+                      {/* Mostrar hora en hover */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded shadow">
+                          {intervalo.hora}
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                ))}
+
+                {/* Citas posicionadas con precisión */}
+                {citas.map((cita) => {
+                  const paciente = pacientes.find(p => p.id === cita.id_paciente) || 
+                    crearPacientePorDefecto(
+                      cita.id_paciente,
+                      cita.paciente_nombre,
+                      cita.paciente_apellido
+                    );
+                  
+                  const estadoColor = {
+                    confirmada: "bg-[#1a6b32]",
+                    pendiente: "bg-[#669933]",
+                    completada: "bg-blue-500",
+                    cancelada: "bg-gray-400"
+                  }[cita.estado] || "bg-gray-200";
+                  
+                  const tipoColor = {
+                    consulta: "border-l-4 border-l-blue-500",
+                    control: "border-l-4 border-l-green-500",
+                    valoracion: "border-l-4 border-l-purple-500",
+                    programacion_quirurgica: "border-l-4 border-l-red-500",
+                    visitador_medico: "border-l-4 border-l-amber-500",
+                    valoracion_virtual: "border-l-4 border-l-cyan-500",
+                    control_virtual: "border-l-4 border-l-emerald-500",
+                    control_postquirurgico: "border-l-4 border-l-pink-500"
+                  }[cita.tipo_cita] || "border-l-4 border-l-gray-500";
+                  
+                  const posicion = calcularPosicionCita(cita.hora);
+                  const altura = calcularAlturaCita(cita.duracion);
+                  
+                  // Calcular hora de fin
+                  const horaFin = agregarMinutos(cita.hora, cita.duracion);
+                  
+                  return (
+                    <div
+                      key={cita.id}
+                      onClick={() => onEdit(cita)}
+                      className={`absolute left-2 right-2 rounded-md shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all ${estadoColor} ${tipoColor}`}
+                      style={{
+                        top: `${posicion}px`,
+                        height: `${Math.max(altura, 24)}px`,
+                        zIndex: 10,
+                        margin: '0 4px'
+                      }}
+                      title={`${cita.hora} - ${horaFin} | ${paciente.nombres} ${paciente.apellidos} | ${tiposDeVisita[cita.tipo_cita]?.label}`}
+                    >
+                      <div className="p-2 h-full flex flex-col text-white overflow-hidden">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-1 mb-0.5">
+                              <span className="text-xs font-semibold truncate">
+                                {cita.hora}
+                              </span>
+                              <span className="text-[10px] opacity-90 px-1 py-0.5 bg-white/20 rounded">
+                                {tiposDeVisita[cita.tipo_cita]?.label?.substring(0, 3) || cita.tipo_cita.substring(0, 3)}
+                              </span>
+                            </div>
+                            <h4 className="text-xs font-semibold truncate">
+                              {paciente.nombres.split(' ')[0]} {paciente.apellidos.split(' ')[0].charAt(0)}.
+                            </h4>
+                          </div>
+                          <span className="text-[10px] opacity-90 whitespace-nowrap">
+                            {cita.estado.charAt(0).toUpperCase() + cita.estado.slice(1)}
+                          </span>
+                        </div>
+                        
+                        {/* Mostrar duración */}
+                        {altura > 30 && (
+                          <div className="text-[10px] opacity-90 mt-0.5">
+                            {cita.duracion} min
+                          </div>
+                        )}
+                        
+                        {/* Mostrar observaciones si hay espacio */}
+                        {cita.observaciones && altura > 45 && (
+                          <p className="text-[10px] opacity-90 truncate mt-1">
+                            {cita.observaciones.substring(0, 30)}{cita.observaciones.length > 30 ? '...' : ''}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Indicador de hora actual (solo si es hoy) */}
+                {formatDate(new Date()) === fecha && (
+                  <div
+                    className="absolute left-0 right-0 h-0.5 bg-red-500 z-20 pointer-events-none"
+                    style={{
+                      top: `${calcularPosicionCita(
+                        `${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')}`
+                      )}px`
+                    }}
+                  >
+                    <div className="absolute -left-2 -top-1.5 w-3 h-3 bg-red-500 rounded-full" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Leyenda */}
+        <div className="border-t p-4 bg-gray-50">
+          <div className="flex items-center justify-between">
+            <div className="grid grid-cols-4 gap-4 text-sm w-full">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-[#1a6b32] rounded"></div>
+                <span className="text-gray-700">Confirmada</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-[#669933] rounded"></div>
+                <span className="text-gray-700">Pendiente</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                <span className="text-gray-700">Completada</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-gray-400 rounded"></div>
+                <span className="text-gray-700">Cancelada</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="text-xs text-gray-600">
+                <span className="font-medium">Intervalos:</span> 10 minutos
+              </div>
+              <button
+                onClick={() => onNuevaCita(fecha)}
+                className="text-sm text-[#1a6b32] hover:text-[#155529] font-medium flex items-center"
+              >
+                <Plus size={16} className="mr-1" />
+                Agregar cita
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal de confirmación para eliminar cita
+function ConfirmarEliminacionModal({
+  cita,
+  paciente,
+  onClose,
+  onConfirm
+}: {
+  cita: cita
+  paciente: paciente
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <AlertCircleIcon className="w-6 h-6 text-red-600 mr-2" />
+              <h3 className="text-lg font-bold text-gray-800">Confirmar Eliminación</h3>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          
+          <div className="mb-6">
+            <p className="text-gray-700 mb-4">
+              ¿Estás seguro de que deseas eliminar esta cita? Esta acción no se puede deshacer.
+            </p>
+            
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+              <h4 className="font-semibold text-red-800 mb-2">Detalles de la cita a eliminar:</h4>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Paciente:</span>
+                  <span className="font-medium">{paciente.nombres} {paciente.apellidos}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Fecha:</span>
+                  <span className="font-medium">{cita.fecha}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Hora:</span>
+                  <span className="font-medium">
+                    {cita.hora} - {agregarMinutos(cita.hora, cita.duracion)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Tipo:</span>
+                  <span className="font-medium">{tiposDeVisita[cita.tipo_cita]?.label}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Estado:</span>
+                  <span className={`font-medium capitalize ${
+                    cita.estado === 'confirmada' ? 'text-green-600' :
+                    cita.estado === 'pendiente' ? 'text-amber-600' :
+                    'text-gray-600'
+                  }`}>
+                    {cita.estado}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <p className="text-red-700 font-medium text-sm">
+              ⚠️ Esta acción eliminará permanentemente la cita del sistema.
+            </p>
+          </div>
+          
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={onConfirm}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center"
+            >
+              <Trash2 size={16} className="mr-2" />
+              Eliminar Cita
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Componente CitaForm actualizado con botón de eliminar Y DURACIONES ESPECÍFICAS
+function CitaForm({ cita, pacientes, onSave, onClose, onDelete }: {
+  cita?: cita
+  pacientes: paciente[]
+  onSave: (data: Omit<cita, "id">) => void
+  onClose: () => void
+  onDelete?: () => void
+}) {
+  const [formData, setFormData] = useState<Omit<cita, "id">>({
+    id_paciente: cita?.id_paciente || "",
+    id_usuario: cita?.id_usuario || "1",
+    tipo_cita: cita?.tipo_cita || "consulta",
+    fecha: cita?.fecha || formatDate(new Date()),
+    hora: cita?.hora || "09:00",
+    duracion: cita?.duracion || 60, // Valor por defecto actualizado
+    estado: cita?.estado || "pendiente",
+    observaciones: cita?.observaciones || "",
+    paciente_nombre: cita?.paciente_nombre || "",
+    paciente_apellido: cita?.paciente_apellido || "",
+    doctor_nombre: cita?.doctor_nombre || "Dr. No Especificado",
+  })
+
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    
+    if (name === "tipo_cita") {
+      // Actualizar la duración automáticamente cuando se cambia el tipo de cita
+      const nuevaDuracion = tiposDeVisita[value as keyof typeof tiposDeVisita]?.duracion || 60
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        duracion: nuevaDuracion
+      }))
+    } else if (name === "duracion") {
+      // Solo permitir valores específicos para la duración
+      const duracionesPermitidas = [10, 20, 30, 60]
+      const valorNumerico = parseInt(value) || 60
+      const duracionValida = duracionesPermitidas.includes(valorNumerico) ? valorNumerico : 60
+      setFormData(prev => ({
+        ...prev,
+        [name]: duracionValida
+      }))
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+      }))
+    }
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    const newErrors: Record<string, string> = {}
+    
+    if (!formData.id_paciente) {
+      newErrors.id_paciente = "Selecciona un paciente"
+    }
+    if (!formData.fecha) {
+      newErrors.fecha = "La fecha es requerida"
+    }
+    if (!formData.hora) {
+      newErrors.hora = "La hora es requerida"
+    }
+    if (!formData.duracion || formData.duracion < 10) {
+      newErrors.duracion = "La duración mínima es 10 minutos"
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+    
+    onSave(formData)
+  }
+
+  const pacienteSeleccionado = pacientes.find(p => p.id === formData.id_paciente)
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-gray-800">
+              {cita ? "Editar cita" : "Nueva cita"}
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition p-2"
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Paciente *
+                </label>
+                <select
+                  name="id_paciente"
+                  value={formData.id_paciente}
+                  onChange={handleChange}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-[#1a6b32] transition ${
+                    errors.id_paciente ? "border-red-500" : "border-gray-300"
+                  }`}
+                >
+                  <option value="">Selecciona un paciente</option>
+                  {pacientes.map((paciente) => (
+                    <option key={paciente.id} value={paciente.id}>
+                      {paciente.nombres} {paciente.apellidos} ({paciente.documento})
+                    </option>
+                  ))}
+                </select>
+                {errors.id_paciente && (
+                  <p className="text-red-500 text-sm mt-1">{errors.id_paciente}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tipo de Visita
+                </label>
+                <select
+                  name="tipo_cita"
+                  value={formData.tipo_cita}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-[#1a6b32] transition"
+                >
+                  {Object.entries(tiposDeVisita).map(([key, value]) => (
+                    <option key={key} value={key}>
+                      {value.label} ({value.duracion} min)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fecha (YYYY-MM-DD) *
+                  </label>
+                  <input
+                    type="date"
+                    name="fecha"
+                    value={formData.fecha}
+                    onChange={handleChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-[#1a6b32] transition ${
+                      errors.fecha ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.fecha && (
+                    <p className="text-red-500 text-sm mt-1">{errors.fecha}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Hora (HH:MM) *
+                  </label>
+                  <input
+                    type="time"
+                    name="hora"
+                    value={formData.hora}
+                    onChange={handleChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-[#1a6b32] transition ${
+                      errors.hora ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.hora && (
+                    <p className="text-red-500 text-sm mt-1">{errors.hora}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Duración (min) *
+                  </label>
+                  <select
+                    name="duracion"
+                    value={formData.duracion}
+                    onChange={handleChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-[#1a6b32] transition ${
+                      errors.duracion ? "border-red-500" : "border-gray-300"
+                    }`}
+                  >
+                    <option value="10">10 minutos</option>
+                    <option value="20">20 minutos</option>
+                    <option value="30">30 minutos</option>
+                    <option value="60">60 minutos</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Duración automática basada en el tipo de cita
+                  </p>
+                  {errors.duracion && (
+                    <p className="text-red-500 text-sm mt-1">{errors.duracion}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Estado
+                  </label>
+                  <select
+                    name="estado"
+                    value={formData.estado}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-[#1a6b32] transition"
+                  >
+                    <option value="pendiente">Pendiente</option>
+                    <option value="confirmada">Confirmada</option>
+                    <option value="completada">Completada</option>
+                    <option value="cancelada">Cancelada</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Observaciones
+                </label>
+                <textarea
+                  name="observaciones"
+                  value={formData.observaciones}
+                  onChange={handleChange}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-[#1a6b32] transition"
+                  placeholder="Notas adicionales sobre la cita..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Doctor
+                </label>
+                <input
+                  type="text"
+                  name="doctor_nombre"
+                  value={formData.doctor_nombre}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-[#1a6b32] transition"
+                  placeholder="Nombre del doctor"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-between space-x-3 mt-8">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex-1"
+              >
+                Cancelar
+              </button>
+              
+              {/* Botón de eliminar - solo visible cuando se está editando una cita existente */}
+              {cita && onDelete && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex-1 flex items-center justify-center"
+                >
+                  <Trash2 size={18} className="mr-2" />
+                  Eliminar
+                </button>
+              )}
+              
+              <button
+                type="submit"
+                className="px-4 py-2 bg-[#1a6b32] text-white rounded-lg hover:bg-[#155529] transition flex-1"
+              >
+                {cita ? "Actualizar" : "Crear"} Cita
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AgendaPage() {
   const [citas, setcitas] = useState<cita[]>([])
   const [pacientes, setpacientes] = useState<paciente[]>([])
@@ -352,6 +1075,11 @@ export default function AgendaPage() {
   const [testingConnection, setTestingConnection] = useState(false)
   const [conflictoHorario, setConflictoHorario] = useState<citaConflict | null>(null)
   const [pendienteGuardar, setPendienteGuardar] = useState<Omit<cita, "id"> | null>(null)
+  const [diaSeleccionado, setDiaSeleccionado] = useState<string | null>(null)
+  const [mostrarConfirmarEliminacion, setMostrarConfirmarEliminacion] = useState(false)
+  const [citaAEliminar, setCitaAEliminar] = useState<cita | null>(null)
+  const [pacienteAEliminar, setPacienteAEliminar] = useState<paciente | null>(null)
+  const [eliminando, setEliminando] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -588,11 +1316,23 @@ export default function AgendaPage() {
     try {
       const horaFormateada = cleanTimeFormat(data.hora)
       
+      // Mapear los tipos de cita a los valores que espera el backend
+      const tipoMapeo: Record<string, string> = {
+
+        control: "control",
+        valoracion: "valoracion",
+        programacion_quirurgica: "program_quir",
+        visitador_medico: "visitador_medico",
+        valoracion_virtual: "valoracion_virtual",
+        control_virtual: "control_virtual",
+        control_postquirurgico: "control_postquirurgico"
+      }
+      
       const citaData = {
         paciente_id: parseInt(data.id_paciente),
         usuario_id: parseInt(data.id_usuario) || 1,
         fecha_hora: `${data.fecha}T${horaFormateada}:00`,
-        tipo: data.tipo_cita === "programacion_quirurgica" ? "program_quir" : data.tipo_cita,
+        tipo: tipoMapeo[data.tipo_cita] || data.tipo_cita,
         duracion_minutos: data.duracion,
         estado_id: getEstadoId(data.estado),
         notas: data.observaciones || ''
@@ -612,6 +1352,7 @@ export default function AgendaPage() {
       }
       
       setShowForm(false)
+      setDiaSeleccionado(null)
       
     } catch (apiError: any) {
       const errorMsg = handleApiError(apiError)
@@ -641,10 +1382,100 @@ export default function AgendaPage() {
     setEditingId(cita.id)
     setSelectedcita(cita)
     setShowForm(true)
+    setDiaSeleccionado(null)
   }
 
   const changeMonth = (offset: number) => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1))
+  }
+
+  const handleDiaClick = (fecha: string) => {
+    // Asegurarnos de que la fecha está en formato correcto
+    const fechaCorregida = formatDate(fecha)
+    setDiaSeleccionado(fechaCorregida)
+  }
+
+  // FUNCIÓN ACTUALIZADA CON PARÁMETRO hora
+  const handleNuevaCitaDesdeModal = (fecha: string, hora?: string) => {
+    setDiaSeleccionado(null)
+    setEditingId(null)
+    
+    // Si se pasa una hora, crear una cita predeterminada con esa hora
+    if (hora) {
+      const nuevaCitaPredefinida: Omit<cita, "id"> = {
+        id_paciente: "",
+        id_usuario: "1",
+        tipo_cita: "control",
+        fecha: fecha,
+        hora: hora,
+        duracion: 10,
+        estado: "pendiente",
+        observaciones: "",
+        paciente_nombre: "",
+        paciente_apellido: "",
+        doctor_nombre: "Dr. No Especificado"
+      };
+      
+      setSelectedcita(nuevaCitaPredefinida as any);
+    } else {
+      setSelectedcita(null);
+    }
+    
+    setShowForm(true);
+  }
+
+  // Función para solicitar eliminar cita
+  const solicitarEliminarCita = (cita: cita) => {
+    const paciente = getpacienteById(cita.id_paciente) || 
+      crearPacientePorDefecto(
+        cita.id_paciente,
+        cita.paciente_nombre,
+        cita.paciente_apellido
+      )
+    
+    setCitaAEliminar(cita)
+    setPacienteAEliminar(paciente)
+    setMostrarConfirmarEliminacion(true)
+    setSelectedcita(null) // Cerrar el modal de detalles si está abierto
+  }
+
+  // Función para confirmar y ejecutar la eliminación
+  const confirmarEliminarCita = async () => {
+    if (!citaAEliminar) return
+    
+    try {
+      setEliminando(true)
+      
+      // Llamar a la API para eliminar la cita
+      await api.deletecita(parseInt(citaAEliminar.id))
+      
+      // Recargar los datos
+      await loadData()
+      
+      // Cerrar modales
+      setMostrarConfirmarEliminacion(false)
+      setCitaAEliminar(null)
+      setPacienteAEliminar(null)
+      setShowForm(false) // Cerrar también el formulario de edición
+      setEditingId(null)
+      setSelectedcita(null)
+      
+      // Mostrar mensaje de éxito
+      toast.success('Cita eliminada exitosamente')
+      
+    } catch (apiError: any) {
+      const errorMsg = handleApiError(apiError)
+      toast.error(`Error al eliminar la cita: ${errorMsg}`)
+    } finally {
+      setEliminando(false)
+    }
+  }
+
+  // Función para cancelar la eliminación
+  const cancelarEliminacion = () => {
+    setMostrarConfirmarEliminacion(false)
+    setCitaAEliminar(null)
+    setPacienteAEliminar(null)
   }
 
   const daysInMonth = getDaysInMonth(currentDate)
@@ -669,6 +1500,7 @@ export default function AgendaPage() {
       return (
         <div
           key={day}
+          onClick={() => handleDiaClick(dateStr)}
           className={`aspect-square p-2 rounded-lg border cursor-pointer transition ${
             isToday
               ? "border-[#1a6b32] bg-[#99d6e8]/10"
@@ -697,7 +1529,11 @@ export default function AgendaPage() {
                     consulta: "bg-blue-500",
                     control: "bg-green-500",
                     valoracion: "bg-purple-500",
-                    programacion_quirurgica: "bg-red-500"
+                    programacion_quirurgica: "bg-red-500",
+                    visitador_medico: "bg-amber-500",
+                    valoracion_virtual: "bg-cyan-500",
+                    control_virtual: "bg-emerald-500",
+                    control_postquirurgico: "bg-pink-500"
                   }[cita.tipo_cita] || "bg-gray-500"
                   
                   const estadoColor = {
@@ -949,7 +1785,11 @@ export default function AgendaPage() {
                       consulta: "bg-blue-500",
                       control: "bg-green-500",
                       valoracion: "bg-purple-500",
-                      programacion_quirurgica: "bg-red-500"
+                      programacion_quirurgica: "bg-red-500",
+                      visitador_medico: "bg-amber-500",
+                      valoracion_virtual: "bg-cyan-500",
+                      control_virtual: "bg-emerald-500",
+                      control_postquirurgico: "bg-pink-500"
                     }[cita.tipo_cita] || "bg-gray-500"
 
                     const estadoColor = {
@@ -1020,6 +1860,7 @@ export default function AgendaPage() {
               setEditingId(null)
               setSelectedcita(null)
             }}
+            onDelete={selectedcita ? () => solicitarEliminarCita(selectedcita) : undefined}
           />
         )}
 
@@ -1035,9 +1876,18 @@ export default function AgendaPage() {
             }
             onClose={() => setSelectedcita(null)}
             onEdit={() => handleEdit(selectedcita)}
-            onDelete={() => {
-              console.log('Eliminar cita:', selectedcita.id);
-            }}
+            onDelete={() => solicitarEliminarCita(selectedcita)}
+          />
+        )}
+
+        {diaSeleccionado && (
+          <DiaCitasModal
+            fecha={diaSeleccionado}
+            citas={citasDelDia(diaSeleccionado)}
+            pacientes={pacientes}
+            onClose={() => setDiaSeleccionado(null)}
+            onEdit={handleEdit}
+            onNuevaCita={handleNuevaCitaDesdeModal}
           />
         )}
 
@@ -1046,6 +1896,15 @@ export default function AgendaPage() {
             conflicto={conflictoHorario}
             onCancel={handleCancelConflicto}
             onOverride={handleOverrideConflicto}
+          />
+        )}
+
+        {mostrarConfirmarEliminacion && citaAEliminar && pacienteAEliminar && (
+          <ConfirmarEliminacionModal
+            cita={citaAEliminar}
+            paciente={pacienteAEliminar}
+            onClose={cancelarEliminacion}
+            onConfirm={confirmarEliminarCita}
           />
         )}
       </div>
