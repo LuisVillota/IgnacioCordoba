@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Plus, Edit2, Eye, ArrowLeft, Upload } from "lucide-react"
+import { Plus, Edit2, Eye, ArrowLeft, Upload, Search, X } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { HistoriaForm } from "../../../components/HistoriaForm"
 import { HistoriaModal } from "../../../components/HistoriaModal"
@@ -12,12 +12,14 @@ import type { paciente } from "../../../types/paciente"
 export default function HistoriaClinicaPage() {
   const [historias, setHistorias] = useState<HistoriaClinica[]>([])
   const [pacientes, setpacientes] = useState<paciente[]>([])
+  const [filteredPacientes, setFilteredPacientes] = useState<paciente[]>([])
   const [selectedpacienteId, setSelectedpacienteId] = useState<string>("")
   const [selectedHistoria, setSelectedHistoria] = useState<HistoriaClinica | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState({ pacientes: false, historias: false, saving: false })
   const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
   
   const isSavingRef = useRef(false)
 
@@ -31,6 +33,21 @@ export default function HistoriaClinicaPage() {
     }
   }, [selectedpacienteId])
 
+  // Efecto para filtrar pacientes cuando cambia el término de búsqueda
+  useEffect(() => {
+    if (searchTerm.trim() === "") {
+      setFilteredPacientes(pacientes)
+    } else {
+      const term = searchTerm.toLowerCase().trim()
+      const filtered = pacientes.filter(paciente => 
+        paciente.nombres?.toLowerCase().includes(term) ||
+        paciente.apellidos?.toLowerCase().includes(term) ||
+        paciente.documento?.toLowerCase().includes(term)
+      )
+      setFilteredPacientes(filtered)
+    }
+  }, [searchTerm, pacientes])
+
   const loadpacientes = async () => {
     try {
       setLoading(prev => ({ ...prev, pacientes: true }))
@@ -43,6 +60,7 @@ export default function HistoriaClinicaPage() {
       ) || []
       
       setpacientes(pacientesTransformados)
+      setFilteredPacientes(pacientesTransformados)
     } catch (error) {
       const errorMessage = handleApiError(error)
       setError(`Error cargando pacientes: ${errorMessage}`)
@@ -120,6 +138,10 @@ export default function HistoriaClinicaPage() {
     setShowForm(true)
   }
 
+  const clearSearch = () => {
+    setSearchTerm("")
+  }
+
   const paciente = pacientes.find((p) => p.id === selectedpacienteId)
   const pacienteHistorias = historias.filter((h) => h.id_paciente === selectedpacienteId)
 
@@ -153,24 +175,68 @@ export default function HistoriaClinicaPage() {
             </div>
           ) : (
             <div className="mt-8">
-              <label className="block text-sm font-semibold text-gray-700 mb-4">
-                Seleccionar paciente ({pacientes.length} pacientes)
-              </label>
-              {pacientes.length === 0 ? (
+              {/* Barra de búsqueda */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Buscar paciente ({filteredPacientes.length} de {pacientes.length} pacientes)
+                </label>
+                <div className="relative max-w-md">
+                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar por nombre, apellido o documento..."
+                    className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent outline-none transition"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={clearSearch}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      type="button"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Filtra por nombre, apellido o número de documento
+                </p>
+              </div>
+
+              {filteredPacientes.length === 0 ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-                  <p className="text-gray-600 mb-4">No hay pacientes registrados</p>
-                  <p className="text-sm text-gray-500">Agrega pacientes desde el módulo de pacientes</p>
+                  {searchTerm ? (
+                    <>
+                      <p className="text-gray-600 mb-4">No se encontraron pacientes con "{searchTerm}"</p>
+                      <button
+                        onClick={clearSearch}
+                        className="inline-flex items-center space-x-2 bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg transition"
+                        type="button"
+                      >
+                        <X size={16} />
+                        <span>Limpiar búsqueda</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-gray-600 mb-4">No hay pacientes registrados</p>
+                      <p className="text-sm text-gray-500">Agrega pacientes desde el módulo de pacientes</p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {pacientes.map((p) => (
+                  {filteredPacientes.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => setSelectedpacienteId(p.id)}
-                      className="p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-[#1a6b32] transition text-left"
+                      className="p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-[#1a6b32] transition text-left group"
                       type="button"
                     >
-                      <p className="font-semibold text-gray-800">
+                      <p className="font-semibold text-gray-800 group-hover:text-[#1a6b32] transition">
                         {p.nombres} {p.apellidos}
                       </p>
                       <p className="text-sm text-gray-600 mt-1">
@@ -178,7 +244,7 @@ export default function HistoriaClinicaPage() {
                       </p>
                       <div className="flex justify-between items-center mt-2">
                         <p className="text-xs text-gray-500">{p.ciudad}</p>
-                        <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600">
+                        <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 group-hover:bg-[#1a6b32] group-hover:text-white transition">
                           {p.estado_paciente}
                         </span>
                       </div>
@@ -203,6 +269,7 @@ export default function HistoriaClinicaPage() {
               setSelectedHistoria(null)
               setHistorias([])
               setError(null)
+              setSearchTerm("") // Limpiar búsqueda al volver
             }}
             className="p-2 hover:bg-gray-100 rounded-lg transition"
             disabled={loading.historias || loading.saving}

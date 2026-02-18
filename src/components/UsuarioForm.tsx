@@ -145,8 +145,8 @@ const handleSubmit = (e: React.FormEvent) => {
             >
               <option value={1}>Administrador</option>
               <option value={2}>Doctor</option>
-              <option value={3}>Recepción</option>
-              <option value={4}>Otro</option>
+              <option value={3}>secretaria</option>
+              <option value={4}>programacion</option>
             </select>
           </div>
 

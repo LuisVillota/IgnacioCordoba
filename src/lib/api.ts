@@ -16,6 +16,28 @@ const setCachedData = (key: string, data: any) => {
   apiCache.set(key, { data, timestamp: Date.now() });
 };
 
+// Función para eliminar archivo
+export const deletePlanFile = async (nombreArchivo: string, planId: string) => {
+  try {
+    const response = await fetch(`/api/planes/${planId}/archivos/${encodeURIComponent(nombreArchivo)}`, {
+      method: 'DELETE',
+    });
+    return await response.json();
+  } catch (error) {
+    return { error: true, message: error.message };
+  }
+};
+
+// Función para visualizar archivo (si es necesario)
+export const viewPlanFile = async (nombreArchivo: string, planId: string) => {
+  try {
+    const response = await fetch(`/api/planes/${planId}/archivos/${encodeURIComponent(nombreArchivo)}?view=true`);
+    return await response.json();
+  } catch (error) {
+    return { error: true, message: error.message };
+  }
+};
+
 export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   let bodyForLog = undefined;
@@ -3368,6 +3390,8 @@ export const cotizacionHelpers = {
     fecha.setDate(fecha.getDate() + diasValidez);
     return fecha.toISOString().split('T')[0];
   },
+
+  
 
   // Función auxiliar para calcular total rápido
   calcularTotalRapido: (subtotalProcedimientos: number, subtotalAdicionales: number, subtotalOtrosAdicionales: number): number => {
