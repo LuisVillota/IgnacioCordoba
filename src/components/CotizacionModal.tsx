@@ -59,7 +59,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
   // Calcular subtotales directamente de los items con valores por defecto
   const calcularSubtotalProcedimientos = () => {
     const subtotal = itemsPorTipo.procedimientos.reduce((sum, item) => {
-      const valor = item.subtotal || 0
+      const valor = item.subtotal || item.valor_total || 0
       console.log("Item procedimiento:", item.nombre, "subtotal:", valor)
       return sum + Number(valor)
     }, 0)
@@ -69,7 +69,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
 
   const calcularSubtotalAdicionales = () => {
     const subtotal = itemsPorTipo.adicionales.reduce((sum, item) => {
-      const valor = item.subtotal || 0
+      const valor = item.subtotal || item.valor_total || 0
       console.log("Item adicional:", item.nombre, "subtotal:", valor)
       return sum + Number(valor)
     }, 0)
@@ -79,7 +79,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
 
   const calcularSubtotalOtrosAdicionales = () => {
     const subtotal = itemsPorTipo.otrosAdicionales.reduce((sum, item) => {
-      const valor = item.subtotal || 0
+      const valor = item.subtotal || item.valor_total || 0
       console.log("Item otro adicional:", item.nombre, "subtotal:", valor)
       return sum + Number(valor)
     }, 0)
@@ -109,6 +109,11 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
         month: '2-digit',
         year: 'numeric'
       })
+
+      // URL del logo desde la carpeta public/images
+      const logoUrl = '/images/logi.jpg'
+      const baseUrl = window.location.origin
+      const logoUrlCompleta = `${baseUrl}${logoUrl}`
       
       // Calcular subtotales para el PDF
       const subtotalProcedimientos = calcularSubtotalProcedimientos()
@@ -507,8 +512,8 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                     <tbody>
                       ${itemsPorTipo.procedimientos.map(item => {
                         const cantidad = item.cantidad || 1
-                        const precioUnitario = item.precio_unitario || 0
-                        const subtotalItem = item.subtotal || (cantidad * precioUnitario)
+                        const precioUnitario = item.precio_unitario || item.valor_unitario || 0
+                        const subtotalItem = item.subtotal || item.valor_total || (cantidad * precioUnitario)
                         
                         return `
                           <tr>
@@ -550,8 +555,8 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                     <tbody>
                       ${itemsPorTipo.adicionales.map(item => {
                         const cantidad = item.cantidad || 1
-                        const precioUnitario = item.precio_unitario || 0
-                        const subtotalItem = item.subtotal || (cantidad * precioUnitario)
+                        const precioUnitario = item.precio_unitario || item.valor_unitario || 0
+                        const subtotalItem = item.subtotal || item.valor_total || (cantidad * precioUnitario)
                         
                         return `
                           <tr>
@@ -589,8 +594,8 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                     <tbody>
                       ${itemsPorTipo.otrosAdicionales.map(item => {
                         const cantidad = item.cantidad || 1
-                        const precioUnitario = item.precio_unitario || 0
-                        const subtotalItem = item.subtotal || (cantidad * precioUnitario)
+                        const precioUnitario = item.precio_unitario || item.valor_unitario || 0
+                        const subtotalItem = item.subtotal || item.valor_total || (cantidad * precioUnitario)
                         
                         return `
                           <tr>
@@ -802,8 +807,8 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               <div className="space-y-3">
                 {itemsPorTipo.procedimientos.map((item) => {
                   const cantidad = item.cantidad || 1
-                  const precioUnitario = item.precio_unitario || 0
-                  const subtotalItem = item.subtotal || (cantidad * precioUnitario)
+                  const precioUnitario = item.precio_unitario || item.valor_unitario || 0
+                  const subtotalItem = item.subtotal || item.valor_total || (cantidad * precioUnitario)
                   
                   return (
                     <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -838,8 +843,8 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               <div className="space-y-3">
                 {itemsPorTipo.adicionales.map((item) => {
                   const cantidad = item.cantidad || 1
-                  const precioUnitario = item.precio_unitario || 0
-                  const subtotalItem = item.subtotal || (cantidad * precioUnitario)
+                  const precioUnitario = item.precio_unitario || item.valor_unitario || 0
+                  const subtotalItem = item.subtotal || item.valor_total || (cantidad * precioUnitario)
                   
                   return (
                     <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -874,8 +879,8 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               <div className="space-y-3">
                 {itemsPorTipo.otrosAdicionales.map((item) => {
                   const cantidad = item.cantidad || 1
-                  const precioUnitario = item.precio_unitario || 0
-                  const subtotalItem = item.subtotal || (cantidad * precioUnitario)
+                  const precioUnitario = item.precio_unitario || item.valor_unitario || 0
+                  const subtotalItem = item.subtotal || item.valor_total || (cantidad * precioUnitario)
                   
                   return (
                     <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">

@@ -187,6 +187,227 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
                 notas_corporales_str = json_to_str(plan.notas_corporales)
                 esquema_mejorado_str = json_to_str(plan.esquema_mejorado)
                 
+                # Preparar valores - IMPORTANTE: orden debe coincidir con columnas
+                valores = (
+                    plan.paciente_id,              # 1
+                    plan.usuario_id,               # 2
+                    plan.procedimiento_desc,       # 3
+                    plan.anestesiologo,            # 4
+                    plan.materiales_requeridos,    # 5
+                    plan.notas_preoperatorias,     # 6
+                    plan.riesgos,                  # 7
+                    plan.hora,                     # 8
+                    plan.fecha_programada,         # 9
+                    plan.nombre_completo,          # 10
+                    plan.peso,                     # 11
+                    plan.altura,                   # 12
+                    plan.fecha_nacimiento,         # 13
+                    plan.imc,                      # 14
+                    plan.imagen_procedimiento,     # 15
+                    plan.fecha_ultimo_procedimiento, # 16
+                    plan.descripcion_procedimiento,  # 17
+                    plan.detalles,                 # 18
+                    plan.notas_doctor,             # 19
+                    plan.tiempo_cirugia_minutos,   # 20
+                    plan.entidad,                  # 21
+                    plan.edad,                     # 22
+                    plan.telefono,                 # 23
+                    plan.celular,                  # 24
+                    plan.direccion,                # 25
+                    plan.email,                    # 26
+                    plan.motivo_consulta,          # 27
+                    plan.farmacologicos,           # 28
+                    plan.traumaticos,              # 29
+                    plan.quirurgicos,              # 30
+                    plan.alergicos,                # 31
+                    plan.toxicos,                  # 32
+                    plan.habitos,                  # 33
+                    plan.cabeza,                   # 34
+                    plan.mamas,                    # 35
+                    plan.tcs,                      # 36
+                    plan.abdomen,                  # 37
+                    plan.gluteos,                  # 38
+                    plan.extremidades,             # 39
+                    plan.pies_faneras,             # 40
+                    plan.identificacion,           # 41
+                    plan.fecha_consulta,           # 42
+                    plan.hora_consulta,            # 43
+                    plan.categoriaIMC,             # 44
+                    plan.edad_calculada,           # 45
+                    plan.ocupacion,                # 46
+                    enfermedad_actual_str,         # 47
+                    antecedentes_str,              # 48
+                    notas_corporales_str,          # 49
+                    plan.duracion_estimada,        # 50
+                    plan.tipo_anestesia,           # 51
+                    plan.requiere_hospitalizacion, # 52
+                    plan.tiempo_hospitalizacion,   # 53
+                    plan.reseccion_estimada,       # 54
+                    plan.firma_cirujano,           # 55
+                    plan.firma_paciente,           # 56
+                    esquema_mejorado_str,          # 57
+                    plan.plan_conducta             # 58
+                )
+                
+                print(f"🔍 DEBUG: Total de valores a insertar: {len(valores)}")
+                
+                # Query INSERT con 58 columnas
+                query = """
+                    INSERT INTO plan_quirurgico (
+                        paciente_id, usuario_id, procedimiento_desc, anestesiologo,
+                        materiales_requeridos, notas_preoperatorias, riesgos, hora,
+                        fecha_programada, nombre_completo, peso, altura, fecha_nacimiento,
+                        imc, imagen_procedimiento, fecha_ultimo_procedimiento,
+                        descripcion_procedimiento, detalles, notas_doctor,
+                        tiempo_cirugia_minutos, entidad, edad, telefono, celular,
+                        direccion, email, motivo_consulta, farmacologicos, traumaticos,
+                        quirurgicos, alergicos, toxicos, habitos, cabeza, mamas,
+                        tcs, abdomen, gluteos, extremidades, pies_faneras,
+                        identificacion, fecha_consulta, hora_consulta, categoriaIMC,
+                        edad_calculada, ocupacion, enfermedad_actual, antecedentes,
+                        notas_corporales, duracion_estimada, tipo_anestesia,
+                        requiere_hospitalizacion, tiempo_hospitalizacion,
+                        reseccion_estimada, firma_cirujano, firma_paciente,
+                        esquema_mejorado, plan_conducta
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s
+                    )
+                """
+                
+                # Contar placeholders
+                num_placeholders = query.count('%s')
+                print(f"🔍 DEBUG: Placeholders en query: {num_placeholders}")
+                print(f"🔍 DEBUG: Valores proporcionados: {len(valores)}")
+                
+                if num_placeholders != len(valores):
+                    raise Exception(f"Desajuste: {num_placeholders} placeholders vs {len(valores)} valores")
+                
+                cursor.execute(query, valores)
+                
+                plan_id = cursor.lastrowid
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Plan quirúrgico creado exitosamente",
+                    "plan_id": plan_id,
+                    "id": plan_id
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creando plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    """Crear un nuevo plan quirúrgico"""
+    try:
+        conn = get_connection()
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el paciente existe
+                cursor.execute("SELECT id FROM paciente WHERE id = %s", (plan.paciente_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                
+                # Convertir campos JSON a string
+                enfermedad_actual_str = json_to_str(plan.enfermedad_actual)
+                antecedentes_str = json_to_str(plan.antecedentes)
+                notas_corporales_str = json_to_str(plan.notas_corporales)
+                esquema_mejorado_str = json_to_str(plan.esquema_mejorado)
+                
+                # Insertar plan quirúrgico - CORREGIDO: 55 campos = 55 valores
+                cursor.execute("""
+                    INSERT INTO plan_quirurgico (
+                        paciente_id, usuario_id, procedimiento_desc, anestesiologo,
+                        materiales_requeridos, notas_preoperatorias, riesgos, hora,
+                        fecha_programada, nombre_completo, peso, altura, fecha_nacimiento,
+                        imc, imagen_procedimiento, fecha_ultimo_procedimiento,
+                        descripcion_procedimiento, detalles, notas_doctor,
+                        tiempo_cirugia_minutos, entidad, edad, telefono, celular,
+                        direccion, email, motivo_consulta, farmacologicos, traumaticos,
+                        quirurgicos, alergicos, toxicos, habitos, cabeza, mamas,
+                        tcs, abdomen, gluteos, extremidades, pies_faneras,
+                        identificacion, fecha_consulta, hora_consulta, categoriaIMC,
+                        edad_calculada, ocupacion, enfermedad_actual, antecedentes,
+                        notas_corporales, duracion_estimada, tipo_anestesia,
+                        requiere_hospitalizacion, tiempo_hospitalizacion,
+                        reseccion_estimada, firma_cirujano, firma_paciente,
+                        plan_conducta, esquema_mejorado
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s
+                    )
+                """, (
+                    # 1-10
+                    plan.paciente_id, plan.usuario_id, plan.procedimiento_desc,
+                    plan.anestesiologo, plan.materiales_requeridos,
+                    plan.notas_preoperatorias, plan.riesgos, plan.hora,
+                    plan.fecha_programada, plan.nombre_completo,
+                    # 11-20
+                    plan.peso, plan.altura, plan.fecha_nacimiento, plan.imc,
+                    plan.imagen_procedimiento, plan.fecha_ultimo_procedimiento,
+                    plan.descripcion_procedimiento, plan.detalles, plan.notas_doctor,
+                    plan.tiempo_cirugia_minutos,
+                    # 21-30
+                    plan.entidad, plan.edad, plan.telefono, plan.celular, 
+                    plan.direccion, plan.email, plan.motivo_consulta, 
+                    plan.farmacologicos, plan.traumaticos, plan.quirurgicos,
+                    # 31-40
+                    plan.alergicos, plan.toxicos, plan.habitos, plan.cabeza, 
+                    plan.mamas, plan.tcs, plan.abdomen, plan.gluteos,
+                    plan.extremidades, plan.pies_faneras,
+                    # 41-50
+                    plan.identificacion, plan.fecha_consulta, plan.hora_consulta, 
+                    plan.categoriaIMC, plan.edad_calculada, plan.ocupacion, 
+                    enfermedad_actual_str, antecedentes_str, notas_corporales_str,
+                    plan.duracion_estimada,
+                    # 51-55
+                    plan.tipo_anestesia, plan.requiere_hospitalizacion,
+                    plan.tiempo_hospitalizacion, plan.reseccion_estimada,
+                    plan.firma_cirujano, plan.firma_paciente, plan.plan_conducta,
+                    esquema_mejorado_str
+                ))
+                
+                plan_id = cursor.lastrowid
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Plan quirúrgico creado exitosamente",
+                    "plan_id": plan_id,
+                    "id": plan_id
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creando plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    """Crear un nuevo plan quirúrgico"""
+    try:
+        conn = get_connection()
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el paciente existe
+                cursor.execute("SELECT id FROM paciente WHERE id = %s", (plan.paciente_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
+                
+                # Convertir campos JSON a string
+                enfermedad_actual_str = json_to_str(plan.enfermedad_actual)
+                antecedentes_str = json_to_str(plan.antecedentes)
+                notas_corporales_str = json_to_str(plan.notas_corporales)
+                esquema_mejorado_str = json_to_str(plan.esquema_mejorado)
+                
                 # Insertar plan quirúrgico - CORREGIDO
                 cursor.execute("""
                     INSERT INTO plan_quirurgico (
@@ -253,6 +474,75 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
 
 @router.put("/{plan_id}", response_model=dict)
 def update_plan_quirurgico(plan_id: int, plan: PlanQuirurgicoUpdate):
+    """Actualizar un plan quirúrgico existente"""
+    try:
+        conn = get_connection()
+        with conn:
+            with conn.cursor() as cursor:
+                # Verificar que el plan existe
+                cursor.execute("SELECT id FROM plan_quirurgico WHERE id = %s", (plan_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Plan quirúrgico no encontrado")
+                
+                # Convertir campos JSON a string
+                enfermedad_actual_str = json_to_str(plan.enfermedad_actual)
+                antecedentes_str = json_to_str(plan.antecedentes)
+                notas_corporales_str = json_to_str(plan.notas_corporales)
+                esquema_mejorado_str = json_to_str(plan.esquema_mejorado)
+                
+                # Actualizar plan
+                cursor.execute("""
+                    UPDATE plan_quirurgico SET
+                        procedimiento_desc = %s, anestesiologo = %s,
+                        materiales_requeridos = %s, notas_preoperatorias = %s,
+                        riesgos = %s, hora = %s, fecha_programada = %s,
+                        peso = %s, altura = %s, imc = %s,
+                        farmacologicos = %s, traumaticos = %s, quirurgicos = %s,
+                        alergicos = %s, toxicos = %s, habitos = %s,
+                        cabeza = %s, mamas = %s, tcs = %s, abdomen = %s,
+                        gluteos = %s, extremidades = %s, pies_faneras = %s,
+                        duracion_estimada = %s, tipo_anestesia = %s,
+                        requiere_hospitalizacion = %s, tiempo_hospitalizacion = %s,
+                        reseccion_estimada = %s, firma_cirujano = %s,
+                        firma_paciente = %s, enfermedad_actual = %s,
+                        antecedentes = %s, notas_corporales = %s,
+                        esquema_mejorado = %s, plan_conducta = %s,
+                        descripcion_procedimiento = %s, detalles = %s,
+                        notas_doctor = %s, tiempo_cirugia_minutos = %s
+                    WHERE id = %s
+                """, (
+                    plan.procedimiento_desc, plan.anestesiologo,
+                    plan.materiales_requeridos, plan.notas_preoperatorias,
+                    plan.riesgos, plan.hora, plan.fecha_programada,
+                    plan.peso, plan.altura, plan.imc,
+                    plan.farmacologicos, plan.traumaticos, plan.quirurgicos,
+                    plan.alergicos, plan.toxicos, plan.habitos,
+                    plan.cabeza, plan.mamas, plan.tcs, plan.abdomen,
+                    plan.gluteos, plan.extremidades, plan.pies_faneras,
+                    plan.duracion_estimada, plan.tipo_anestesia,
+                    plan.requiere_hospitalizacion, plan.tiempo_hospitalizacion,
+                    plan.reseccion_estimada, plan.firma_cirujano,
+                    plan.firma_paciente, enfermedad_actual_str,
+                    antecedentes_str, notas_corporales_str,
+                    esquema_mejorado_str, plan.plan_conducta,
+                    plan.descripcion_procedimiento, plan.detalles,
+                    plan.notas_doctor, plan.tiempo_cirugia_minutos,
+                    plan_id  # Este va al final para el WHERE
+                ))
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Plan quirúrgico actualizado exitosamente",
+                    "plan_id": plan_id
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error actualizando plan: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
     """Actualizar un plan quirúrgico existente"""
     try:
         conn = get_connection()
