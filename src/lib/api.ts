@@ -25,7 +25,7 @@ export const deletePlanFile = async (nombreArchivo: string, planId: string) => {
     });
     return await response.json();
   } catch (error) {
-    return { error: true, message: error instanceof Error ? error.message : 'Error desconocido' };
+    return { error: true, message: error.message };
   }
 };
 
@@ -35,7 +35,7 @@ export const viewPlanFile = async (nombreArchivo: string, planId: string) => {
     const response = await fetch(`/api/planes/${planId}/archivos/${encodeURIComponent(nombreArchivo)}?view=true`);
     return await response.json();
   } catch (error) {
-    return { error: true, message: error instanceof Error ? error.message : 'Error desconocido' };
+    return { error: true, message: error.message };
   }
 };
 
