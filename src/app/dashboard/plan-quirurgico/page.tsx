@@ -2,20 +2,26 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-import { Plus, Edit2, Eye, Calendar, Scale, User, FileText, RefreshCw, Download, Printer, Trash2 } from "lucide-react"
+import { useSearchParams } from "next/navigation"
+import { Plus, Edit2, Eye, Calendar, Scale, User, FileText, RefreshCw, Download, Printer, Trash2, Search, Loader2 } from "lucide-react"
 import type { PlanQuirurgico } from "../../../types/planQuirurgico"
 import { PlanQuirurgicoForm } from "../../../components/PlanQuirurgicoForm"
 import { api } from "../../../lib/api"
 
 export default function PlanQuirurgicoPage() {
+  const searchParams = useSearchParams()
+  const pacienteIdFromQuery = searchParams.get("paciente_id")
+
   const [planesQuirurgicos, setPlanesQuirurgicos] = useState<PlanQuirurgico[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
+
   const [planSeleccionado, setPlanSeleccionado] = useState<PlanQuirurgico | undefined>()
-  const [vistaActual, setVistaActual] = useState<"lista" | "formulario">("lista")
+  const [vistaActual, setVistaActual] = useState<"lista" | "formulario">(pacienteIdFromQuery ? "formulario" : "lista")
   const [refreshing, setRefreshing] = useState(false)
-  
+  const [searchTermPlan, setSearchTermPlan] = useState("")
+  const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null)
+
   // Usar useRef para prevenir llamadas duplicadas
   const isMounted = useRef(true)
   const isFetching = useRef(false)
@@ -24,7 +30,7 @@ export default function PlanQuirurgicoPage() {
   useEffect(() => {
     isMounted.current = true
     cargarPlanes()
-    
+
     return () => {
       isMounted.current = false
     }
@@ -111,6 +117,36 @@ export default function PlanQuirurgicoPage() {
     setPlanSeleccionado(undefined)
     setVistaActual("formulario")
   }
+
+  const handleEliminarPlan = async (plan: PlanQuirurgico) => {
+    if (!window.confirm(`¿Estás seguro de eliminar el plan de ${plan.datos_paciente?.nombre_completo || 'este paciente'}?`)) return
+    try {
+      setDeletingPlanId(plan.id)
+      await api.deletePlanQuirurgico(plan.id)
+      alert("Plan quirúrgico eliminado exitosamente")
+      await cargarPlanes()
+    } catch (err: any) {
+      console.error("Error eliminando plan:", err)
+      alert(`Error: ${err.message || 'Error desconocido'}`)
+    } finally {
+      setDeletingPlanId(null)
+    }
+  }
+
+  // Filtrar y ordenar planes A-Z
+  const filteredPlanes = planesQuirurgicos
+    .filter((plan) => {
+      if (!searchTermPlan.trim()) return true
+      const term = searchTermPlan.toLowerCase()
+      const nombre = (plan.datos_paciente?.nombre_completo || '').toLowerCase()
+      const doc = (plan.datos_paciente?.identificacion || '').toLowerCase()
+      return nombre.includes(term) || doc.includes(term)
+    })
+    .sort((a, b) => {
+      const nameA = (a.datos_paciente?.nombre_completo || '').toLowerCase()
+      const nameB = (b.datos_paciente?.nombre_completo || '').toLowerCase()
+      return nameA.localeCompare(nameB)
+    })
 
   const handleEditar = async (plan: PlanQuirurgico) => {
     console.log("🔄 Editando plan:", {
@@ -564,7 +600,7 @@ export default function PlanQuirurgicoPage() {
   };
 
   // Función para imprimir el contenido del modal
-  const imprimirPlan = () => {
+  const imprimirPlan = async () => {
     if (!planParaVer) return;
 
     // Crear una ventana de impresión
@@ -576,12 +612,41 @@ export default function PlanQuirurgicoPage() {
 
     // Obtener datos del plan
     const plan = planParaVer;
-    const imcData = plan.datos_paciente.imc ? 
+    const imcData = plan.datos_paciente.imc ?
       { imc: plan.datos_paciente.imc, categoria: plan.datos_paciente.categoriaIMC } :
       calcularIMC(Number(plan.datos_paciente.peso), Number(plan.datos_paciente.altura));
 
     // URL del logo de la clínica
     const logoUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQceqGrv0esgBkN1C8B_p7qsRJaV-zVHVk0sw&s';
+
+    // Buscar imagen del esquema en HC del paciente
+    let esquemaUrl = '';
+    const pacienteId = plan.id_paciente || plan.datos_paciente?.id;
+    console.log("🖼️ Buscando esquema para paciente:", pacienteId);
+    if (pacienteId) {
+      try {
+        const historias = await api.getHistoriasBypaciente(parseInt(pacienteId));
+        let historiasArray: any[] = [];
+        if (Array.isArray(historias)) historiasArray = historias;
+        else if (historias?.historias) historiasArray = historias.historias;
+        else if (historias?.data) historiasArray = historias.data;
+
+        console.log("🖼️ HCs encontradas:", historiasArray.length);
+        if (historiasArray.length > 0) {
+          const hcReciente = historiasArray[historiasArray.length - 1];
+          const fotosStr = hcReciente.fotos ? String(hcReciente.fotos) : '';
+          const fotos = fotosStr.split(',').filter((f: string) => f.trim());
+          console.log("🖼️ Fotos en HC:", fotos);
+          // Usar la foto más reciente de la HC (el esquema se sube como última foto)
+          if (fotos.length > 0) {
+            esquemaUrl = fotos[fotos.length - 1];
+            console.log("🖼️ Esquema URL encontrada:", esquemaUrl);
+          }
+        }
+      } catch (err) {
+        console.warn("No se pudo obtener esquema de HC:", err);
+      }
+    }
 
     // Crear contenido HTML para imprimir
     const contenidoHTML = `
@@ -1220,7 +1285,14 @@ export default function PlanQuirurgicoPage() {
               ` : ''}
               
               <!-- ESQUEMA QUIRÚRGICO -->
-              ${plan.esquema_mejorado && Object.keys(plan.esquema_mejorado.zoneMarkings || {}).length > 0 ? `
+              ${esquemaUrl ? `
+              <div class="compact-section">
+                  <div class="section-title">📐 ESQUEMA QUIRÚRGICO</div>
+                  <div style="text-align: center; margin: 5px 0;">
+                      <img src="${esquemaUrl}" alt="Esquema Corporal" style="max-width: 55%; max-height: 400px; object-fit: contain; border: 1px solid #dee2e6; border-radius: 6px;" />
+                  </div>
+              </div>
+              ` : (plan.esquema_mejorado && Object.keys(plan.esquema_mejorado.zoneMarkings || {}).length > 0 ? `
               <div class="compact-section">
                   <div class="section-title">📐 ESQUEMA QUIRÚRGICO</div>
                   <div class="grid-2">
@@ -1236,7 +1308,7 @@ export default function PlanQuirurgicoPage() {
                       </div>
                   </div>
               </div>
-              ` : ''}
+              ` : '')}
               
               <!-- ARCHIVOS ADJUNTOS -->
               ${plan.imagenes_adjuntas && plan.imagenes_adjuntas.length > 0 ? `
@@ -1310,14 +1382,40 @@ export default function PlanQuirurgicoPage() {
           </div>
           
           <script>
-              // Esperar a que la página cargue e imprimir automáticamente
+              // Esperar a que la página y las imágenes carguen e imprimir
               window.onload = function() {
-                  setTimeout(function() {
-                      window.print();
+                  var images = document.querySelectorAll('img');
+                  var loaded = 0;
+                  var total = images.length;
+
+                  function tryPrint() {
                       setTimeout(function() {
-                          window.close();
-                      }, 1000);
-                  }, 500);
+                          window.print();
+                          setTimeout(function() {
+                              window.close();
+                          }, 1000);
+                      }, 300);
+                  }
+
+                  if (total === 0) {
+                      tryPrint();
+                  } else {
+                      images.forEach(function(img) {
+                          if (img.complete) {
+                              loaded++;
+                              if (loaded >= total) tryPrint();
+                          } else {
+                              img.addEventListener('load', function() {
+                                  loaded++;
+                                  if (loaded >= total) tryPrint();
+                              });
+                              img.addEventListener('error', function() {
+                                  loaded++;
+                                  if (loaded >= total) tryPrint();
+                              });
+                          }
+                      });
+                  }
               }
           </script>
       </body>
@@ -1329,14 +1427,145 @@ export default function PlanQuirurgicoPage() {
     ventanaImpresion.document.close();
   };
 
-  const handleGuardar = async (plan: PlanQuirurgico) => {
+  // Mapea datos del Plan Quirúrgico al formato de la API de Historia Clínica
+  const mapPlanToHistoriaClinica = (pacienteId: string, hc: any) => {
+    // Concatenar notas_corporales en un solo texto para exploracion_fisica
+    const notasCorporales = hc.notas_corporales || {}
+    const exploracionFisica = Object.entries(notasCorporales)
+      .filter(([_, value]) => value && String(value).trim())
+      .map(([key, value]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}`)
+      .join('\n')
+
+    const antecedentes = hc.antecedentes || {}
+
+    return {
+      paciente_id: parseInt(pacienteId),
+      motivo_consulta: hc.motivo_consulta || '',
+      antecedentes_medicos: hc.antecedentes_medicos || '',
+      antecedentes_quirurgicos: antecedentes.quirurgicos || '',
+      antecedentes_alergicos: antecedentes.alergicos || '',
+      antecedentes_farmacologicos: antecedentes.farmacologicos || '',
+      exploracion_fisica: exploracionFisica,
+      diagnostico: hc.diagnostico || '',
+      tratamiento: hc.tratamiento || '',
+      recomendaciones: hc.recomendaciones || '',
+    }
+  }
+
+  // Guarda/actualiza la Historia Clínica a partir de los datos del Plan
+  const guardarHistoriaClinicaDesdePlan = async (plan: PlanQuirurgico) => {
+    const pacienteId = plan.id_paciente || plan.datos_paciente?.id
+    if (!pacienteId) {
+      console.warn("⚠️ Sin ID de paciente, omitiendo guardado de HC")
+      return
+    }
+
+    const hcData = mapPlanToHistoriaClinica(pacienteId, plan.historia_clinica || {})
+
+    try {
+      // Verificar si ya existe una HC para este paciente
+      const existingHistorias = await api.getHistoriasBypaciente(parseInt(pacienteId))
+
+      let historiasArray: any[] = []
+      if (Array.isArray(existingHistorias)) {
+        historiasArray = existingHistorias
+      } else if (existingHistorias?.historias) {
+        historiasArray = existingHistorias.historias
+      } else if (existingHistorias?.data) {
+        historiasArray = existingHistorias.data
+      }
+
+      if (historiasArray.length > 0) {
+        // Actualizar la más reciente, preservando fotos existentes
+        const latestHC = historiasArray[historiasArray.length - 1]
+        console.log(`📝 Actualizando HC existente ID: ${latestHC.id}`)
+        await api.updateHistoriaClinica(parseInt(latestHC.id), {
+          ...hcData,
+          fotos: latestHC.fotos || '',
+        })
+      } else {
+        // Crear nueva
+        console.log("🆕 Creando nueva HC para paciente:", pacienteId)
+        await api.createHistoriaClinica(hcData)
+      }
+      console.log("✅ Historia Clínica sincronizada exitosamente")
+    } catch (error) {
+      // Si falla la consulta, intentar crear nueva
+      console.warn("⚠️ Error verificando HC existente, intentando crear nueva:", error)
+      try {
+        await api.createHistoriaClinica(hcData)
+        console.log("✅ Historia Clínica creada exitosamente")
+      } catch (createError) {
+        console.error("❌ No se pudo sincronizar la Historia Clínica:", createError)
+      }
+    }
+  }
+
+  // Sube la imagen del esquema a la HC del paciente (se llama después de guardar plan + HC)
+  const subirEsquemaAHistoriaClinica = async (plan: PlanQuirurgico, esquemaFile: File) => {
+    const pacienteId = plan.id_paciente || plan.datos_paciente?.id
+    if (!pacienteId) {
+      console.warn("⚠️ Sin ID de paciente, no se puede subir esquema")
+      return
+    }
+
+    // Buscar la HC que ya debería existir (se creó/actualizó en guardarHistoriaClinicaDesdePlan)
+    let historiaId: number | null = null
+    try {
+      const historias = await api.getHistoriasBypaciente(parseInt(pacienteId))
+      let historiasArray: any[] = []
+      if (Array.isArray(historias)) historiasArray = historias
+      else if (historias?.historias) historiasArray = historias.historias
+      else if (historias?.data) historiasArray = historias.data
+
+      if (historiasArray.length > 0) {
+        historiaId = parseInt(historiasArray[historiasArray.length - 1].id)
+      }
+    } catch {
+      console.warn("⚠️ No se encontró HC para subir esquema")
+      return
+    }
+
+    if (!historiaId) {
+      console.warn("⚠️ No hay HC disponible para adjuntar el esquema")
+      return
+    }
+
+    // Subir la foto
+    const uploadResult = await api.uploadHistoriaFoto(historiaId, esquemaFile)
+    console.log("✅ Esquema subido a HC:", uploadResult)
+
+    // Actualizar el campo 'fotos' de la HC con la nueva URL
+    if (uploadResult.url) {
+      const historias = await api.getHistoriasBypaciente(parseInt(pacienteId))
+      let historiasArray: any[] = []
+      if (Array.isArray(historias)) historiasArray = historias
+      else if (historias?.historias) historiasArray = historias.historias
+      else if (historias?.data) historiasArray = historias.data
+
+      const hcActual = historiasArray.find((h: any) => parseInt(h.id) === historiaId)
+      const fotosExistentes = hcActual?.fotos ? String(hcActual.fotos).split(',').filter((f: string) => f.trim()) : []
+      fotosExistentes.push(uploadResult.url)
+      const fotosString = fotosExistentes.join(',')
+
+      await api.updateHistoriaClinica(historiaId, {
+        ...hcActual,
+        paciente_id: parseInt(pacienteId),
+        fotos: fotosString
+      })
+      console.log("✅ Campo fotos actualizado en HC:", fotosString)
+    }
+  }
+
+  const handleGuardar = async (plan: PlanQuirurgico, esquemaFile?: File | null) => {
     try {
       console.log("💾 Guardando plan:", {
         id: plan.id,
         nombre: plan.datos_paciente.nombre_completo,
-        esEdicion: !!planSeleccionado
+        esEdicion: !!planSeleccionado,
+        tieneEsquema: !!esquemaFile
       })
-      
+
       // Sanitizar y validar los datos antes de enviar
       let planSanitizado: PlanQuirurgico;
       try {
@@ -1346,9 +1575,9 @@ export default function PlanQuirurgicoPage() {
         alert(`Error de validación: ${validationError.message}`);
         return;
       }
-      
+
       let result
-      
+
       if (planSeleccionado) {
         // Actualizar plan existente
         console.log("📝 Actualizando plan existente...")
@@ -1358,9 +1587,9 @@ export default function PlanQuirurgicoPage() {
         console.log("🆕 Creando nuevo plan...")
         result = await api.createPlanQuirurgico(planSanitizado)
       }
-      
+
       console.log("✅ Resultado del guardado:", result)
-      
+
       // fetchAPI ya devuelve un objeto, NO lanza excepciones
       if (result.error) {
         // Si hay error, mostrar mensaje y salir
@@ -1368,10 +1597,27 @@ export default function PlanQuirurgicoPage() {
         alert(`Error al guardar: ${result.message}`)
         return // Salir de la función
       }
-      
-      // Si es éxito, recargar la lista
+
+      // Si es éxito, sincronizar HC y recargar la lista
       if (result.success) {
-        console.log("✅ Plan guardado exitosamente, recargando lista...")
+        console.log("✅ Plan guardado exitosamente, sincronizando HC...")
+
+        // Guardar Historia Clínica (no bloquea si falla)
+        try {
+          await guardarHistoriaClinicaDesdePlan(planSanitizado)
+        } catch (hcError) {
+          console.warn("⚠️ Plan guardado pero no se pudo sincronizar la Historia Clínica:", hcError)
+        }
+
+        // Subir esquema a la HC (al final, cuando la HC ya existe)
+        if (esquemaFile) {
+          try {
+            await subirEsquemaAHistoriaClinica(planSanitizado, esquemaFile)
+          } catch (esquemaError) {
+            console.warn("⚠️ Plan y HC guardados pero no se pudo subir el esquema:", esquemaError)
+          }
+        }
+
         await cargarPlanes()
         setVistaActual("lista")
         alert(planSeleccionado ? "Plan actualizado exitosamente" : "Plan creado exitosamente")
@@ -1474,10 +1720,11 @@ export default function PlanQuirurgicoPage() {
             </p>
           )}
         </div>
-        <PlanQuirurgicoForm 
+        <PlanQuirurgicoForm
           plan={planSeleccionado}
           onGuardar={handleGuardar}
           onCancel={() => setVistaActual("lista")}
+          pacienteIdInicial={!planSeleccionado ? pacienteIdFromQuery || undefined : undefined}
         />
       </div>
     )
@@ -1510,6 +1757,36 @@ export default function PlanQuirurgicoPage() {
           </button>
         </div>
       </div>
+
+      {/* Barra de búsqueda */}
+      {!loading && planesQuirurgicos.length > 0 && vistaActual === "lista" && (
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Buscar plan quirúrgico ({filteredPlanes.length} de {planesQuirurgicos.length} planes)
+          </label>
+          <div className="relative max-w-md">
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              value={searchTermPlan}
+              onChange={(e) => setSearchTermPlan(e.target.value)}
+              placeholder="Buscar por nombre o documento del paciente..."
+              className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent outline-none transition"
+            />
+            {searchTermPlan && (
+              <button
+                onClick={() => setSearchTermPlan("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                type="button"
+              >
+                <span className="text-lg">&times;</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-12">
@@ -1544,15 +1821,26 @@ export default function PlanQuirurgicoPage() {
             Crear Primer Plan
           </button>
         </div>
+      ) : filteredPlanes.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+          <p className="text-gray-600 mb-4">No se encontraron planes con &quot;{searchTermPlan}&quot;</p>
+          <button
+            onClick={() => setSearchTermPlan("")}
+            className="inline-flex items-center space-x-2 bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg transition"
+            type="button"
+          >
+            <span>Limpiar búsqueda</span>
+          </button>
+        </div>
       ) : (
         <div className="grid gap-6">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm text-gray-600">
-              Mostrando <span className="font-bold">{planesQuirurgicos.length}</span> plan{planesQuirurgicos.length !== 1 ? 'es' : ''} quirúrgico{planesQuirurgicos.length !== 1 ? 's' : ''}
+              Mostrando <span className="font-bold">{filteredPlanes.length}</span> plan{filteredPlanes.length !== 1 ? 'es' : ''} quirúrgico{filteredPlanes.length !== 1 ? 's' : ''}
             </div>
           </div>
-          
-          {planesQuirurgicos.map((plan) => {
+
+          {filteredPlanes.map((plan) => {
             // Calcular IMC si no está en los datos
             const imcData = plan.datos_paciente.imc ? 
               { imc: plan.datos_paciente.imc, categoria: plan.datos_paciente.categoriaIMC } :
@@ -1600,6 +1888,19 @@ export default function PlanQuirurgicoPage() {
                     >
                       <Edit2 className="w-4 h-4" />
                       <span className="hidden sm:inline">Editar</span>
+                    </button>
+                    <button
+                      onClick={() => handleEliminarPlan(plan)}
+                      disabled={deletingPlanId === plan.id}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 text-sm disabled:opacity-50"
+                      title="Eliminar plan"
+                    >
+                      {deletingPlanId === plan.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                      <span className="hidden sm:inline">Eliminar</span>
                     </button>
                   </div>
                 </div>
@@ -1979,7 +2280,7 @@ export default function PlanQuirurgicoPage() {
               {/* NOTAS DEL DOCTOR */}
               {planParaVer.notas_doctor && (
                 <section className="mb-6 p-4 bg-gray-50 rounded-lg border">
-                  <h3 className="text-lg font-bold text-[#1a6b32] mb-4">Notas del Doctor</h3>
+                  <h3 className="text-lg font-bold text-[#1a6b32] mb-4">Notas del Doctor y evolución</h3>
                   <p className="text-gray-800 whitespace-pre-wrap bg-white p-3 rounded border">
                     {planParaVer.notas_doctor}
                   </p>

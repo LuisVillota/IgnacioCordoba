@@ -81,12 +81,18 @@ export default function pacientesPage() {
     }
   }
 
-  const filteredpacientes = pacientes.filter(
-    (p) =>
-      p.nombres.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.apellidos.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.documento.includes(searchTerm),
-  )
+  const filteredpacientes = pacientes
+    .filter(
+      (p) =>
+        p.nombres.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.apellidos.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.documento.includes(searchTerm),
+    )
+    .sort((a, b) => {
+      const nameA = `${a.nombres} ${a.apellidos}`.toLowerCase()
+      const nameB = `${b.nombres} ${b.apellidos}`.toLowerCase()
+      return nameA.localeCompare(nameB)
+    })
 
   const handleSavepaciente = async (data: Omit<paciente, "id" | "fecha_registro">) => {
     try {

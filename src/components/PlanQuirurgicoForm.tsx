@@ -2,17 +2,19 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react"
 import { PlanQuirurgico } from "../types/planQuirurgico"
-import { Search, Upload, X, Eye, Download } from "lucide-react"
+import { Search, Upload, X, Eye, Download, FileText } from "lucide-react"
 import { api } from "../lib/api"
 import { EsquemaViewer } from "../components/EsquemaViewer"
 import { CotizacionForm } from "../components/CotizacionForm"
+import { generarPlanPDF } from "../utils/generarPlanPDF"
 
 type ProcedureType = 'liposuction' | 'lipotransfer';
 
 interface Props {
   plan?: PlanQuirurgico
-  onGuardar: (plan: PlanQuirurgico) => void
+  onGuardar: (plan: PlanQuirurgico, esquemaFile?: File | null) => void
   onCancel?: () => void
+  pacienteIdInicial?: string
 }
 
 interface DibujoAccion {
@@ -25,7 +27,7 @@ interface DibujoAccion {
 
 type ZoneMarkingsSVG = { [zoneId: string]: 'liposuction' | 'lipotransfer' | null };
 
-export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel }) => {
+export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel, pacienteIdInicial }) => {
   
   // ---------------------------
   // Estado para selector de pacientes
@@ -40,12 +42,18 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   // Estado para el visor de esquemas
   // ---------------------------
   const [showEsquemaViewer, setShowEsquemaViewer] = useState(false)
+  const [esquemaCapturado, setEsquemaCapturado] = useState<File | null>(null)
 
   // ---------------------------
-  // NUEVO: Estado para el modal de cotización
+  // Estado para el modal de cotización
   // ---------------------------
   const [showCotizacionModal, setShowCotizacionModal] = useState(false)
   const [planPendienteGuardar, setPlanPendienteGuardar] = useState<PlanQuirurgico | null>(null)
+
+  // ---------------------------
+  // Estado para generación de PDF
+  // ---------------------------
+  const [generandoPDF, setGenerandoPDF] = useState(false)
 
   // ---------------------------
   // Estado para archivos/imágenes
@@ -72,9 +80,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
   })
 
   // ---------------------------
-  // Historia clínica - CON VALORES POR DEFECTO SEGUROS
+  // Historia clínica
   // ---------------------------
   const defaultEnfermedadActual = {
+    acido_peptica: false,
     hepatitis: false,
     discrasia_sanguinea: false,
     cardiopatias: false,
@@ -119,8 +128,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     celular: "",
     direccion: "",
     email: "",
+    referido_por: "",
     motivo_consulta: "",
     motivo_consulta_detalle: "",
+    descripcion_enfermedad_actual: "",
     enfermedad_actual: defaultEnfermedadActual,
     antecedentes: defaultAntecedentes,
     enfermedades_piel: false,
@@ -133,7 +144,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     notas_corporales: defaultNotasCorporales,
     diagnostico: "",
     plan_conducta: "",
+    antecedentes_medicos: "",
+    tratamiento: "",
+    recomendaciones: "",
   }
+
   const getSafeHistoriaClinica = () => {
     if (!plan?.historia_clinica) {
       return defaultHistoriaClinica;
@@ -563,14 +578,26 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       setpacientes(pacientesMapeados);
       
       if (datospaciente.id && pacientesMapeados.length > 0) {
-        const pacienteExistente = pacientesMapeados.find((p: any) => 
+        const pacienteExistente = pacientesMapeados.find((p: any) =>
           p.id.toString() === datospaciente.id.toString()
         );
         if (pacienteExistente) {
           setpacienteSeleccionado(pacienteExistente);
         }
       }
-      
+
+      // Auto-seleccionar paciente si viene de la agenda con pacienteIdInicial
+      if (pacienteIdInicial && pacientesMapeados.length > 0) {
+        const pacienteInicial = pacientesMapeados.find((p: any) =>
+          p.id.toString() === pacienteIdInicial.toString()
+        );
+        if (pacienteInicial) {
+          seleccionarpaciente(pacienteInicial);
+          setShowSelectorpacientes(false);
+          return;
+        }
+      }
+
       if (!plan && !pacienteSeleccionado && pacientesMapeados.length > 0) {
         setShowSelectorpacientes(true);
       }
@@ -594,22 +621,28 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     }
   };
   
-  const pacientesFiltrados = pacientes.filter(paciente => {
-    if (!searchTerm.trim()) return true;
-    
-    const term = searchTerm.toLowerCase();
-    const nombreCompleto = paciente.nombre_completo || `${paciente.nombre || ''} ${paciente.apellido || ''}`.toLowerCase();
-    const documento = paciente.numero_documento || paciente.documento || '';
-    const telefono = paciente.telefono || '';
-    const email = paciente.email || '';
-    
-    return (
-      nombreCompleto.includes(term) ||
-      documento.toLowerCase().includes(term) ||
-      telefono.includes(term) ||
-      email.toLowerCase().includes(term)
-    );
-  });
+  const pacientesFiltrados = [...pacientes]
+    .sort((a, b) => {
+      const nameA = (a.nombre_completo || `${a.nombre || ''} ${a.apellido || ''}`).toLowerCase()
+      const nameB = (b.nombre_completo || `${b.nombre || ''} ${b.apellido || ''}`).toLowerCase()
+      return nameA.localeCompare(nameB)
+    })
+    .filter(paciente => {
+      if (!searchTerm.trim()) return true;
+
+      const term = searchTerm.toLowerCase();
+      const nombreCompleto = paciente.nombre_completo || `${paciente.nombre || ''} ${paciente.apellido || ''}`.toLowerCase();
+      const documento = paciente.numero_documento || paciente.documento || '';
+      const telefono = paciente.telefono || '';
+      const email = paciente.email || '';
+
+      return (
+        nombreCompleto.includes(term) ||
+        documento.toLowerCase().includes(term) ||
+        telefono.includes(term) ||
+        email.toLowerCase().includes(term)
+      );
+    });
   
   const seleccionarpaciente = async (paciente: any) => {
     try {
@@ -1011,7 +1044,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     element.style.fill = '';
     
     if (!element.hasAttribute('data-zone-id')) {
-      const zoneId = `zone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const zoneId = `zone-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
       element.setAttribute('data-zone-id', zoneId);
     }
     
@@ -1109,7 +1142,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           }
           
           if (!svgElement.hasAttribute('data-zone-id')) {
-            const zoneId = `zone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const zoneId = `zone-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
             svgElement.setAttribute('data-zone-id', zoneId);
           }
           
@@ -1241,8 +1274,83 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     alert(`Funcionalidad de exportar a ${format.toUpperCase()} será implementada con html2canvas y jsPDF`);
   };
 
+  // ══════════════════════════════════════════════════════════════════
+  // GENERACIÓN DE PDF
+  // ══════════════════════════════════════════════════════════════════
+  const handleGenerarPDF = async () => {
+    if (!datospaciente.nombre_completo) {
+      alert("Debe seleccionar un paciente antes de generar el PDF");
+      return;
+    }
+
+    setGenerandoPDF(true);
+    try {
+      let esquemaDataUrl: string | null = null
+
+      // 1. Si hay esquema capturado en memoria, usarlo
+      if (esquemaCapturado) {
+        esquemaDataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.readAsDataURL(esquemaCapturado)
+        })
+      }
+
+      // 2. Si no hay en memoria, buscar en las fotos de la HC del paciente
+      if (!esquemaDataUrl && datospaciente.id) {
+        try {
+          const historias = await api.getHistoriasBypaciente(parseInt(datospaciente.id))
+          let historiasArray: any[] = []
+          if (Array.isArray(historias)) historiasArray = historias
+          else if (historias?.historias) historiasArray = historias.historias
+          else if (historias?.data) historiasArray = historias.data
+
+          if (historiasArray.length > 0) {
+            const hcReciente = historiasArray[historiasArray.length - 1]
+            const fotosStr = hcReciente.fotos ? String(hcReciente.fotos) : ''
+            const fotos = fotosStr.split(',').filter((f: string) => f.trim())
+
+            // Buscar la foto de esquema más reciente
+            const esquemaUrl = fotos.reverse().find((url: string) =>
+              url.toLowerCase().includes('esquema')
+            ) || (fotos.length > 0 ? fotos[0] : null)
+
+            if (esquemaUrl) {
+              try {
+                const response = await fetch(esquemaUrl)
+                const blob = await response.blob()
+                esquemaDataUrl = await new Promise<string>((resolve) => {
+                  const reader = new FileReader()
+                  reader.onloadend = () => resolve(reader.result as string)
+                  reader.readAsDataURL(blob)
+                })
+              } catch (fetchErr) {
+                console.warn("No se pudo descargar la imagen del esquema:", fetchErr)
+              }
+            }
+          }
+        } catch (hcErr) {
+          console.warn("No se pudo buscar esquema en HC:", hcErr)
+        }
+      }
+
+      await generarPlanPDF({
+        datospaciente,
+        historiaClinica,
+        conductaQuirurgica,
+        notasDoctor,
+        esquemaImageDataUrl: esquemaDataUrl,
+      });
+    } catch (error) {
+      console.error("Error generando PDF:", error);
+      alert("Error al generar el PDF. Intente nuevamente.");
+    } finally {
+      setGenerandoPDF(false);
+    }
+  };
+
   // ---------------------------
-  // NUEVA LÓGICA: Construir el plan y abrir cotización antes de guardar
+  // LÓGICA: Construir el plan y abrir cotización antes de guardar
   // ---------------------------
   const construirPlan = (): PlanQuirurgico | null => {
     if (!plan && !datospaciente.id) {
@@ -1314,25 +1422,41 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
     }
   }
 
-  // Interceptar el click de guardar: construir plan y abrir cotización
-  const handleClickGuardar = () => {
+  const handleClickGuardar = async () => {
     const nuevoPlan = construirPlan()
     if (!nuevoPlan) return
 
-    // Guardamos el plan en estado temporal y abrimos el modal de cotización
+    // Verificar si ya existe una cotización para este paciente
+    const pacienteIdActual = datospaciente.id || plan?.id_paciente
+    if (pacienteIdActual) {
+      try {
+        const response = await api.getCotizaciones(200, 0)
+        const cotizaciones = response?.cotizaciones || response?.data || (Array.isArray(response) ? response : [])
+        const cotizacionExistente = cotizaciones.find(
+          (c: any) => String(c.paciente_id) === String(pacienteIdActual)
+        )
+
+        if (cotizacionExistente) {
+          // Ya existe cotización → guardar directo sin modal
+          onGuardar(nuevoPlan, esquemaCapturado)
+          return
+        }
+      } catch (error) {
+        console.warn("No se pudo verificar cotizaciones existentes:", error)
+      }
+    }
+
+    // No existe cotización → abrir modal de cotización primero
     setPlanPendienteGuardar(nuevoPlan)
     setShowCotizacionModal(true)
   }
 
-  // Llamado cuando se guarda exitosamente la cotización desde el modal
   const handleCotizacionGuardada = async (cotizacionData: any) => {
-    // 1. Cerrar el modal de cotización
     setShowCotizacionModal(false)
 
     if (!planPendienteGuardar) return
 
     try {
-      // 2. Guardar la cotización en el backend
       const { api: apiInstance } = await import("../lib/api")
       
       if (cotizacionData._backendData) {
@@ -1344,21 +1468,17 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
       }
     } catch (error) {
       console.error("Error guardando cotización:", error)
-      // Aun si falla la cotización, procedemos a guardar el plan
     }
 
-    // 3. Guardar el plan quirúrgico
-    onGuardar(planPendienteGuardar)
+    onGuardar(planPendienteGuardar, esquemaCapturado)
     setPlanPendienteGuardar(null)
   }
 
-  // Llamado cuando se cierra/cancela el modal de cotización sin guardar
   const handleCotizacionCancelada = () => {
     setShowCotizacionModal(false)
     setPlanPendienteGuardar(null)
   }
 
-  // Datos del paciente formateados para pasar al CotizacionForm
   const pacienteParaCotizacion = pacienteSeleccionado
     ? {
         id: parseInt(pacienteSeleccionado.id),
@@ -1609,163 +1729,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </div>
       </section>
 
-      {/* EDITOR DE ESQUEMAS */}
-      <section className="p-4 border rounded bg-white">
-        <div className="flex justify-between items-center">
-          <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Editor de Esquemas</h3>
-          <button
-            onClick={() => setShowEsquemaViewer(true)}
-            className="px-6 py-2 bg-[#1a6b32] text-white rounded-lg hover:bg-[#155427] flex items-center gap-2"
-          >
-            🎨 Abrir Editor de Esquemas
-          </button>
-        </div>
-        <p className="text-sm text-gray-600">
-          Abre el editor interactivo para marcar zonas de liposucción, lipotransferencia, agregar texto y dibujos libres.
-        </p>
-      </section>
-      
-      {showEsquemaViewer && (
-        <EsquemaViewer 
-          onClose={() => setShowEsquemaViewer(false)} 
-          planId={plan?.id}
-        />
-      )}
-
-      {/* ARCHIVOS ADJUNTOS */}
-      <section className="p-4 border rounded bg-white">
-        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Archivos Adjuntos del Plan</h3>
-
-        <div className="mb-4">
-          <p className="text-sm text-gray-600 mb-3">
-            Suba imágenes del paciente, estudios previos, PDFs de consentimiento informado o cualquier documento relevante para el plan quirúrgico.
-            Formatos permitidos: JPG, PNG, GIF, BMP, WebP, PDF. Máximo 10MB por imagen, 15MB por PDF.
-          </p>
-          
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#1a6b32] transition-colors">
-            <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect} className="hidden" id="plan-file-upload" accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf,image/*,application/pdf" />
-            <label htmlFor="plan-file-upload" className="cursor-pointer block">
-              <div className="flex flex-col items-center justify-center gap-3">
-                <Upload className="text-gray-400" size={32} />
-                <div>
-                  <span className="font-medium text-gray-700">Haga clic para seleccionar archivos</span>
-                  <p className="text-sm text-gray-500 mt-1">o arrastre y suelte archivos aquí</p>
-                </div>
-                <span className="text-xs text-gray-400">Se permiten imágenes y PDFs (máx. 10MB imágenes, 15MB PDFs)</span>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <h4 className="font-medium text-gray-700 mb-3">Archivos cargados ({archivosCargados.length})</h4>
-          
-          {isLoadingArchivos ? (
-            <div className="text-center py-4">
-              <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#1a6b32] mb-2"></div>
-              <p className="text-sm text-gray-600">Cargando archivos...</p>
-            </div>
-          ) : archivosCargados.length === 0 ? (
-            <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
-              <span className="text-3xl mb-2 block">📁</span>
-              <p className="text-gray-500">No hay archivos adjuntos</p>
-              <p className="text-sm text-gray-400 mt-1">Suba archivos usando el botón de arriba</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {archivosCargados.map((url, index) => {
-                const fileName = getFileNameFromUrl(url);
-                const fileIcon = getFileIcon(fileName);
-                const isUploading = uploadingFiles[fileName];
-                const uploadProgressValue = uploadProgress[fileName] || 0;
-                
-                return (
-                  <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <span className="text-xl">{fileIcon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-800 truncate" title={fileName}>{fileName}</span>
-                          {isUploading && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Subiendo...</span>}
-                        </div>
-                        <div className="text-xs text-gray-500">Archivo {index + 1} de {archivosCargados.length}</div>
-                        {isUploading && (
-                          <div className="mt-2">
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div className="bg-green-600 h-2 rounded-full transition-all duration-300" style={{ width: `${uploadProgressValue}%` }}></div>
-                            </div>
-                            <div className="text-xs text-gray-500 text-right mt-1">{uploadProgressValue}%</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => handleViewFile(url)} className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full transition-colors" title="Ver archivo"><Eye size={18} /></button>
-                      <button onClick={() => handleDownloadFile(url, fileName)} className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-full transition-colors" title="Descargar archivo"><Download size={18} /></button>
-                      <button onClick={() => handleDeleteFile(url, index)} className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full transition-colors" title="Eliminar archivo"><X size={18} /></button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* NOTAS DEL DOCTOR */}
-      <section className="p-4 border rounded bg-white">
-        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Notas del Doctor</h3>
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Notas del doctor</label>
-          <textarea className="w-full border p-2 rounded" rows={4} placeholder="Escriba aquí las observaciones, notas o comentarios importantes..." value={notasDoctor} onChange={e => setNotasDoctor(e.target.value)} />
-        </div>
-      </section>
-
-      {/* CONDUCTA QUIRÚRGICA */}
-      <section className="p-4 border rounded bg-white">
-        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Conducta Quirúrgica</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo QX (Horas)</label>
-            <input className="w-full border p-2 rounded" type="number" placeholder="Ej: 120" value={conductaQuirurgica.duracion_estimada} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, duracion_estimada: e.target.value}))} min="0" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de anestesia</label>
-            <select className="w-full border p-2 rounded" value={conductaQuirurgica.tipo_anestesia} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tipo_anestesia: e.target.value}))}>
-              <option value="general">General</option>
-              <option value="peridural">Peridural</option>
-              <option value="sedacion">Sedación</option>
-              <option value="local">Local</option>
-              <option value="ninguna">Ninguna</option>
-            </select>
-          </div>
-          <div className="flex items-center">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={conductaQuirurgica.requiere_hospitalizacion} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, requiere_hospitalizacion: e.target.checked}))} /> 
-              Requiere hospitalización
-            </label>
-          </div>
-          {conductaQuirurgica.requiere_hospitalizacion && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo hospitalización</label>
-              <input className="w-full border p-2 rounded" placeholder="Tiempo hospitalización" value={conductaQuirurgica.tiempo_hospitalizacion} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tiempo_hospitalizacion: e.target.value}))} />
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Resección estimada</label>
-            <input className="w-full border p-2 rounded" placeholder="Resección estimada" value={conductaQuirurgica.reseccion_estimada} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, reseccion_estimada: e.target.value}))} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Firma cirujano (URL opcional)</label>
-            <input className="w-full border p-2 rounded" placeholder="Firma cirujano (dataURL opcional)" value={conductaQuirurgica.firma_cirujano} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, firma_cirujano: e.target.value}))} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Firma paciente (URL opcional)</label>
-            <input className="w-full border p-2 rounded" placeholder="Firma paciente (dataURL opcional)" value={conductaQuirurgica.firma_paciente} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, firma_paciente: e.target.value}))} />
-          </div>
-        </div>
-      </section>
-
       {/* HISTORIA CLÍNICA */}
       <section className="p-4 border rounded bg-white">
         <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Historia Clínica Completa</h3>
@@ -1778,6 +1741,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Entidad</label>
             <input className="w-full border p-2 rounded" placeholder="Entidad" value={historiaClinica.entidad} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, entidad: e.target.value}))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Referido por</label>
+            <input className="w-full border p-2 rounded" placeholder="Referido por" value={historiaClinica.referido_por} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, referido_por: e.target.value}))} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
@@ -1807,6 +1774,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </div>
 
         <h4 className="font-semibold mt-3 mb-2">Enfermedad actual</h4>
+        <div className="mb-3">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+          <textarea className="w-full border p-2 rounded" rows={2} placeholder="Descripción de la enfermedad actual" value={historiaClinica.descripcion_enfermedad_actual} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, descripcion_enfermedad_actual: e.target.value}))} />
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           {Object.keys(historiaClinica.enfermedad_actual).map((k: any) => (
             <label key={k} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
@@ -1814,6 +1785,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
               <span className="text-sm capitalize">{k.replace(/_/g, ' ')}</span>
             </label>
           ))}
+        </div>
+
+        <div className="mt-3">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Antecedentes Médicos Generales</label>
+          <textarea className="w-full border p-2 rounded" rows={3} placeholder="Antecedentes médicos generales del paciente..." value={historiaClinica.antecedentes_medicos} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, antecedentes_medicos: e.target.value}))} />
         </div>
 
         <h4 className="font-semibold mt-3 mb-2">Antecedentes</h4>
@@ -1864,18 +1840,130 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           ))}
         </div>
 
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Diagnóstico</label>
-          <input className="w-full border p-2 rounded" placeholder="Diagnóstico" value={historiaClinica.diagnostico} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, diagnostico: e.target.value}))} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Diagnóstico</label>
+            <textarea className="w-full border p-2 rounded" rows={3} placeholder="Diagnóstico" value={historiaClinica.diagnostico} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, diagnostico: e.target.value}))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tratamiento</label>
+            <textarea className="w-full border p-2 rounded" rows={3} placeholder="Plan de tratamiento..." value={historiaClinica.tratamiento} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, tratamiento: e.target.value}))} />
+          </div>
         </div>
 
         <div className="mt-3">
           <label className="block text-sm font-medium text-gray-700 mb-1">Plan de conducta</label>
           <textarea className="w-full border p-2 rounded" rows={3} placeholder="Plan de conducta" value={historiaClinica.plan_conducta} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, plan_conducta: e.target.value}))} />
         </div>
+
+        <div className="mt-3">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Recomendaciones</label>
+          <textarea className="w-full border p-2 rounded" rows={3} placeholder="Recomendaciones para el paciente..." value={historiaClinica.recomendaciones} onChange={e => setHistoriaClinica((prev: typeof historiaClinica) => ({...prev, recomendaciones: e.target.value}))} />
+        </div>
       </section>
 
-      {/* BOTÓN GUARDAR */}
+      {/* CONDUCTA QUIRÚRGICA */}
+      <section className="p-4 border rounded bg-white">
+        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Conducta Quirúrgica</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo QX (Horas)</label>
+            <input className="w-full border p-2 rounded" type="number" placeholder="Ej: 120" value={conductaQuirurgica.duracion_estimada} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, duracion_estimada: e.target.value}))} min="0" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de anestesia</label>
+            <select className="w-full border p-2 rounded" value={conductaQuirurgica.tipo_anestesia} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tipo_anestesia: e.target.value}))}>
+              <option value="general">General</option>
+              <option value="peridural">Peridural</option>
+              <option value="sedacion">Sedación</option>
+              <option value="local">Local</option>
+              <option value="ninguna">Ninguna</option>
+            </select>
+          </div>
+          <div className="flex items-center">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={conductaQuirurgica.requiere_hospitalizacion} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, requiere_hospitalizacion: e.target.checked}))} />
+              Requiere hospitalización
+            </label>
+          </div>
+          {conductaQuirurgica.requiere_hospitalizacion && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo hospitalización</label>
+              <input className="w-full border p-2 rounded" placeholder="Tiempo hospitalización" value={conductaQuirurgica.tiempo_hospitalizacion} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tiempo_hospitalizacion: e.target.value}))} />
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Resección estimada</label>
+            <input className="w-full border p-2 rounded" placeholder="Resección estimada" value={conductaQuirurgica.reseccion_estimada} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, reseccion_estimada: e.target.value}))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Firma cirujano (URL opcional)</label>
+            <input className="w-full border p-2 rounded" placeholder="Firma cirujano (dataURL opcional)" value={conductaQuirurgica.firma_cirujano} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, firma_cirujano: e.target.value}))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Firma paciente (URL opcional)</label>
+            <input className="w-full border p-2 rounded" placeholder="Firma paciente (dataURL opcional)" value={conductaQuirurgica.firma_paciente} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, firma_paciente: e.target.value}))} />
+          </div>
+        </div>
+      </section>
+
+      {/* NOTAS DEL DOCTOR */}
+      <section className="p-4 border rounded bg-white">
+        <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Notas del Doctor y Evolución</h3>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Notas del doctor y evolución</label>
+          <textarea className="w-full border p-2 rounded" rows={4} placeholder="Escriba aquí las observaciones, notas o comentarios importantes..." value={notasDoctor} onChange={e => setNotasDoctor(e.target.value)} />
+        </div>
+      </section>
+
+      {/* EDITOR DE ESQUEMAS */}
+      <section className="p-4 border rounded bg-white">
+        <div className="flex justify-between items-center">
+          <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Editor de Esquemas</h3>
+          <button
+            onClick={() => setShowEsquemaViewer(true)}
+            className="px-6 py-2 bg-[#1a6b32] text-white rounded-lg hover:bg-[#155427] flex items-center gap-2"
+          >
+            Abrir Editor de Esquemas
+          </button>
+        </div>
+        <p className="text-sm text-gray-600">
+          Abre el editor interactivo para marcar zonas de liposucción, lipotransferencia, agregar texto y dibujos libres.
+          Dentro del editor usa "Guardar Esquema" para capturar la imagen. Se adjuntará a la Historia Clínica al guardar el plan.
+        </p>
+        {esquemaCapturado && (
+          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-green-600 text-lg">&#10003;</span>
+              <span className="text-sm text-green-800 font-medium">
+                Esquema capturado: {esquemaCapturado.name}
+              </span>
+            </div>
+            <button
+              onClick={() => setEsquemaCapturado(null)}
+              className="text-red-500 hover:text-red-700 text-sm"
+            >
+              Quitar
+            </button>
+          </div>
+        )}
+      </section>
+
+      {showEsquemaViewer && (
+        <EsquemaViewer
+          onClose={() => setShowEsquemaViewer(false)}
+          planId={plan?.id}
+          pacienteId={datospaciente.id}
+          onEsquemaCapturado={(file) => {
+            setEsquemaCapturado(file)
+            setShowEsquemaViewer(false)
+          }}
+        />
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* BOTONES DE ACCIÓN                                                  */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
       <div className="flex justify-between items-center pt-4 border-t">
         <div>
           {onCancel && (
@@ -1886,6 +1974,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </div>
         
         <div className="flex gap-3">
+          {/* BOTÓN GUARDAR */}
           <button 
             onClick={handleClickGuardar}
             className="bg-[#1a6b32] text-white px-6 py-3 rounded-lg hover:bg-[#155228] flex items-center gap-2"
@@ -1896,12 +1985,9 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
         </div>
       </div>
 
-      {/* ============================================ */}
-      {/* MODAL DE COTIZACIÓN — se muestra ANTES de guardar el plan */}
-      {/* ============================================ */}
+      {/* MODAL DE COTIZACIÓN */}
       {showCotizacionModal && (
         <div className="fixed inset-0 z-[60]">
-          {/* Overlay con mensaje informativo */}
           <div className="fixed top-0 left-0 right-0 z-[70] flex justify-center pt-4 pointer-events-none">
             <div className="bg-[#1a6b32] text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-3 pointer-events-auto">
               <span className="text-lg">📋</span>
@@ -1915,7 +2001,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel 
           <CotizacionForm
             onSave={handleCotizacionGuardada}
             onClose={handleCotizacionCancelada}
-            // Pre-cargar el paciente si está disponible
             cotizacion={
               pacienteParaCotizacion
                 ? {

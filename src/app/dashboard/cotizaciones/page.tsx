@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Edit2, Eye, Loader2, Trash2 } from "lucide-react"
+import { Plus, Edit2, Eye, Loader2, Trash2, Search } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { CotizacionForm } from "../../../components/CotizacionForm"
 import { CotizacionModal } from "../../../components/CotizacionModal"
@@ -29,7 +29,8 @@ export default function CotizacionesPage() {
   const [selectedCotizacion, setSelectedCotizacion] = useState<Cotizacion | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  
+  const [searchTerm, setSearchTerm] = useState("")
+
   useEffect(() => {
     fetchData()
     fetchpacientes()
@@ -74,7 +75,18 @@ export default function CotizacionesPage() {
     await fetchData()
   }
 
-  const filteredCotizaciones = cotizaciones; // Mostrar todas las cotizaciones
+  const filteredCotizaciones = [...cotizaciones]
+    .filter(cot => {
+      if (!searchTerm.trim()) return true
+      const term = searchTerm.toLowerCase()
+      const nombre = `${cot.paciente_nombre || ""} ${cot.paciente_apellido || ""}`.toLowerCase()
+      return nombre.includes(term) || (cot.paciente_documento || "").toLowerCase().includes(term) || `cz-${cot.id}`.includes(term)
+    })
+    .sort((a, b) => {
+      const nombreA = `${a.paciente_nombre || ""} ${a.paciente_apellido || ""}`.toLowerCase()
+      const nombreB = `${b.paciente_nombre || ""} ${b.paciente_apellido || ""}`.toLowerCase()
+      return nombreA.localeCompare(nombreB)
+    })
 
   const handleSaveCotizacion = async (formData: any) => {
     try {
@@ -264,13 +276,30 @@ export default function CotizacionesPage() {
 
         {!loading && !refreshing && !error && (
           <>
+            {cotizaciones.length > 0 && (
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Buscar cotización ({filteredCotizaciones.length} de {cotizaciones.length} cotizaciones)
+                </label>
+                <div className="relative max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar por paciente, documento o número..."
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a6b32]/30 focus:border-[#1a6b32]"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">#</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">paciente</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Paciente</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Fecha</th>
                       <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Total</th>
                       <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Acciones</th>
@@ -279,10 +308,10 @@ export default function CotizacionesPage() {
                   <tbody className="divide-y divide-gray-200">
                     {filteredCotizaciones.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                          {cotizaciones.length === 0 
+                        <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                          {cotizaciones.length === 0
                             ? "No hay cotizaciones registradas"
-                            : "No hay cotizaciones"}
+                            : `No se encontraron cotizaciones para "${searchTerm}"`}
                           <button
                             onClick={refreshData}
                             className="mt-2 block mx-auto text-sm text-[#1a6b32] hover:underline disabled:opacity-50"
@@ -295,7 +324,6 @@ export default function CotizacionesPage() {
                     ) : (
                       filteredCotizaciones.map((cot) => (
                         <tr key={cot.id} className="hover:bg-gray-50 transition">
-                          <td className="px-6 py-4 text-sm font-medium text-gray-600">CZ-{cot.id}</td>
                           <td className="px-6 py-4 text-sm">
                             <p className="font-medium text-gray-800">
                               {cot.paciente_nombre || 'N/A'} {cot.paciente_apellido || ''}

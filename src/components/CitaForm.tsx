@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, FileText } from "lucide-react";
 import type { Cita } from "../types/cita";
 import DatePickerColombia from "../components/DatePickerColombia";
 
@@ -16,8 +16,9 @@ interface paciente {
 interface citaFormProps {
   cita?: Cita;
   pacientes?: paciente[];
-  onSave: (data: Omit<Cita, "id">) => void | Promise<void>; 
+  onSave: (data: Omit<Cita, "id">) => void | Promise<void>;
   onClose: () => void;
+  onPlanQuirurgico?: (pacienteId: string) => void;
 }
 
 
@@ -60,7 +61,7 @@ const formatTimeForInput = (time: string): string => {
   return match ? match[1] : '09:00';
 };
 
-export function CitaForm({ cita, pacientes = [], onSave, onClose }: citaFormProps) {
+export function CitaForm({ cita, pacientes = [], onSave, onClose, onPlanQuirurgico }: citaFormProps) {
   // Preparar datos iniciales
   const [formData, setFormData] = useState({
     id_paciente: cita?.id_paciente || "",
@@ -271,6 +272,17 @@ export function CitaForm({ cita, pacientes = [], onSave, onClose }: citaFormProp
               Cancelar
             </button>
           </div>
+
+          {onPlanQuirurgico && formData.id_paciente && (
+            <button
+              type="button"
+              onClick={() => onPlanQuirurgico(formData.id_paciente)}
+              className="w-full bg-[#1a6b32] hover:bg-[#155529] text-white font-medium py-2 rounded-lg transition flex items-center justify-center space-x-2"
+            >
+              <FileText size={18} />
+              <span>Realizar plan quirúrgico</span>
+            </button>
+          )}
 
           {pacientes.length === 0 && (
             <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded mt-2">

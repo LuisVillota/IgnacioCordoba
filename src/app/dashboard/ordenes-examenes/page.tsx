@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { OrdenExamenesForm } from "../../../components/OrdenExamenesForm"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
-import { Search, Filter, Loader2, User, Phone, Mail, Calendar } from "lucide-react"
+import { Search, Loader2, User, Phone, Mail, Calendar, ArrowLeft } from "lucide-react"
 
 interface paciente {
   id: string
@@ -12,13 +12,13 @@ interface paciente {
   apellidos: string
   tipo_documento: string
   documento: string
-  telefono: string  
-  email: string    
-  fecha_nacimiento: string  
-  genero: string   
-  direccion: string 
-  ciudad: string   
-  estado_paciente: "activo" | "inactivo" 
+  telefono: string
+  email: string
+  fecha_nacimiento: string
+  genero: string
+  direccion: string
+  ciudad: string
+  estado_paciente: "activo" | "inactivo"
   fecha_registro: string
 }
 
@@ -27,7 +27,7 @@ export default function OrdenExamenesPage() {
   const [pacientes, setpacientes] = useState<paciente[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [filterEstado, setFilterEstado] = useState<string>("todos")
+  const [showForm, setShowForm] = useState(false)
 
   useEffect(() => {
     loadpacientes()
@@ -36,11 +36,11 @@ export default function OrdenExamenesPage() {
   const loadpacientes = async () => {
     try {
       setLoading(true)
-      
+
       const response = await api.getpacientes(100, 0)
-      
+
       let pacientesArray: paciente[] = []
-      
+
       if (Array.isArray(response)) {
         pacientesArray = response.map(transformpacienteFromBackend)
       } else if (response?.pacientes && Array.isArray(response.pacientes)) {
@@ -48,9 +48,9 @@ export default function OrdenExamenesPage() {
       } else if (response?.data && Array.isArray(response.data)) {
         pacientesArray = response.data.map(transformpacienteFromBackend)
       }
-      
+
       setpacientes(pacientesArray)
-      
+
     } catch (error: any) {
       toast.error("Error cargando pacientes: " + handleApiError(error))
       setpacientes([])
@@ -77,33 +77,138 @@ export default function OrdenExamenesPage() {
     }
   }
 
-  const filteredpacientes = pacientes.filter(paciente => {
+  const filteredpacientes = [...pacientes].sort((a, b) =>
+    `${a.nombres} ${a.apellidos}`.localeCompare(`${b.nombres} ${b.apellidos}`)
+  ).filter(paciente => {
     const searchLower = searchTerm.toLowerCase()
-    const matchesSearch = 
+    return (
       paciente.nombres.toLowerCase().includes(searchLower) ||
       paciente.apellidos.toLowerCase().includes(searchLower) ||
       paciente.documento.toLowerCase().includes(searchLower) ||
       paciente.telefono.toLowerCase().includes(searchLower) ||
       paciente.email.toLowerCase().includes(searchLower)
-    
-    const matchesEstado = filterEstado === "todos" || paciente.estado_paciente === filterEstado
-    
-    return matchesSearch && matchesEstado
+    )
   })
 
+  const handleSelectPaciente = (paciente: paciente) => {
+    setSelectedpaciente(paciente)
+    setShowForm(true)
+  }
+
+  const handleBack = () => {
+    setShowForm(false)
+    setSelectedpaciente(null)
+  }
+
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Órdenes para Exámenes</h1>
-        <p className="text-gray-600 mt-2">Generar órdenes médicas para exámenes</p>
+    <div className="p-4 sm:p-6">
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Órdenes para Exámenes</h1>
+        <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">Generar órdenes médicas para exámenes</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Mobile: toggle between list and form */}
+      <div className="lg:hidden">
+        {showForm && selectedpaciente ? (
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-4 border-b border-gray-200 bg-gray-50">
+              <button
+                onClick={handleBack}
+                className="flex items-center text-sm text-[#1a6b32] hover:text-[#155529] mb-3 transition"
+              >
+                <ArrowLeft size={16} className="mr-1" />
+                Volver a la lista
+              </button>
+              <h2 className="text-base font-semibold text-gray-800 leading-tight">
+                Orden de Exámenes para{" "}
+                <span className="text-[#1a6b32]">
+                  {selectedpaciente.nombres} {selectedpaciente.apellidos}
+                </span>
+              </h2>
+              <div className="flex flex-wrap gap-2 mt-1">
+                <span className="text-xs text-gray-600">
+                  {selectedpaciente.tipo_documento}: {selectedpaciente.documento}
+                </span>
+                {selectedpaciente.telefono && (
+                  <span className="text-xs text-gray-600">Tel: {selectedpaciente.telefono}</span>
+                )}
+              </div>
+            </div>
+            <div className="p-4">
+              <OrdenExamenesForm paciente={selectedpaciente} />
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow p-4">
+            <h2 className="text-base font-semibold text-gray-800 mb-3">Seleccionar paciente</h2>
+
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Buscar paciente..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent text-sm"
+              />
+            </div>
+
+            {loading ? (
+              <div className="text-center py-10">
+                <Loader2 className="animate-spin mx-auto text-[#1a6b32]" size={28} />
+                <p className="text-gray-600 mt-2 text-sm">Cargando pacientes...</p>
+              </div>
+            ) : filteredpacientes.length === 0 ? (
+              <div className="text-center py-10 text-gray-500">
+                <User className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+                <p className="text-sm">{searchTerm ? "No se encontraron pacientes" : "No hay pacientes registrados"}</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                {filteredpacientes.map((paciente) => (
+                  <div
+                    key={paciente.id}
+                    className="p-3 border border-gray-200 rounded-lg cursor-pointer hover:border-[#1a6b32]/50 hover:shadow-sm transition-all active:bg-gray-50"
+                    onClick={() => handleSelectPaciente(paciente)}
+                  >
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <div className="w-9 h-9 bg-[#1a6b32]/10 rounded-full flex items-center justify-center flex-shrink-0">
+                        <User size={18} className="text-[#1a6b32]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-medium text-gray-800 text-sm truncate">
+                          {paciente.nombres} {paciente.apellidos}
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          <span className="font-mono bg-gray-100 px-1 rounded">
+                            {paciente.tipo_documento}: {paciente.documento}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <p className="text-xs text-gray-600">
+                Mostrando <span className="font-semibold">{filteredpacientes.length}</span> de{" "}
+                <span className="font-semibold">{pacientes.length}</span> pacientes
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: side by side */}
+      <div className="hidden lg:grid lg:grid-cols-3 gap-6">
+        {/* Patient list */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="mb-4">
               <h2 className="text-lg font-semibold text-gray-800 mb-3">Seleccionar paciente</h2>
-              
+
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
@@ -114,18 +219,8 @@ export default function OrdenExamenesPage() {
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent"
                 />
               </div>
-              
-              <div className="flex items-center space-x-2 mb-4">
-                <Filter size={18} className="text-gray-500" />
-                <select
-                  value={filterEstado}
-                  onChange={(e) => setFilterEstado(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent text-sm"
-                >
-                  <option value="todos">Todos los estados</option>
-                  <option value="activo">Activos</option>
-                  <option value="inactivo">Inactivos</option>
-                </select>
+
+              <div className="flex justify-end mb-2">
                 <button
                   onClick={loadpacientes}
                   className="p-2 text-gray-600 hover:text-[#1a6b32] hover:bg-gray-100 rounded-lg transition"
@@ -149,7 +244,7 @@ export default function OrdenExamenesPage() {
                 <p>{searchTerm ? "No se encontraron pacientes" : "No hay pacientes registrados"}</p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
                 {filteredpacientes.map((paciente) => (
                   <div
                     key={paciente.id}
@@ -158,61 +253,48 @@ export default function OrdenExamenesPage() {
                         ? "border-[#1a6b32] bg-[#1a6b32]/5"
                         : "border-gray-200 hover:border-[#1a6b32]/50"
                     }`}
-                    onClick={() => setSelectedpaciente(paciente)}
+                    onClick={() => handleSelectPaciente(paciente)}
                   >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-start space-x-3">
-                          <div className="w-10 h-10 bg-[#1a6b32]/10 rounded-full flex items-center justify-center flex-shrink-0">
-                            <User size={20} className="text-[#1a6b32]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-gray-800 truncate">
-                              {paciente.nombres} {paciente.apellidos}
-                            </h3>
-                            <p className="text-sm text-gray-600 mt-1 flex items-center">
-                              <span className="font-mono bg-gray-100 px-1 rounded">
-                                {paciente.tipo_documento}: {paciente.documento}
-                              </span>
-                            </p>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {paciente.telefono && (
-                                <span className="inline-flex items-center text-xs text-gray-500">
-                                  <Phone size={12} className="mr-1" />
-                                  {paciente.telefono}
-                                </span>
-                              )}
-                              {paciente.email && (
-                                <span className="inline-flex items-center text-xs text-gray-500">
-                                  <Mail size={12} className="mr-1" />
-                                  {paciente.email}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                    <div className="flex items-start space-x-3 min-w-0">
+                      <div className="w-10 h-10 bg-[#1a6b32]/10 rounded-full flex items-center justify-center flex-shrink-0">
+                        <User size={20} className="text-[#1a6b32]" />
+                      </div>
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <h3 className="font-medium text-gray-800 truncate">
+                          {paciente.nombres} {paciente.apellidos}
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          <span className="font-mono bg-gray-100 px-1 rounded text-xs">
+                            {paciente.tipo_documento}: {paciente.documento}
+                          </span>
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {paciente.telefono && (
+                            <span className="inline-flex items-center text-xs text-gray-500">
+                              <Phone size={12} className="mr-1 flex-shrink-0" />
+                              <span className="truncate max-w-[100px]">{paciente.telefono}</span>
+                            </span>
+                          )}
+                          {paciente.email && (
+                            <span className="inline-flex items-center text-xs text-gray-500">
+                              <Mail size={12} className="mr-1 flex-shrink-0" />
+                              <span className="truncate max-w-[120px]">{paciente.email}</span>
+                            </span>
+                          )}
                         </div>
+                        {paciente.fecha_nacimiento && (
+                          <div className="mt-2 text-xs text-gray-500 flex items-center">
+                            <Calendar size={12} className="mr-1 flex-shrink-0" />
+                            Nac: {new Date(paciente.fecha_nacimiento).toLocaleDateString()}
+                          </div>
+                        )}
                       </div>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
-                          paciente.estado_paciente === "activo"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {paciente.estado_paciente || "activo"}
-                      </span>
                     </div>
-                    {paciente.fecha_nacimiento && (
-                      <div className="mt-2 text-xs text-gray-500 flex items-center">
-                        <Calendar size={12} className="mr-1" />
-                        Nacimiento: {new Date(paciente.fecha_nacimiento).toLocaleDateString()}
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
             )}
-            
+
             <div className="mt-4 pt-4 border-t border-gray-200">
               <p className="text-sm text-gray-600">
                 Mostrando <span className="font-semibold">{filteredpacientes.length}</span> de{" "}
@@ -222,31 +304,35 @@ export default function OrdenExamenesPage() {
           </div>
         </div>
 
+        {/* Form panel */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow h-full">
             {selectedpaciente ? (
               <>
                 <div className="p-6 border-b border-gray-200 bg-gray-50">
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
                       <h2 className="text-lg font-semibold text-gray-800">
-                        Orden de Exámenes para {selectedpaciente.nombres} {selectedpaciente.apellidos}
+                        Orden de Exámenes
                       </h2>
-                      <div className="flex flex-wrap gap-4 mt-2">
+                      <p className="text-[#1a6b32] font-medium mt-0.5 truncate">
+                        {selectedpaciente.nombres} {selectedpaciente.apellidos}
+                      </p>
+                      <div className="flex flex-wrap gap-3 mt-1">
                         <span className="text-sm text-gray-600">
                           {selectedpaciente.tipo_documento}: {selectedpaciente.documento}
                         </span>
                         {selectedpaciente.telefono && (
-                          <span className="text-sm text-gray-600">Teléfono: {selectedpaciente.telefono}</span>
+                          <span className="text-sm text-gray-600">Tel: {selectedpaciente.telefono}</span>
                         )}
                         {selectedpaciente.email && (
-                          <span className="text-sm text-gray-600">Email: {selectedpaciente.email}</span>
+                          <span className="text-sm text-gray-600 truncate max-w-[200px]">{selectedpaciente.email}</span>
                         )}
                       </div>
                     </div>
                     <button
-                      onClick={() => setSelectedpaciente(null)}
-                      className="text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 px-3 py-1 rounded transition"
+                      onClick={handleBack}
+                      className="text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 px-3 py-1 rounded transition flex-shrink-0"
                     >
                       Cambiar paciente
                     </button>
@@ -255,7 +341,7 @@ export default function OrdenExamenesPage() {
 
                 <div className="p-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Nueva Orden de Exámenes</h3>
-                  <OrdenExamenesForm 
+                  <OrdenExamenesForm
                     paciente={selectedpaciente}
                   />
                 </div>

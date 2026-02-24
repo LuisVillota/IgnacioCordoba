@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Plus, Edit2, Eye, ArrowLeft, Upload, Search, X } from "lucide-react"
+import { Plus, Edit2, Eye, ArrowLeft, Upload, Search, X, Trash2, Loader2 } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { HistoriaForm } from "../../../components/HistoriaForm"
 import { HistoriaModal } from "../../../components/HistoriaModal"
@@ -20,7 +20,8 @@ export default function HistoriaClinicaPage() {
   const [loading, setLoading] = useState({ pacientes: false, historias: false, saving: false })
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  
+  const [deletingHcId, setDeletingHcId] = useState<number | null>(null)
+
   const isSavingRef = useRef(false)
 
   useEffect(() => {
@@ -35,16 +36,19 @@ export default function HistoriaClinicaPage() {
 
   // Efecto para filtrar pacientes cuando cambia el término de búsqueda
   useEffect(() => {
+    const sortAZ = (arr: paciente[]) => [...arr].sort((a, b) =>
+      `${a.nombres} ${a.apellidos}`.toLowerCase().localeCompare(`${b.nombres} ${b.apellidos}`.toLowerCase())
+    )
     if (searchTerm.trim() === "") {
-      setFilteredPacientes(pacientes)
+      setFilteredPacientes(sortAZ(pacientes))
     } else {
       const term = searchTerm.toLowerCase().trim()
-      const filtered = pacientes.filter(paciente => 
+      const filtered = pacientes.filter(paciente =>
         paciente.nombres?.toLowerCase().includes(term) ||
         paciente.apellidos?.toLowerCase().includes(term) ||
         paciente.documento?.toLowerCase().includes(term)
       )
-      setFilteredPacientes(filtered)
+      setFilteredPacientes(sortAZ(filtered))
     }
   }, [searchTerm, pacientes])
 
@@ -136,6 +140,23 @@ export default function HistoriaClinicaPage() {
     setEditingId(historia.id)
     setSelectedHistoria(historia)
     setShowForm(true)
+  }
+
+  const handleDeleteHistoria = async (historia: HistoriaClinica) => {
+    if (!window.confirm(`¿Estás seguro de eliminar esta historia clínica del ${historia.fecha_creacion}?`)) return
+    try {
+      setDeletingHcId(parseInt(historia.id))
+      await api.deleteHistoriaClinica(parseInt(historia.id))
+      alert("Historia clínica eliminada exitosamente")
+      if (selectedpacienteId) {
+        await loadHistorias(parseInt(selectedpacienteId))
+      }
+    } catch (err: any) {
+      console.error("Error eliminando HC:", err)
+      alert(`Error: ${err.message || 'Error desconocido'}`)
+    } finally {
+      setDeletingHcId(null)
+    }
   }
 
   const clearSearch = () => {
@@ -404,6 +425,19 @@ export default function HistoriaClinicaPage() {
                         <Edit2 size={18} />
                       </button>
                     </ProtectedRoute>
+                    <button
+                      onClick={() => handleDeleteHistoria(historia)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
+                      title="Eliminar"
+                      disabled={deletingHcId === parseInt(historia.id)}
+                      type="button"
+                    >
+                      {deletingHcId === parseInt(historia.id) ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={18} />
+                      )}
+                    </button>
                   </div>
                 </div>
 

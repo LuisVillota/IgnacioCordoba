@@ -68,6 +68,13 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
   const [selectedAdicional, setSelectedAdicional] = useState<string>("")
   const [selectedOtroAdicional, setSelectedOtroAdicional] = useState<string>("")
 
+  const [searchProcedimiento, setSearchProcedimiento] = useState("")
+  const [showProcedimientoDropdown, setShowProcedimientoDropdown] = useState(false)
+  const [searchAdicional, setSearchAdicional] = useState("")
+  const [showAdicionalDropdown, setShowAdicionalDropdown] = useState(false)
+  const [searchOtroAdicional, setSearchOtroAdicional] = useState("")
+  const [showOtroAdicionalDropdown, setShowOtroAdicionalDropdown] = useState(false)
+
   // ── NUEVO: estado para el buscador de pacientes ──
   const [searchPaciente, setSearchPaciente] = useState("")
   const [showPacienteDropdown, setShowPacienteDropdown] = useState(false)
@@ -193,9 +200,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
 
     setFormData(prev => ({ ...prev, items: [...prev.items, newItem] }))
 
-    if (tipo === "procedimiento") { setSelectedProcedimiento(""); setErrors(prev => ({ ...prev, procedimiento: "" })) }
-    if (tipo === "adicional") { setSelectedAdicional(""); setErrors(prev => ({ ...prev, adicional: "" })) }
-    if (tipo === "otroAdicional") { setSelectedOtroAdicional(""); setErrors(prev => ({ ...prev, otroAdicional: "" })) }
+    if (tipo === "procedimiento") { setSelectedProcedimiento(""); setSearchProcedimiento(""); setErrors(prev => ({ ...prev, procedimiento: "" })) }
+    if (tipo === "adicional") { setSelectedAdicional(""); setSearchAdicional(""); setErrors(prev => ({ ...prev, adicional: "" })) }
+    if (tipo === "otroAdicional") { setSelectedOtroAdicional(""); setSearchOtroAdicional(""); setErrors(prev => ({ ...prev, otroAdicional: "" })) }
   }
 
   const handleRemoveItem = (itemId: string) => {
@@ -535,17 +542,42 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
           <div>
             <h3 className="font-bold text-gray-800 mb-3">VALORES DE PROCEDIMIENTOS</h3>
             <div className="flex gap-2 mb-4">
-              <select
-                value={selectedProcedimiento}
-                onChange={(e) => setSelectedProcedimiento(e.target.value)}
-                disabled={loading || isSubmitting}
-                className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${errors.procedimiento ? "border-red-500" : "border-gray-300"}`}
-              >
-                <option value="">-- Selecciona procedimiento --</option>
-                {procedimientos.map((p) => (
-                  <option key={p.id} value={p.id}>{p.nombre} (${cotizacionHelpers.formatCurrency(p.precio)})</option>
-                ))}
-              </select>
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Buscar procedimiento..."
+                  value={selectedProcedimiento
+                    ? (procedimientos.find(p => p.id.toString() === selectedProcedimiento)?.nombre ?? searchProcedimiento)
+                    : searchProcedimiento}
+                  onChange={(e) => { setSearchProcedimiento(e.target.value); setSelectedProcedimiento(""); setShowProcedimientoDropdown(true) }}
+                  onFocus={() => setShowProcedimientoDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowProcedimientoDropdown(false), 150)}
+                  disabled={loading || isSubmitting}
+                  className={`w-full pl-9 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${errors.procedimiento ? "border-red-500" : "border-gray-300"}`}
+                />
+                {showProcedimientoDropdown && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    {procedimientos
+                      .filter(p => !searchProcedimiento.trim() || p.nombre.toLowerCase().includes(searchProcedimiento.toLowerCase()))
+                      .map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => { setSelectedProcedimiento(p.id.toString()); setSearchProcedimiento(""); setShowProcedimientoDropdown(false) }}
+                          className="w-full text-left px-3 py-2 hover:bg-[#1a6b32]/5 border-b border-gray-50 last:border-0"
+                        >
+                          <span className="font-medium text-gray-800">{p.nombre}</span>
+                          <span className="text-gray-500 ml-2 text-sm">(${cotizacionHelpers.formatCurrency(p.precio)})</span>
+                        </button>
+                      ))}
+                    {procedimientos.filter(p => !searchProcedimiento.trim() || p.nombre.toLowerCase().includes(searchProcedimiento.toLowerCase())).length === 0 && (
+                      <p className="px-3 py-3 text-sm text-gray-500">No se encontraron procedimientos</p>
+                    )}
+                  </div>
+                )}
+              </div>
               <button type="button" onClick={() => handleAddItem("procedimiento")} disabled={loading || isSubmitting} className="bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition disabled:opacity-50">
                 <Plus size={18} /><span>Agregar</span>
               </button>
@@ -578,10 +610,42 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
           <div>
             <h3 className="font-bold text-gray-800 mb-3">ADICIONALES</h3>
             <div className="flex gap-2 mb-4">
-              <select value={selectedAdicional} onChange={(e) => setSelectedAdicional(e.target.value)} disabled={loading || isSubmitting} className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${errors.adicional ? "border-red-500" : "border-gray-300"}`}>
-                <option value="">-- Selecciona adicional --</option>
-                {adicionales.map((a) => (<option key={a.id} value={a.id}>{a.nombre} (${cotizacionHelpers.formatCurrency(a.precio)})</option>))}
-              </select>
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Buscar adicional..."
+                  value={selectedAdicional
+                    ? (adicionales.find(a => a.id.toString() === selectedAdicional)?.nombre ?? searchAdicional)
+                    : searchAdicional}
+                  onChange={(e) => { setSearchAdicional(e.target.value); setSelectedAdicional(""); setShowAdicionalDropdown(true) }}
+                  onFocus={() => setShowAdicionalDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowAdicionalDropdown(false), 150)}
+                  disabled={loading || isSubmitting}
+                  className={`w-full pl-9 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${errors.adicional ? "border-red-500" : "border-gray-300"}`}
+                />
+                {showAdicionalDropdown && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    {adicionales
+                      .filter(a => !searchAdicional.trim() || a.nombre.toLowerCase().includes(searchAdicional.toLowerCase()))
+                      .map(a => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => { setSelectedAdicional(a.id.toString()); setSearchAdicional(""); setShowAdicionalDropdown(false) }}
+                          className="w-full text-left px-3 py-2 hover:bg-[#1a6b32]/5 border-b border-gray-50 last:border-0"
+                        >
+                          <span className="font-medium text-gray-800">{a.nombre}</span>
+                          <span className="text-gray-500 ml-2 text-sm">(${cotizacionHelpers.formatCurrency(a.precio)})</span>
+                        </button>
+                      ))}
+                    {adicionales.filter(a => !searchAdicional.trim() || a.nombre.toLowerCase().includes(searchAdicional.toLowerCase())).length === 0 && (
+                      <p className="px-3 py-3 text-sm text-gray-500">No se encontraron adicionales</p>
+                    )}
+                  </div>
+                )}
+              </div>
               <button type="button" onClick={() => handleAddItem("adicional")} disabled={loading || isSubmitting} className="bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition disabled:opacity-50">
                 <Plus size={18} /><span>Agregar</span>
               </button>
@@ -614,10 +678,42 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
           <div>
             <h3 className="font-bold text-gray-800 mb-3">OTROS ADICIONALES</h3>
             <div className="flex gap-2 mb-4">
-              <select value={selectedOtroAdicional} onChange={(e) => setSelectedOtroAdicional(e.target.value)} disabled={loading || isSubmitting} className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${errors.otroAdicional ? "border-red-500" : "border-gray-300"}`}>
-                <option value="">-- Selecciona otro adicional --</option>
-                {otrosAdicionales.map((oa) => (<option key={oa.id} value={oa.id}>{oa.nombre} {oa.precio > 0 ? `(${cotizacionHelpers.formatCurrency(oa.precio)})` : "(Incluido)"}</option>))}
-              </select>
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Buscar otro adicional..."
+                  value={selectedOtroAdicional
+                    ? (otrosAdicionales.find(oa => oa.id.toString() === selectedOtroAdicional)?.nombre ?? searchOtroAdicional)
+                    : searchOtroAdicional}
+                  onChange={(e) => { setSearchOtroAdicional(e.target.value); setSelectedOtroAdicional(""); setShowOtroAdicionalDropdown(true) }}
+                  onFocus={() => setShowOtroAdicionalDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowOtroAdicionalDropdown(false), 150)}
+                  disabled={loading || isSubmitting}
+                  className={`w-full pl-9 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8] ${errors.otroAdicional ? "border-red-500" : "border-gray-300"}`}
+                />
+                {showOtroAdicionalDropdown && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    {otrosAdicionales
+                      .filter(oa => !searchOtroAdicional.trim() || oa.nombre.toLowerCase().includes(searchOtroAdicional.toLowerCase()))
+                      .map(oa => (
+                        <button
+                          key={oa.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => { setSelectedOtroAdicional(oa.id.toString()); setSearchOtroAdicional(""); setShowOtroAdicionalDropdown(false) }}
+                          className="w-full text-left px-3 py-2 hover:bg-[#1a6b32]/5 border-b border-gray-50 last:border-0"
+                        >
+                          <span className="font-medium text-gray-800">{oa.nombre}</span>
+                          <span className="text-gray-500 ml-2 text-sm">{oa.precio > 0 ? `($${cotizacionHelpers.formatCurrency(oa.precio)})` : "(Incluido)"}</span>
+                        </button>
+                      ))}
+                    {otrosAdicionales.filter(oa => !searchOtroAdicional.trim() || oa.nombre.toLowerCase().includes(searchOtroAdicional.toLowerCase())).length === 0 && (
+                      <p className="px-3 py-3 text-sm text-gray-500">No se encontraron otros adicionales</p>
+                    )}
+                  </div>
+                )}
+              </div>
               <button type="button" onClick={() => handleAddItem("otroAdicional")} disabled={loading || isSubmitting} className="bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition disabled:opacity-50">
                 <Plus size={18} /><span>Agregar</span>
               </button>

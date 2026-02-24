@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Calendar, Clock, User, Loader2, AlertCircle, Scissors, AlertTriangle } from "lucide-react"
+import { X, Calendar, Clock, User, Loader2, AlertCircle, Scissors, AlertTriangle, Search } from "lucide-react"
 import type { Programacion, CreateProgramacionData } from "../types/programacion"
 import { api, handleApiError } from "../lib/api"
 
@@ -151,6 +151,10 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
   } | null>(null)
   const [conflictValidationError, setConflictValidationError] = useState<string | null>(null)
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false)
+  const [pacienteSearch, setPacienteSearch] = useState("")
+  const [showPacienteDropdown, setShowPacienteDropdown] = useState(false)
+  const [procedimientoSearch, setProcedimientoSearch] = useState("")
+  const [showProcedimientoDropdown, setShowProcedimientoDropdown] = useState(false)
 
   useEffect(() => {
     const cargarDatos = async () => {
@@ -569,20 +573,64 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
               Paciente
               {pacientesLoading && <Loader2 className="inline ml-2 h-4 w-4 animate-spin" />}
             </label>
-            <select
-              value={formData.numero_documento}
-              onChange={(e) => handleChange("numero_documento", e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent"
-              required
-              disabled={pacientesLoading || isLoading || validating || isCheckingAvailability}
-            >
-              <option value="">Seleccionar paciente</option>
-              {pacientes.map((paciente) => (
-                <option key={paciente.numero_documento} value={paciente.numero_documento}>
-                  {paciente.nombre} {paciente.apellido} - {paciente.numero_documento}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar paciente por nombre o documento..."
+                  value={(() => {
+                    if (formData.numero_documento) {
+                      const sel = pacientes.find(p => p.numero_documento === formData.numero_documento)
+                      if (sel) return `${sel.nombre} ${sel.apellido} (${sel.numero_documento})`
+                    }
+                    return pacienteSearch
+                  })()}
+                  onChange={(e) => {
+                    setPacienteSearch(e.target.value)
+                    if (formData.numero_documento) handleChange("numero_documento", "")
+                    setShowPacienteDropdown(true)
+                  }}
+                  onFocus={() => setShowPacienteDropdown(true)}
+                  disabled={pacientesLoading || isLoading || validating || isCheckingAvailability}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent"
+                />
+              </div>
+              {showPacienteDropdown && !pacientesLoading && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {[...pacientes]
+                    .sort((a, b) => `${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`))
+                    .filter(p => {
+                      const term = pacienteSearch.toLowerCase()
+                      if (!term) return true
+                      return `${p.nombre} ${p.apellido}`.toLowerCase().includes(term) || p.numero_documento.includes(term)
+                    })
+                    .map(p => (
+                      <button
+                        key={p.numero_documento}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          handleChange("numero_documento", p.numero_documento)
+                          setPacienteSearch("")
+                          setShowPacienteDropdown(false)
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-green-50 text-sm border-b border-gray-100 last:border-b-0"
+                      >
+                        <span className="font-medium">{p.nombre} {p.apellido}</span>
+                        <span className="text-gray-500 ml-2">({p.numero_documento})</span>
+                      </button>
+                    ))}
+                  {pacientes.filter(p => {
+                    const term = pacienteSearch.toLowerCase()
+                    if (!term) return true
+                    return `${p.nombre} ${p.apellido}`.toLowerCase().includes(term) || p.numero_documento.includes(term)
+                  }).length === 0 && (
+                    <p className="px-4 py-3 text-sm text-gray-500">No se encontraron pacientes</p>
+                  )}
+                </div>
+              )}
+            </div>
             {pacientes.length === 0 && !pacientesLoading && (
               <p className="text-xs text-red-500 mt-1">No hay pacientes disponibles</p>
             )}
@@ -626,28 +674,64 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
                 Procedimiento
                 {procedimientosLoading && <Loader2 className="inline ml-2 h-4 w-4 animate-spin" />}
               </label>
-              <select
-                value={formData.procedimiento_id}
-                onChange={(e) =>
-                  handleChange("procedimiento_id", Number(e.target.value))
-                }
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent"
-                required
-                disabled={
-                  procedimientosLoading ||
-                  isLoading ||
-                  validating ||
-                  isCheckingAvailability
-                }
-              >
-                <option value={0}>Seleccionar procedimiento</option>
-
-                {procedimientos.map((procedimiento) => (
-                  <option key={procedimiento.id} value={procedimiento.id}>
-                    {procedimiento.nombre} ({formatCurrency(procedimiento.precio)})
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar procedimiento por nombre..."
+                    value={(() => {
+                      if (formData.procedimiento_id) {
+                        const sel = procedimientos.find(p => p.id === formData.procedimiento_id)
+                        if (sel) return `${sel.nombre} (${formatCurrency(sel.precio)})`
+                      }
+                      return procedimientoSearch
+                    })()}
+                    onChange={(e) => {
+                      setProcedimientoSearch(e.target.value)
+                      if (formData.procedimiento_id) handleChange("procedimiento_id", 0)
+                      setShowProcedimientoDropdown(true)
+                    }}
+                    onFocus={() => setShowProcedimientoDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowProcedimientoDropdown(false), 150)}
+                    className="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent"
+                    disabled={procedimientosLoading || isLoading || validating || isCheckingAvailability}
+                  />
+                </div>
+                {showProcedimientoDropdown && !procedimientosLoading && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {procedimientos
+                      .filter(p => {
+                        const term = procedimientoSearch.toLowerCase()
+                        if (!term) return true
+                        return p.nombre.toLowerCase().includes(term)
+                      })
+                      .map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            handleChange("procedimiento_id", p.id)
+                            setProcedimientoSearch("")
+                            setShowProcedimientoDropdown(false)
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                        >
+                          <span className="font-medium">{p.nombre}</span>
+                          <span className="text-gray-500 ml-2">({formatCurrency(p.precio)})</span>
+                        </button>
+                      ))}
+                    {procedimientos.filter(p => {
+                      const term = procedimientoSearch.toLowerCase()
+                      if (!term) return true
+                      return p.nombre.toLowerCase().includes(term)
+                    }).length === 0 && (
+                      <p className="px-4 py-3 text-sm text-gray-500">No se encontraron procedimientos</p>
+                    )}
+                  </div>
+                )}
+              </div>
               {procedimientoSeleccionado && (
                 <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
                   <p className="text-sm text-green-700">

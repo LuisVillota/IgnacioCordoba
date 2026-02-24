@@ -1,20 +1,20 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { 
-  Plus, 
-  Edit2, 
-  Eye, 
-  Trash2, 
-  Scissors, 
-  RefreshCw, 
-  AlertCircle, 
-  Calendar, 
-  Filter, 
+import {
+  Plus,
+  Edit2,
+  Eye,
+  RefreshCw,
+  AlertCircle,
+  Calendar,
   CheckCircle,
   Clock,
   User,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Scissors,
 } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { ProgramacionForm } from "../../../components/ProgramacionForm"
@@ -22,205 +22,376 @@ import { ProgramacionModal } from "../../../components/ProgramacionModal"
 import type { Programacion, CreateProgramacionData } from "../../../types/programacion"
 import { api, handleApiError } from "../../../lib/api"
 
-export default function ProgramacionQuirurgicaPage() {
-  const [programaciones, setProgramaciones] = useState<Programacion[]>([])
-  const [showForm, setShowForm] = useState(false)
-  const [selectedProgramacion, setSelectedProgramacion] = useState<Programacion | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [filterEstado, setFilterEstado] = useState<string>("todas")
-  const [filterFecha, setFilterFecha] = useState<"todas" | "hoy" | "semana" | "mes">("todas")
-  const [filterDocumento, setFilterDocumento] = useState<string>("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [refreshKey, setRefreshKey] = useState(0)
-  const [stats, setStats] = useState({
-    total: 0,
-    programados: 0,
-    confirmados: 0,
-    enQuirofano: 0,
-    operados: 0,
-    cancelados: 0,
-    aplazados: 0
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+/** Normaliza cualquier formato de hora del backend a "HH:MM" */
+function normalizeHora(hora: string): string {
+  if (!hora) return "09:00"
+  // Formato intervalo PostgreSQL/MySQL: PT15H, PT9H30M, PT0H30M, etc.
+  if (hora.startsWith("PT")) {
+    const hMatch = hora.match(/PT(\d+)H/)
+    const mMatch = hora.match(/H(\d+)M/)
+    const h = hMatch ? parseInt(hMatch[1]) : 0
+    const m = mMatch ? parseInt(mMatch[1]) : 0
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+  }
+  // HH:MM:SS → tomar solo HH:MM
+  if (/^\d{1,2}:\d{2}:\d{2}$/.test(hora)) return hora.substring(0, 5)
+  // HH:MM → ya está bien
+  if (/^\d{1,2}:\d{2}$/.test(hora)) {
+    const [h, m] = hora.split(":").map(Number)
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+  }
+  return "09:00"
+}
+
+function minutosDesdeStr(hora: string): number {
+  if (!hora) return 0
+  const normalized = normalizeHora(hora)
+  const [h, m] = normalized.split(":").map(Number)
+  return h * 60 + (m || 0)
+}
+
+function agregarMins(hora: string, mins: number): string {
+  const total = minutosDesdeStr(normalizeHora(hora)) + mins
+  const h = Math.floor(total / 60) % 24
+  const m = total % 60
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+}
+
+function formatDateStr(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
+
+// ─── Estado colours ────────────────────────────────────────────────────────
+
+const ESTADO_COLORS: Record<string, { bg: string; light: string; text: string }> = {
+  Programado:   { bg: "bg-blue-500",   light: "bg-blue-100",   text: "text-blue-800"   },
+  Confirmado:   { bg: "bg-green-500",  light: "bg-green-100",  text: "text-green-800"  },
+  Aplazado:     { bg: "bg-orange-500", light: "bg-orange-100", text: "text-orange-800" },
+  "En Quirofano": { bg: "bg-purple-500", light: "bg-purple-100", text: "text-purple-800" },
+  Operado:      { bg: "bg-indigo-500", light: "bg-indigo-100", text: "text-indigo-800" },
+  Cancelado:    { bg: "bg-red-400",    light: "bg-red-100",    text: "text-red-800"    },
+}
+
+function getEstadoColor(estado: string) {
+  return ESTADO_COLORS[estado] ?? { bg: "bg-gray-400", light: "bg-gray-100", text: "text-gray-800" }
+}
+
+function getEstadoIcon(estado: string) {
+  const icons: Record<string, string> = {
+    Confirmado: "✅", Operado: "🏥", "En Quirofano": "⚕️", Cancelado: "❌", Aplazado: "⏸️",
+  }
+  return icons[estado] ?? "📅"
+}
+
+// ─── Overlap column layout (same algorithm as agenda) ─────────────────────
+
+interface ProgConColumna { prog: Programacion; columna: number; totalColumnas: number }
+
+function calcularColumnas(progs: Programacion[]): ProgConColumna[] {
+  if (progs.length === 0) return []
+  const sorted = [...progs].sort((a, b) => minutosDesdeStr(a.hora) - minutosDesdeStr(b.hora))
+  const clusters: Programacion[][] = []
+  let cur = [sorted[0]]
+  let end = minutosDesdeStr(sorted[0].hora) + (sorted[0].duracion || 60)
+
+  for (let i = 1; i < sorted.length; i++) {
+    const s = minutosDesdeStr(sorted[i].hora)
+    if (s < end) { cur.push(sorted[i]); end = Math.max(end, s + (sorted[i].duracion || 60)) }
+    else { clusters.push(cur); cur = [sorted[i]]; end = s + (sorted[i].duracion || 60) }
+  }
+  clusters.push(cur)
+
+  const result: ProgConColumna[] = []
+  for (const cluster of clusters) {
+    const cols: Programacion[][] = []
+    for (const p of cluster) {
+      const ps = minutosDesdeStr(p.hora)
+      let placed = false
+      for (let c = 0; c < cols.length; c++) {
+        const last = cols[c][cols[c].length - 1]
+        if (ps >= minutosDesdeStr(last.hora) + (last.duracion || 60)) { cols[c].push(p); placed = true; break }
+      }
+      if (!placed) cols.push([p])
+    }
+    const total = cols.length
+    cols.forEach((col, ci) => col.forEach(p => result.push({ prog: p, columna: ci, totalColumnas: total })))
+  }
+  return result
+}
+
+// ─── Day Modal with timeline ───────────────────────────────────────────────
+
+function DiaProgramacionesModal({
+  fecha, programaciones, onClose, onNuevaProgramacion, onEdit, onVerDetalle,
+}: {
+  fecha: string
+  programaciones: Programacion[]
+  onClose: () => void
+  onNuevaProgramacion: (fecha: string, hora?: string) => void
+  onEdit: (p: Programacion) => void
+  onVerDetalle: (p: Programacion) => void
+}) {
+  const [sel, setSel] = useState<Programacion | null>(null)
+
+  const d = new Date(fecha + "T00:00:00")
+  const diaSemana = d.toLocaleDateString("es-ES", { weekday: "long" })
+  const label = `${diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)}, ${d.getDate()} de ${d.toLocaleDateString("es-ES", { month: "long" })} de ${d.getFullYear()}`
+
+  const H_INI = 7, H_FIN = 20
+  const TOTAL = (H_FIN - H_INI) * 6 // 10-min slots
+  const slots = Array.from({ length: TOTAL }, (_, i) => {
+    const mins = i * 10
+    const h = Math.floor(mins / 60) + H_INI
+    const m = mins % 60
+    return { hora: `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`, esHora: m === 0, esMedia: m === 30 }
   })
 
-  const formatHora = (hora: string): string => {
-    if (!hora) return "00:00 AM";
-    
-    try {
-      if (hora.startsWith('PT')) {
-        const horasMatch = hora.match(/PT(\d+)H/);
-        const horas = horasMatch ? parseInt(horasMatch[1]) : 0;
-        const ampm = horas >= 12 ? 'PM' : 'AM';
-        const horas12 = horas % 12 || 12;
-        return `${horas12.toString().padStart(2, '0')}:00 ${ampm}`;
-      }
-      
-      if (hora.includes(':')) {
-        const partes = hora.split(':');
-        const horas = parseInt(partes[0]);
-        const minutos = partes[1] ? parseInt(partes[1]) : 0;
-        const ampm = horas >= 12 ? 'PM' : 'AM';
-        const horas12 = horas % 12 || 12;
-        return `${horas12.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')} ${ampm}`;
-      }
-      
-      const horasNum = parseInt(hora);
-      if (!isNaN(horasNum)) {
-        const ampm = horasNum >= 12 ? 'PM' : 'AM';
-        const horas12 = horasNum % 12 || 12;
-        return `${horas12.toString().padStart(2, '0')}:00 ${ampm}`;
-      }
-      
-      return hora;
-    } catch (error) {
-      return hora;
-    }
-  };
+  const pos  = (hora: string) => { const [h, m] = hora.split(":").map(Number); return ((h - H_INI) * 60 + m) * 4 }
+  const alto = (dur: number)  => Math.max(dur * 4, 40)
 
-  const formatCurrency = (amount: number | undefined): string => {
-    if (!amount) return "$0";
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  useEffect(() => {
-    loadProgramaciones()
-  }, [filterEstado, filterFecha, refreshKey])
-
-  useEffect(() => {
-    if (filterDocumento.trim() !== "") {
-      buscarPorDocumento(filterDocumento)
-    } else if (filterDocumento.trim() === "" && refreshKey > 0) {
-      loadProgramaciones()
-    }
-  }, [filterDocumento])
-
-  const loadProgramaciones = async () => {
-    setLoading(true)
-    setError(null)
-    
-    try {
-      const params: any = {
-        limit: 100,
-        offset: 0
-      }
-      
-      if (filterEstado !== "todas") {
-        const estadoMap: Record<string, string> = {
-          "programado": "Programado",
-          "confirmado": "Confirmado",
-          "aplazado": "Aplazado",
-          "en_quirofano": "En Quirofano",
-          "operado": "Operado",
-          "cancelado": "Cancelado"
-        }
-        
-        if (estadoMap[filterEstado]) {
-          params.estado = estadoMap[filterEstado]
-        }
-      }
-
-      if (filterFecha !== "todas") {
-        const hoy = new Date().toISOString().split('T')[0]
-        
-        if (filterFecha === "hoy") {
-          params.fecha_inicio = hoy
-          params.fecha_fin = hoy
-        } else if (filterFecha === "semana") {
-          const semanaPasada = new Date()
-          semanaPasada.setDate(semanaPasada.getDate() - 7)
-          params.fecha_inicio = semanaPasada.toISOString().split('T')[0]
-          params.fecha_fin = hoy
-        } else if (filterFecha === "mes") {
-          const mesPasado = new Date()
-          mesPasado.setMonth(mesPasado.getMonth() - 1)
-          params.fecha_inicio = mesPasado.toISOString().split('T')[0]
-          params.fecha_fin = hoy
-        }
-      }
-      
-      const response = await api.getAgendaProcedimientos(
-        params.limit,
-        params.offset,
-        undefined,
-        params.estado,
-        undefined,
-        params.fecha_inicio,
-        params.fecha_fin
-      )
-      
-      if (response && response.procedimientos) {
-        const programacionesFormateadas = response.procedimientos.map((proc: any) => {
-          return {
-            id: proc.id.toString(),
-            paciente_id: proc.paciente_id || "",
-            numero_documento: proc.numero_documento || "",
-            fecha: proc.fecha,
-            hora: proc.hora || "09:00",
-            duracion: proc.duracion || 60,
-            procedimiento_id: proc.procedimiento_id?.toString() || "0",
-            anestesiologo: proc.anestesiologo || "",
-            estado: proc.estado,
-            observaciones: proc.observaciones || "",
-            fecha_creacion: proc.fecha_creacion || new Date().toISOString(),
-            paciente_nombre: proc.paciente_nombre,
-            paciente_apellido: proc.paciente_apellido,
-            procedimiento_nombre: proc.procedimiento_nombre,
-            procedimiento_precio: proc.procedimiento_precio
-          }
-        })
-        
-        setProgramaciones(programacionesFormateadas)
-        calcularEstadisticas(programacionesFormateadas)
-      } else {
-        setProgramaciones([])
-        setStats({
-          total: 0,
-          programados: 0,
-          confirmados: 0,
-          enQuirofano: 0,
-          operados: 0,
-          cancelados: 0,
-          aplazados: 0
-        })
-      }
-    } catch (err: any) {
-      setError(handleApiError(err))
-    } finally {
-      setLoading(false)
-    }
+  const fmt12 = (hora: string) => {
+    const [h, m] = hora.split(":").map(Number)
+    const ap = h >= 12 ? "PM" : "AM"; const h12 = h % 12 || 12
+    return m === 0 ? `${h12} ${ap}` : `${h12}:${m.toString().padStart(2, "0")} ${ap}`
   }
 
-  const buscarPorDocumento = async (documento: string) => {
-    if (documento.trim() === "") {
-      loadProgramaciones()
-      return
-    }
+  const progsConCol = calcularColumnas(programaciones)
+  const todayStr = formatDateStr(new Date())
 
-    setLoading(true)
-    setError(null)
-    
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-lg shadow-xl max-h-[90vh] overflow-hidden flex flex-col"
+        style={{ width: sel ? "900px" : "700px", maxWidth: "98vw" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-5 border-b flex items-center justify-between flex-shrink-0">
+          <div>
+            <h3 className="text-xl font-bold text-gray-800">{label}</h3>
+            <p className="text-gray-500 text-sm mt-0.5">
+              {programaciones.length} programación{programaciones.length !== 1 ? "es" : ""}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onNuevaProgramacion(fecha)}
+              className="flex items-center gap-2 px-4 py-2 bg-[#1a6b32] hover:bg-[#155529] text-white rounded-lg transition text-sm"
+            >
+              <Plus size={16} /> Nueva programación
+            </button>
+            <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600">
+              <X size={22} />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex flex-1 min-h-0">
+          {/* Timeline */}
+          <div className="flex flex-1 overflow-y-auto">
+            {/* Hour labels */}
+            <div className="w-20 flex-shrink-0 border-r bg-white sticky left-0 z-10">
+              {slots.map((s, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center justify-center border-b border-gray-100 ${s.esHora ? "font-semibold bg-gray-50" : ""}`}
+                  style={{ height: "40px", borderBottomWidth: s.esHora ? "2px" : "1px", borderBottomStyle: s.esHora ? "solid" : "dashed" }}
+                >
+                  <span className="text-xs text-gray-500">
+                    {s.esHora ? fmt12(s.hora) : s.esMedia ? "·" : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Events area */}
+            <div className="flex-1 relative">
+              <div className="absolute inset-0" style={{ height: `${TOTAL * 40}px` }}>
+                {/* Grid + click-to-create slots */}
+                {slots.map((s, i) => (
+                  <div
+                    key={i}
+                    className={`absolute left-0 right-0 ${s.esHora ? "border-b-2 border-gray-300" : "border-b border-gray-100 border-dashed"}`}
+                    style={{ top: `${i * 40}px`, height: "40px" }}
+                  >
+                    <button
+                      onClick={() => onNuevaProgramacion(fecha, s.hora)}
+                      className="w-full h-full hover:bg-green-50/40 transition group"
+                      title={`Nueva programación a las ${s.hora}`}
+                    >
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                        <span className="text-xs text-gray-400 bg-white px-2 py-0.5 rounded shadow">{s.hora}</span>
+                      </div>
+                    </button>
+                  </div>
+                ))}
+
+                {/* Programaciones */}
+                {progsConCol.map(({ prog, columna, totalColumnas }) => {
+                  const c = getEstadoColor(prog.estado)
+                  const top  = pos(prog.hora || "07:00")
+                  const h    = alto(prog.duracion || 60)
+                  const cw   = 100 / totalColumnas
+                  const isSel = sel?.id === prog.id
+                  const horaFin = agregarMins(prog.hora || "07:00", prog.duracion || 60)
+                  return (
+                    <div
+                      key={prog.id}
+                      onClick={() => setSel(isSel ? null : prog)}
+                      className={`absolute rounded-md shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all border-l-4 border-white/40 ${c.bg} ${isSel ? "ring-2 ring-white ring-offset-1" : ""}`}
+                      style={{ top: `${top}px`, height: `${h}px`, left: `calc(${columna * cw}% + 2px)`, width: `calc(${cw}% - 4px)`, zIndex: isSel ? 20 : 10 }}
+                      title={`${prog.hora} | ${prog.paciente_nombre} ${prog.paciente_apellido} | ${prog.estado}`}
+                    >
+                      <div className="p-1.5 h-full flex flex-col text-white overflow-hidden">
+                        <div className="flex justify-between items-start gap-1">
+                          <span className="text-[10px] font-semibold">{prog.hora} – {horaFin}</span>
+                          <span className="text-[9px] bg-white/20 px-1 rounded shrink-0">{prog.estado}</span>
+                        </div>
+                        <span className="text-xs font-bold truncate mt-0.5">
+                          {prog.paciente_nombre} {prog.paciente_apellido}
+                        </span>
+                        {prog.numero_documento && <span className="text-[10px] opacity-90">CC: {prog.numero_documento}</span>}
+                        {prog.procedimiento_nombre && <span className="text-[10px] opacity-80 truncate">{prog.procedimiento_nombre}</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Current time line */}
+                {fecha === todayStr && (() => {
+                  const now = new Date()
+                  const nowH = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`
+                  return (
+                    <div className="absolute left-0 right-0 h-0.5 bg-red-500 z-30 pointer-events-none" style={{ top: `${pos(nowH)}px` }}>
+                      <div className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-red-500 rounded-full" />
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+          </div>
+
+          {/* Detail side panel */}
+          {sel && (
+            <div className="w-72 border-l bg-white flex flex-col flex-shrink-0 overflow-y-auto">
+              <div className={`p-4 ${getEstadoColor(sel.estado).light} border-b flex items-start justify-between`}>
+                <span className={`text-sm font-semibold px-2 py-1 rounded-full ${getEstadoColor(sel.estado).light} ${getEstadoColor(sel.estado).text}`}>
+                  {getEstadoIcon(sel.estado)} {sel.estado}
+                </span>
+                <button onClick={() => setSel(null)} className="text-gray-400 hover:text-gray-600 p-0.5">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4 flex-1">
+                <div>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Paciente</p>
+                  <p className="font-bold text-gray-800 mt-0.5">{sel.paciente_nombre} {sel.paciente_apellido}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Cédula</p>
+                  <p className="text-gray-800 text-sm">{sel.numero_documento || "No registrado"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Fecha y hora</p>
+                  <p className="text-gray-800 text-sm">{sel.fecha}</p>
+                  <p className="text-gray-600 text-sm">{sel.hora} — {agregarMins(sel.hora || "00:00", sel.duracion || 60)} ({sel.duracion} min)</p>
+                </div>
+                {sel.procedimiento_nombre && (
+                  <div>
+                    <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Procedimiento</p>
+                    <p className="text-gray-800 text-sm">{sel.procedimiento_nombre}</p>
+                  </div>
+                )}
+                {sel.anestesiologo && (
+                  <div>
+                    <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Anestesiólogo</p>
+                    <p className="text-gray-800 text-sm">{sel.anestesiologo}</p>
+                  </div>
+                )}
+                {sel.observaciones && (
+                  <div>
+                    <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Observaciones</p>
+                    <p className="text-gray-700 text-sm">{sel.observaciones}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 border-t space-y-2">
+                <ProtectedRoute permissions={["editar_programacion"]}>
+                  <button
+                    onClick={() => { onEdit(sel); setSel(null) }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#1a6b32] hover:bg-[#155529] text-white rounded-lg transition text-sm"
+                  >
+                    <Edit2 size={14} /> Editar programación
+                  </button>
+                </ProtectedRoute>
+                <button
+                  onClick={() => { onVerDetalle(sel); setSel(null) }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition text-sm"
+                >
+                  <Eye size={14} /> Ver detalle completo
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Legend */}
+        <div className="border-t p-3 bg-gray-50 flex-shrink-0">
+          <div className="flex flex-wrap gap-3">
+            {Object.entries(ESTADO_COLORS).map(([estado, c]) => (
+              <div key={estado} className="flex items-center gap-1.5 text-xs">
+                <div className={`w-3 h-3 rounded ${c.bg}`} />
+                <span className="text-gray-600">{estado}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────
+
+export default function ProgramacionQuirurgicaPage() {
+  const [programaciones, setProgramaciones] = useState<Programacion[]>([])
+  const [showForm, setShowForm]             = useState(false)
+  const [selectedProgramacion, setSelectedProgramacion] = useState<Programacion | null>(null)
+  const [editingId, setEditingId]           = useState<string | null>(null)
+  const [loading, setLoading]               = useState(false)
+  const [error, setError]                   = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey]         = useState(0)
+  const [stats, setStats] = useState({ total: 0, programados: 0, confirmados: 0, enQuirofano: 0, operados: 0, cancelados: 0, aplazados: 0 })
+
+  // Calendar
+  const [currentDate, setCurrentDate]     = useState(new Date())
+  const [diaSeleccionado, setDiaSeleccionado] = useState<string | null>(null)
+  const [verDetalleProg, setVerDetalleProg] = useState<Programacion | null>(null)
+
+  // ── Data loading ──────────────────────────────────────────────────────────
+
+  useEffect(() => { loadProgramaciones() }, [refreshKey])
+
+  const loadProgramaciones = async () => {
+    setLoading(true); setError(null)
     try {
-      const response = await api.getAgendaProcedimientos(
-        100,
-        0,
-        undefined,
-        undefined,
-        documento
-      )
-      
+      const response = await api.getAgendaProcedimientos(200, 0)
       if (response && response.procedimientos) {
-        const programacionesFormateadas = response.procedimientos.map((proc: any) => ({
+        const formatted: Programacion[] = response.procedimientos.map((proc: any) => ({
           id: proc.id.toString(),
           paciente_id: proc.paciente_id || "",
           numero_documento: proc.numero_documento || "",
           fecha: proc.fecha,
-          hora: proc.hora || "09:00",
+          hora: normalizeHora(proc.hora || "09:00"),
           duracion: proc.duracion || 60,
           procedimiento_id: proc.procedimiento_id?.toString() || "0",
           anestesiologo: proc.anestesiologo || "",
@@ -230,13 +401,13 @@ export default function ProgramacionQuirurgicaPage() {
           paciente_nombre: proc.paciente_nombre,
           paciente_apellido: proc.paciente_apellido,
           procedimiento_nombre: proc.procedimiento_nombre,
-          procedimiento_precio: proc.procedimiento_precio
+          procedimiento_precio: proc.procedimiento_precio,
         }))
-        
-        setProgramaciones(programacionesFormateadas)
-        calcularEstadisticas(programacionesFormateadas)
+        setProgramaciones(formatted)
+        calcularEstadisticas(formatted)
       } else {
         setProgramaciones([])
+        setStats({ total: 0, programados: 0, confirmados: 0, enQuirofano: 0, operados: 0, cancelados: 0, aplazados: 0 })
       }
     } catch (err: any) {
       setError(handleApiError(err))
@@ -245,687 +416,299 @@ export default function ProgramacionQuirurgicaPage() {
     }
   }
 
-  const calcularEstadisticas = (programacionesList: Programacion[]) => {
-    const estadisticas = {
-      total: programacionesList.length,
-      programados: programacionesList.filter(p => p.estado === "Programado").length,
-      confirmados: programacionesList.filter(p => p.estado === "Confirmado").length,
-      enQuirofano: programacionesList.filter(p => p.estado === "En Quirofano").length,
-      operados: programacionesList.filter(p => p.estado === "Operado").length,
-      cancelados: programacionesList.filter(p => p.estado === "Cancelado").length,
-      aplazados: programacionesList.filter(p => p.estado === "Aplazado").length
-    }
-    
-    setStats(estadisticas)
+  const calcularEstadisticas = (list: Programacion[]) => {
+    setStats({
+      total: list.length,
+      programados: list.filter(p => p.estado === "Programado").length,
+      confirmados: list.filter(p => p.estado === "Confirmado").length,
+      enQuirofano: list.filter(p => p.estado === "En Quirofano").length,
+      operados:    list.filter(p => p.estado === "Operado").length,
+      cancelados:  list.filter(p => p.estado === "Cancelado").length,
+      aplazados:   list.filter(p => p.estado === "Aplazado").length,
+    })
   }
+
+  // ── Save / Edit / Delete ──────────────────────────────────────────────────
 
   const handleEdit = (prog: Programacion) => {
-    setSelectedProgramacion(prog)
-    setEditingId(prog.id)
-    setShowForm(true)
+    setSelectedProgramacion(prog); setEditingId(prog.id); setShowForm(true); setDiaSeleccionado(null)
   }
 
-  const filteredProgramaciones = programaciones.filter((p) => {
-    const estadoMatch = filterEstado === "todas" || 
-                       p.estado.toLowerCase().replace(" ", "_") === filterEstado
-    
-    const documentoMatch = !filterDocumento || 
-                          p.numero_documento.toLowerCase().includes(filterDocumento.toLowerCase()) ||
-                          (p.paciente_nombre && p.paciente_nombre.toLowerCase().includes(filterDocumento.toLowerCase())) ||
-                          (p.paciente_apellido && p.paciente_apellido.toLowerCase().includes(filterDocumento.toLowerCase()))
-    
-    return estadoMatch && documentoMatch
-  })
-
   const handleSaveProgramacion = async (data: CreateProgramacionData) => {
-    setLoading(true);
-    setError(null);
-    setSuccessMessage(null);
-    
+    setLoading(true); setError(null); setSuccessMessage(null)
     try {
-      const procedimientoIdStr = data.procedimiento_id.toString();
-
-      if (procedimientoIdStr === "0" || !procedimientoIdStr.trim()) {
-        setError("Por favor selecciona un procedimiento de la lista");
-        setLoading(false);
-        return;
-      }
-
-      const procedimientoIdNum = parseInt(procedimientoIdStr, 10);
-      
-      if (isNaN(procedimientoIdNum) || procedimientoIdNum <= 0) {
-        setError("El procedimiento seleccionado no existe. Por favor selecciona uno diferente de la lista.");
-        setLoading(false);
-        return;
-      }
-
-      let horaFormateada = data.hora;
-      if (horaFormateada.includes(":") && horaFormateada.split(":").length === 2) {
-        horaFormateada += ":00";
-      }
-
-      const datosParaBackend = {
+      const procId = parseInt(data.procedimiento_id.toString(), 10)
+      if (isNaN(procId) || procId <= 0) { setError("Por favor selecciona un procedimiento de la lista"); setLoading(false); return }
+      let hora = data.hora
+      if (hora.includes(":") && hora.split(":").length === 2) hora += ":00"
+      const payload = {
         numero_documento: data.numero_documento,
-        fecha: data.fecha,
-        hora: horaFormateada,
-        procedimiento_id: procedimientoIdNum,
+        fecha: data.fecha, hora,
+        procedimiento_id: procId,
         duracion: data.duracion,
         anestesiologo: data.anestesiologo,
         estado: data.estado,
         observaciones: data.observaciones,
-        paciente_id: data.paciente_id ? parseInt(data.paciente_id) : undefined
+        paciente_id: data.paciente_id ? parseInt(data.paciente_id) : undefined,
       }
-
-      let response;
+      let response
       if (editingId) {
-        const editingIdNum = parseInt(editingId);
-        if (isNaN(editingIdNum)) {
-          setError("ID de edición inválido");
-          setLoading(false);
-          return;
-        }
-        response = await api.updateAgendaProcedimiento(editingIdNum, datosParaBackend);
+        const idNum = parseInt(editingId)
+        if (isNaN(idNum)) { setError("ID de edición inválido"); setLoading(false); return }
+        response = await api.updateAgendaProcedimiento(idNum, payload)
       } else {
-        response = await api.createAgendaProcedimiento(datosParaBackend);
+        response = await api.createAgendaProcedimiento(payload)
       }
-      
       if (response && response.error === true) {
-        if (response.isConflictError) {
-          setError(`⚠️ ${response.message || "Conflicto de horario"}. Por favor selecciona otra hora.`);
-        } else if (response.isValidationError) {
-          setError(`❌ ${response.message || "Error de validación"}`);
-        } else if (response.isNotFoundError) {
-          setError(`❌ ${response.message || "Recurso no encontrado"}`);
-        } else if (response.isNetworkError) {
-          setError("❌ Error de conexión. Verifica tu conexión a internet.");
-        } else {
-          setError(`❌ ${response.message || "Error desconocido"}`);
-        }
-        
-        setLoading(false);
-        return;
+        setError(`❌ ${response.message || "Error desconocido"}`); setLoading(false); return
       }
-      
       if (response && response.success !== false) {
-        setSuccessMessage(editingId ? 
-          "Programación actualizada correctamente" : 
-          "Programación creada correctamente"
-        );
-        
-        if (filterDocumento) {
-          setFilterDocumento("");
-        }
-        
-        setTimeout(() => {
-          setRefreshKey(prev => prev + 1);
-        }, 500);
-        
-        setShowForm(false);
-        setEditingId(null);
-        setSelectedProgramacion(null);
-        setLoading(false);
+        setSuccessMessage(editingId ? "Programación actualizada correctamente" : "Programación creada correctamente")
+        setTimeout(() => setRefreshKey(k => k + 1), 500)
+        setShowForm(false); setEditingId(null); setSelectedProgramacion(null)
       } else {
-        setError("❌ Respuesta inesperada del servidor");
-        setLoading(false);
+        setError("❌ Respuesta inesperada del servidor")
       }
-
     } catch (err: any) {
-      if (err && typeof err === 'object' && 'error' in err && err.error === true) {
-        setLoading(false);
-        return;
-      }
-      
-      const errorMsg = err.message || "Error desconocido";
-      
-      if (errorMsg.includes("network") || errorMsg.includes("failed to fetch")) {
-        setError("❌ Error de conexión. Verifica que el backend esté funcionando.");
-      } else {
-        setError(`❌ ${handleApiError(err)}`);
-      }
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm("¿Estás seguro de que deseas cancelar esta programación?\n\nEsta acción cambiará el estado a 'Cancelado'.")) {
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const idNum = parseInt(id);
-        if (isNaN(idNum)) {
-          setError("ID inválido");
-          return;
-        }
-        
-        const programacionActual = programaciones.find(p => p.id === id);
-        if (!programacionActual) {
-          setError("Programación no encontrada");
-          return;
-        }
-        
-        const datosParaCancelar = {
-          numero_documento: programacionActual.numero_documento,
-          fecha: programacionActual.fecha,
-          hora: programacionActual.hora,
-          duracion: programacionActual.duracion,
-          procedimiento_id: parseInt(programacionActual.procedimiento_id),
-          anestesiologo: programacionActual.anestesiologo,
-          estado: "Cancelado" as const,
-          observaciones: programacionActual.observaciones || `Cancelado el ${new Date().toLocaleDateString()}`
-        };
-        
-        await api.updateAgendaProcedimiento(idNum, datosParaCancelar);
-        
-        setSuccessMessage("Programación cancelada exitosamente");
-        
-        if (filterDocumento) {
-          setFilterDocumento("");
-        }
-        
-        setRefreshKey(prev => prev + 1);
-      } catch (err: any) {
-        setError(handleApiError(err));
-      } finally {
-        setLoading(false);
-      }
+      setError(`❌ ${handleApiError(err)}`)
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleChangeEstado = async (id: string, nuevoEstado: Programacion["estado"]) => {
-    setLoading(true);
-    setError(null);
-    
+    setLoading(true); setError(null)
     try {
-      const idNum = parseInt(id);
-      if (isNaN(idNum)) {
-        setError("ID inválido");
-        return;
-      }
-      
-      const programacionActual = programaciones.find(p => p.id === id);
-      if (!programacionActual) {
-        setError("Programación no encontrada");
-        return;
-      }
-      
-      const datosActualizar = {
-        numero_documento: programacionActual.numero_documento,
-        fecha: programacionActual.fecha,
-        hora: programacionActual.hora,
-        duracion: programacionActual.duracion,
-        procedimiento_id: parseInt(programacionActual.procedimiento_id),
-        anestesiologo: programacionActual.anestesiologo,
-        estado: nuevoEstado,
-        observaciones: programacionActual.observaciones || ""
-      };
-      
-      await api.updateAgendaProcedimiento(idNum, datosActualizar);
-      
-      setSuccessMessage(`Estado cambiado a "${nuevoEstado}"`);
-      setRefreshKey(prev => prev + 1);
-    } catch (err: any) {
-      setError(handleApiError(err));
-    } finally {
-      setLoading(false);
-    }
+      const idNum = parseInt(id); if (isNaN(idNum)) { setError("ID inválido"); return }
+      const p = programaciones.find(x => x.id === id); if (!p) { setError("Programación no encontrada"); return }
+      await api.updateAgendaProcedimiento(idNum, {
+        numero_documento: p.numero_documento, fecha: p.fecha, hora: p.hora,
+        duracion: p.duracion, procedimiento_id: parseInt(p.procedimiento_id),
+        anestesiologo: p.anestesiologo, estado: nuevoEstado, observaciones: p.observaciones || "",
+      })
+      setSuccessMessage(`Estado cambiado a "${nuevoEstado}"`)
+      setRefreshKey(k => k + 1)
+    } catch (err: any) { setError(handleApiError(err)) }
+    finally { setLoading(false) }
   }
 
-  const estadoColors: Record<string, string> = {
-    "Programado": "bg-blue-100 text-blue-800 border border-blue-200",
-    "Confirmado": "bg-green-100 text-green-800 border border-green-200",
-    "Aplazado": "bg-orange-100 text-orange-800 border border-orange-200",
-    "En Quirofano": "bg-purple-100 text-purple-800 border border-purple-200",
-    "Operado": "bg-indigo-100 text-indigo-800 border border-indigo-200",
-    "Cancelado": "bg-red-100 text-red-800 border border-red-200",
+  // ── Calendar helpers ──────────────────────────────────────────────────────
+
+  const getDaysInMonth  = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  const getFirstDayOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1).getDay()
+  const changeMonth = (offset: number) => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1))
+  const monthName   = currentDate.toLocaleString("es-ES", { month: "long", year: "numeric" })
+
+  const programacionesDelDia = (fecha: string) =>
+    programaciones
+      .filter(p => p.fecha === fecha)
+      .sort((a, b) => minutosDesdeStr(a.hora) - minutosDesdeStr(b.hora))
+
+  const handleNuevaProgramacionDesdeModal = (fecha: string, hora?: string) => {
+    setDiaSeleccionado(null); setEditingId(null)
+    setSelectedProgramacion(hora ? { fecha, hora } as any : { fecha } as any)
+    setShowForm(true)
   }
 
-  const getEstadoIcon = (estado: string) => {
-    switch (estado) {
-      case "Confirmado": return "✅";
-      case "Operado": return "🏥";
-      case "En Quirofano": return "⚕️";
-      case "Cancelado": return "❌";
-      case "Aplazado": return "⏸️";
-      default: return "📅";
-    }
+  // ── Calendar render ───────────────────────────────────────────────────────
+
+  const renderCalendarDays = () => {
+    const todayStr = formatDateStr(new Date())
+    const days = getDaysInMonth(currentDate)
+    return Array.from({ length: days }, (_, i) => {
+      const day = i + 1
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
+      const dateStr = formatDateStr(date)
+      const dayProgs = programacionesDelDia(dateStr)
+      const isToday = todayStr === dateStr
+
+      return (
+        <div
+          key={day}
+          onClick={() => setDiaSeleccionado(dateStr)}
+          className={`min-h-[80px] p-2 rounded-lg border cursor-pointer transition ${
+            isToday ? "border-[#1a6b32] bg-[#99d6e8]/10" : "border-gray-200 hover:border-[#669933] hover:bg-gray-50"
+          }`}
+        >
+          <div className="flex justify-between items-start mb-1">
+            <p className={`text-sm font-semibold ${isToday ? "text-[#1a6b32]" : "text-gray-700"}`}>{day}</p>
+            {dayProgs.length > 0 && (
+              <span className="text-[10px] bg-blue-100 text-blue-800 rounded-full px-1.5 py-0.5">{dayProgs.length}</span>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            {dayProgs.slice(0, 3).map(prog => {
+              const c = getEstadoColor(prog.estado)
+              return (
+                <div key={prog.id} className={`rounded px-1 py-0.5 text-white text-[10px] truncate ${c.bg}`}>
+                  <span className="font-medium">{prog.hora}</span>
+                  {" "}
+                  {prog.paciente_nombre?.split(" ")[0]} {prog.paciente_apellido?.charAt(0)}.
+                </div>
+              )
+            })}
+            {dayProgs.length > 3 && (
+              <p className="text-[10px] text-gray-400 pl-0.5">+{dayProgs.length - 3} más</p>
+            )}
+          </div>
+        </div>
+      )
+    })
   }
 
-  const clearFilters = () => {
-    setFilterEstado("todas");
-    setFilterFecha("todas");
-    setFilterDocumento("");
-  }
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <ProtectedRoute permissions={["ver_programacion"]}>
       <div className="p-6">
-        <div className="flex items-center justify-between mb-8">
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Programación Quirúrgica</h1>
-            <p className="text-gray-600 mt-2">Gestiona las cirugías programadas</p>
+            <p className="text-gray-600 mt-1">Gestiona las cirugías programadas</p>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => setRefreshKey(prev => prev + 1)}
+              onClick={() => setRefreshKey(k => k + 1)}
               disabled={loading}
-              className="flex items-center space-x-2 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition disabled:opacity-50"
-              title="Actualizar"
+              className="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition disabled:opacity-50"
             >
-              <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
-              <span>Actualizar</span>
+              <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+              Actualizar
             </button>
             <ProtectedRoute permissions={["crear_programacion"]}>
               <button
-                onClick={() => {
-                  setEditingId(null);
-                  setSelectedProgramacion(null);
-                  setShowForm(true);
-                }}
-                className="flex items-center space-x-2 bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg transition"
+                onClick={() => { setEditingId(null); setSelectedProgramacion(null); setShowForm(true) }}
+                className="flex items-center gap-2 bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg transition"
               >
-                <Plus size={20} />
-                <span>Nueva Programación</span>
+                <Plus size={18} /> Nueva Programación
               </button>
             </ProtectedRoute>
           </div>
         </div>
 
+        {/* Alerts */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
-            <AlertCircle className="text-red-500 mr-2 mt-0.5 flex-shrink-0" size={20} />
-            <div className="flex-1">
-              <p className="text-red-700 font-medium">Error</p>
-              <p className="text-red-600 text-sm mt-1">{error}</p>
-            </div>
-            <button
-              onClick={() => setError(null)}
-              className="text-red-500 hover:text-red-700 text-sm"
-            >
-              Cerrar
-            </button>
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
+            <AlertCircle className="text-red-500 mr-2 mt-0.5 flex-shrink-0" size={18} />
+            <div className="flex-1"><p className="text-red-700 text-sm">{error}</p></div>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600"><X size={16} /></button>
           </div>
         )}
-
         {successMessage && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start">
-            <CheckCircle className="text-green-500 mr-2 mt-0.5 flex-shrink-0" size={20} />
-            <div className="flex-1">
-              <p className="text-green-700 font-medium">Éxito</p>
-              <p className="text-green-600 text-sm mt-1">{successMessage}</p>
-            </div>
-            <button
-              onClick={() => setSuccessMessage(null)}
-              className="text-green-500 hover:text-green-700 text-sm"
-            >
-              Cerrar
-            </button>
+          <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start">
+            <CheckCircle className="text-green-500 mr-2 mt-0.5 flex-shrink-0" size={18} />
+            <div className="flex-1"><p className="text-green-700 text-sm">{successMessage}</p></div>
+            <button onClick={() => setSuccessMessage(null)} className="text-green-400 hover:text-green-600"><X size={16} /></button>
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-7 gap-4 mb-8">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Total</p>
-                <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
-              </div>
-              <div className="bg-blue-100 p-2 rounded-lg">
-                <Calendar className="text-blue-600" size={20} />
-              </div>
+        {/* Stats bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+          {[
+            { label: "Total",       value: stats.total,       color: "text-gray-800",   bg: "bg-gray-50",    border: "border-gray-200" },
+            { label: "Programados", value: stats.programados, color: "text-blue-600",   bg: "bg-blue-50",    border: "border-blue-200" },
+            { label: "Confirmados", value: stats.confirmados, color: "text-green-600",  bg: "bg-green-50",   border: "border-green-200" },
+            { label: "En Quirófano",value: stats.enQuirofano, color: "text-purple-600", bg: "bg-purple-50",  border: "border-purple-200" },
+            { label: "Operados",    value: stats.operados,    color: "text-indigo-600", bg: "bg-indigo-50",  border: "border-indigo-200" },
+            { label: "Cancelados",  value: stats.cancelados,  color: "text-red-600",    bg: "bg-red-50",     border: "border-red-200" },
+            { label: "Aplazados",   value: stats.aplazados,   color: "text-orange-600", bg: "bg-orange-50",  border: "border-orange-200" },
+          ].map(s => (
+            <div key={s.label} className={`${s.bg} rounded-lg border ${s.border} p-3 text-center`}>
+              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
             </div>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Programados</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.programados}</p>
-              </div>
-              <div className="bg-blue-100 p-2 rounded-lg">
-                <span className="text-blue-600">📅</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Confirmados</p>
-                <p className="text-2xl font-bold text-green-600">{stats.confirmados}</p>
-              </div>
-              <div className="bg-green-100 p-2 rounded-lg">
-                <span className="text-green-600">✅</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">En Quirófano</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.enQuirofano}</p>
-              </div>
-              <div className="bg-purple-100 p-2 rounded-lg">
-                <span className="text-purple-600">⚕️</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Operados</p>
-                <p className="text-2xl font-bold text-indigo-600">{stats.operados}</p>
-              </div>
-              <div className="bg-indigo-100 p-2 rounded-lg">
-                <span className="text-indigo-600">🏥</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Cancelados</p>
-                <p className="text-2xl font-bold text-red-600">{stats.cancelados}</p>
-              </div>
-              <div className="bg-red-100 p-2 rounded-lg">
-                <span className="text-red-600">❌</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Aplazados</p>
-                <p className="text-2xl font-bold text-orange-600">{stats.aplazados}</p>
-              </div>
-              <div className="bg-orange-100 p-2 rounded-lg">
-                <span className="text-orange-600">⏸️</span>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
 
-        <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center mb-4">
-            <Filter size={18} className="text-gray-500 mr-2" />
-            <h3 className="font-medium text-gray-700">Filtros</h3>
-            {(filterEstado !== "todas" || filterFecha !== "todas" || filterDocumento) && (
-              <button
-                onClick={clearFilters}
-                className="ml-auto text-sm text-[#1a6b32] hover:text-[#155529]"
-              >
-                Limpiar filtros
+        {/* Calendar */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-xl font-bold text-gray-800 capitalize">{monthName}</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded-lg transition">
+                <ChevronLeft size={20} />
               </button>
-            )}
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por fecha</label>
-              <div className="flex flex-wrap gap-2">
-                {["todas", "hoy", "semana", "mes"].map((fecha) => (
-                  <button
-                    key={fecha}
-                    onClick={() => setFilterFecha(fecha as "todas" | "hoy" | "semana" | "mes")}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center space-x-1 ${
-                      filterFecha === fecha
-                        ? "bg-[#1a6b32] text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    {fecha === "todas" ? "Todas las fechas" :
-                     fecha === "hoy" ? "Hoy" :
-                     fecha === "semana" ? "Última semana" : "Último mes"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Filtrar por estado</label>
-              <div className="flex flex-wrap gap-2">
-                {["todas", "Programado", "Confirmado", "Aplazado", "En Quirofano", "Operado", "Cancelado"].map((estado) => (
-                  <button
-                    key={estado}
-                    onClick={() => setFilterEstado(estado.toLowerCase().replace(" ", "_"))}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${
-                      filterEstado === estado.toLowerCase().replace(" ", "_")
-                        ? "bg-[#1a6b32] text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    {estado === "todas" ? "Todos" : estado}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Buscar por documento o nombre
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={filterDocumento}
-                  onChange={(e) => setFilterDocumento(e.target.value)}
-                  placeholder="Documento, nombre o apellido..."
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent pr-10"
-                />
-                {filterDocumento && (
-                  <button
-                    onClick={() => setFilterDocumento("")}
-                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                  >
-                    <X size={18} />
-                  </button>
-                )}
-              </div>
+              <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                Hoy
+              </button>
+              <button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded-lg transition">
+                <ChevronRight size={20} />
+              </button>
             </div>
           </div>
-        </div>
 
-        {loading && (
-          <div className="mb-6 flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1a6b32]"></div>
-            <span className="ml-3 text-gray-600">Cargando programaciones...</span>
+          {/* Day headers */}
+          <div className="grid grid-cols-7 gap-2 mb-2">
+            {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map(d => (
+              <div key={d} className="text-center text-sm font-semibold text-gray-500 py-2">{d}</div>
+            ))}
           </div>
-        )}
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Paciente</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Procedimiento</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Fecha/Hora</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Duración</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Anestesiólogo</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Estado</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredProgramaciones.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center justify-center">
-                        <Calendar className="text-gray-300 mb-3" size={48} />
-                        <p className="text-gray-500 font-medium mb-1">
-                          {loading ? "Cargando..." : "No hay programaciones"}
-                        </p>
-                        {!loading && (filterEstado !== "todas" || filterFecha !== "todas" || filterDocumento) && (
-                          <p className="text-gray-400 text-sm">
-                            Intenta cambiar los filtros o{" "}
-                            <button
-                              onClick={clearFilters}
-                              className="text-[#1a6b32] hover:text-[#155529] underline"
-                            >
-                              limpiar los filtros
-                            </button>
-                          </p>
-                        )}
-                        {!loading && filteredProgramaciones.length === 0 && programaciones.length === 0 && (
-                          <p className="text-gray-400 text-sm mt-2">
-                            No hay programaciones registradas.{" "}
-                            <button
-                              onClick={() => {
-                                setEditingId(null);
-                                setSelectedProgramacion(null);
-                                setShowForm(true);
-                              }}
-                              className="text-[#1a6b32] hover:text-[#155529] font-medium"
-                            >
-                              Crea tu primera programación
-                            </button>
-                          </p>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredProgramaciones.map((prog) => (
-                    <tr key={prog.id} className="hover:bg-gray-50 transition">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-medium text-gray-800">
-                            {prog.paciente_nombre} {prog.paciente_apellido}
-                          </p>
-                          <p className="text-xs text-gray-600">{prog.numero_documento}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-start space-x-2">
-                          <Scissors size={16} className="text-[#669933] mt-0.5 flex-shrink-0" />
-                          <div>
-                            <span className="font-medium text-gray-800">{prog.procedimiento_nombre || "No especificado"}</span>
-                            {prog.procedimiento_precio && (
-                              <p className="text-xs text-gray-600 mt-1">
-                                {formatCurrency(prog.procedimiento_precio)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        <div className="flex items-center space-x-1">
-                          <Calendar size={14} className="text-gray-400" />
-                          <span>{prog.fecha}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 mt-1">
-                          <Clock size={14} className="text-gray-400" />
-                          <span>{formatHora(prog.hora)}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {prog.duracion} min
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        <div className="flex items-center">
-                          <User size={14} className="text-gray-400 mr-1" />
-                          {prog.anestesiologo || "No especificado"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center space-x-2">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${estadoColors[prog.estado]}`}>
-                            {getEstadoIcon(prog.estado)} {prog.estado}
-                          </span>
-                          {prog.estado === "Programado" && (
-                            <ProtectedRoute permissions={["editar_programacion"]}>
-                              <button
-                                onClick={() => handleChangeEstado(prog.id, "Confirmado")}
-                                className="text-xs text-green-600 hover:text-green-800"
-                                title="Confirmar"
-                              >
-                              </button>
-                            </ProtectedRoute>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-center space-x-2">
-                          <button
-                            onClick={() => setSelectedProgramacion(prog)}
-                            className="p-2 text-[#1a6b32] hover:bg-blue-50 rounded-lg transition"
-                            title="Ver detalles"
-                          >
-                            <Eye size={18} />
-                          </button>
-                          <ProtectedRoute permissions={["editar_programacion"]}>
-                            <button
-                              onClick={() => handleEdit(prog)}
-                              className="p-2 text-[#669933] hover:bg-green-50 rounded-lg transition"
-                              title="Editar"
-                            >
-                              <Edit2 size={18} />
-                            </button>
-                          </ProtectedRoute>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          
-          {filteredProgramaciones.length > 0 && (
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-600">
-                  Mostrando <span className="font-medium">{filteredProgramaciones.length}</span> de{" "}
-                  <span className="font-medium">{programaciones.length}</span> programaciones
-                </p>
-                <div className="flex items-center space-x-2">
-                  <p className="text-sm text-gray-600">
-                    Filtrado por:{" "}
-                    {filterEstado !== "todas" && (
-                      <span className="font-medium mx-1">{filterEstado.replace("_", " ")}</span>
-                    )}
-                    {filterFecha !== "todas" && (
-                      <span className="font-medium mx-1">
-                        {filterFecha === "hoy" ? "hoy" : 
-                         filterFecha === "semana" ? "última semana" : "último mes"}
-                      </span>
-                    )}
-                    {filterDocumento && (
-                      <span className="font-medium mx-1">"{filterDocumento}"</span>
-                    )}
-                  </p>
-                </div>
-              </div>
+          {/* Days grid */}
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1a6b32]" />
+              <span className="ml-3 text-gray-600">Cargando...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: getFirstDayOfMonth(currentDate) }).map((_, i) => (
+                <div key={`empty-${i}`} className="min-h-[80px]" />
+              ))}
+              {renderCalendarDays()}
             </div>
           )}
+
+          {/* Legend */}
+          <div className="mt-4 pt-4 border-t flex flex-wrap gap-3">
+            {Object.entries(ESTADO_COLORS).map(([estado, c]) => (
+              <div key={estado} className="flex items-center gap-1.5 text-xs text-gray-600">
+                <div className={`w-3 h-3 rounded ${c.bg}`} />
+                {estado}
+              </div>
+            ))}
+          </div>
         </div>
 
-        {showForm && (
-          <ProgramacionForm
-            programacion={selectedProgramacion || undefined}
-            onSave={handleSaveProgramacion}
-            onClose={() => {
-              setShowForm(false)
-              setEditingId(null)
-              setError(null)
-              setSuccessMessage(null)
-            }}
-            isLoading={loading}
-          />
-        )}
-
-        {selectedProgramacion && !showForm && (
-          <ProgramacionModal
-            programacion={selectedProgramacion}
-            onClose={() => setSelectedProgramacion(null)}
-            onEdit={() => handleEdit(selectedProgramacion)}
-          />
-        )}
+        {/* Tip */}
+        <p className="text-xs text-gray-400 mt-3 text-center">
+          Haz clic en un día para ver y gestionar sus programaciones
+        </p>
       </div>
+
+      {/* Day Modal */}
+      {diaSeleccionado && (
+        <DiaProgramacionesModal
+          fecha={diaSeleccionado}
+          programaciones={programacionesDelDia(diaSeleccionado)}
+          onClose={() => setDiaSeleccionado(null)}
+          onNuevaProgramacion={handleNuevaProgramacionDesdeModal}
+          onEdit={handleEdit}
+          onVerDetalle={p => { setDiaSeleccionado(null); setVerDetalleProg(p) }}
+        />
+      )}
+
+      {/* Programacion Form */}
+      {showForm && (
+        <ProgramacionForm
+          programacion={selectedProgramacion || undefined}
+          onSave={handleSaveProgramacion}
+          onClose={() => { setShowForm(false); setEditingId(null); setSelectedProgramacion(null); setError(null); setSuccessMessage(null) }}
+          isLoading={loading}
+        />
+      )}
+
+      {/* Programacion Detail Modal */}
+      {verDetalleProg && !showForm && (
+        <ProgramacionModal
+          programacion={verDetalleProg}
+          onClose={() => setVerDetalleProg(null)}
+          onEdit={() => { handleEdit(verDetalleProg); setVerDetalleProg(null) }}
+        />
+      )}
     </ProtectedRoute>
   )
 }

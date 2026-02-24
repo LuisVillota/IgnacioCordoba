@@ -2038,19 +2038,31 @@ setTimeout(checkSVGLoaded, 2000);
 
     function initializeSchema(objectId) {
       const objectElement = document.getElementById(objectId);
-      
-      objectElement.addEventListener('load', function() {
+      if (!objectElement) return;
+
+      function setupSvg() {
         const svgDoc = objectElement.contentDocument;
-        if (!svgDoc) return;
+        if (!svgDoc || !svgDoc.documentElement) return;
+
+        // Verificar que el SVG realmente cargó (no es about:blank)
+        if (svgDoc.documentElement.tagName !== 'svg' && svgDoc.documentElement.nodeName !== 'svg') {
+          console.log(`⏳ SVG ${objectId} aún no listo, reintentando...`);
+          setTimeout(setupSvg, 200);
+          return;
+        }
+
+        // Evitar inicialización doble
+        if (objectElement.getAttribute('data-initialized')) return;
+        objectElement.setAttribute('data-initialized', 'true');
 
         svgDocuments.push(svgDoc);
         createPatterns(svgDoc);
 
         const svgElement = svgDoc.documentElement;
-        
+
         svgElement.style.userSelect = 'none';
         svgElement.style.webkitUserSelect = 'none';
-        
+
         svgElement.addEventListener('mousedown', (e) => startDrawing(e, svgDoc));
         svgElement.addEventListener('mousemove', (e) => continueDrawing(e, svgDoc));
         svgElement.addEventListener('mouseup', (e) => stopDrawing(e, svgDoc));
@@ -2064,31 +2076,31 @@ setTimeout(checkSVGLoaded, 2000);
           if (label) {
             const originalFill = element.style.fill || element.getAttribute('fill') || '';
             element.setAttribute('data-original-fill', originalFill);
-            
+
             const originalOpacity = element.style.fillOpacity || element.getAttribute('fill-opacity') || '';
             if (originalOpacity) {
               element.setAttribute('data-original-opacity', originalOpacity);
             }
-            
+
             element.classList.add('zone');
             element.style.cursor = 'pointer';
-            
+
             element.addEventListener('click', function(e) {
               if (isDrawingMode) {
                 e.stopPropagation();
                 return;
               }
-              
+
               if (isTextMode) {
                 e.stopPropagation();
                 return;
               }
-              
+
               const currentProcedure = element.getAttribute('data-procedure');
-              
+
               if (currentProcedure) {
                 removeProcedurePattern(this);
-                
+
                 const index = selectionHistory.findIndex(s => s.element === this);
                 if (index > -1) {
                   selectionHistory.splice(index, 1);
@@ -2096,7 +2108,7 @@ setTimeout(checkSVGLoaded, 2000);
               } else {
                 const selectedProcedure = getSelectedProcedure();
                 applyProcedurePattern(this, selectedProcedure);
-                
+
                 selectionHistory.push({
                   element: this,
                   procedure: selectedProcedure,
@@ -2113,7 +2125,14 @@ setTimeout(checkSVGLoaded, 2000);
           text.style.userSelect = 'none';
           text.style.webkitUserSelect = 'none';
         });
-      });
+      }
+
+      // Si el SVG ya cargó (race condition en iframe), inicializar de inmediato
+      if (objectElement.contentDocument && objectElement.contentDocument.documentElement) {
+        setupSvg();
+      }
+      // También escuchar el evento load por si aún no cargó
+      objectElement.addEventListener('load', setupSvg);
     }
 
     document.addEventListener('keydown', function(e) {
@@ -2127,18 +2146,26 @@ setTimeout(checkSVGLoaded, 2000);
     // Función para inicializar cuando el DOM esté listo
     document.addEventListener('DOMContentLoaded', function() {
       console.log('✅ Editor de esquemas cargado');
-      
-      // Verificar si estamos en iframe
       console.log('¿En iframe?', window.self !== window.top);
-      console.log('Referrer:', document.referrer);
-      
+
       // Inicializar los esquemas SVG
       initializeSchema('body-schema');
       initializeSchema('facial-schema');
-      
+
+      // Reintentar inicialización después de un tiempo por si los SVG no cargaron aún
+      setTimeout(function() {
+        initializeSchema('body-schema');
+        initializeSchema('facial-schema');
+      }, 500);
+
+      setTimeout(function() {
+        initializeSchema('body-schema');
+        initializeSchema('facial-schema');
+      }, 1500);
+
       // Notificar al padre que ya cargó
       if (window.parent !== window) {
-        window.parent.postMessage({ 
+        window.parent.postMessage({
           type: 'ESQUEMA_LOADED',
           source: 'esquema-editor'
         }, '*');

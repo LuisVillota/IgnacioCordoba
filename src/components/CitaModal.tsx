@@ -10,6 +10,7 @@ interface CitaModalProps {
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
+  onPlanQuirurgico?: (pacienteId: string) => void
 }
 
 const tiposDeVisita: Record<string, string> = {
@@ -19,7 +20,7 @@ const tiposDeVisita: Record<string, string> = {
   programacion_quirurgica: "Programación Quirúrgica",
 }
 
-export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: CitaModalProps) {
+export function CitaModal({ cita, paciente, onClose, onEdit, onDelete, onPlanQuirurgico }: CitaModalProps) {
   const estadoColors: Record<string, string> = {
     pendiente: "bg-[#669933]/20 text-[#1a6b32]",
     confirmada: "bg-[#99d6e8]/20 text-[#1a6b32]",
@@ -28,8 +29,8 @@ export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: CitaMod
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-md w-full">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-lg shadow-lg max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-800">Detalles de la cita</h2>
@@ -103,19 +104,31 @@ export function CitaModal({ cita, paciente, onClose, onEdit, onDelete }: CitaMod
         </div>
 
         {/* Actions */}
-        <div className="flex items-center space-x-3 p-6 border-t border-gray-200">
-          <button
-            onClick={onEdit}
-            className="flex-1 bg-[#669933] hover:bg-[#5a8a2a] text-white font-medium py-2 rounded-lg transition"
-          >
-            Editar
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 rounded-lg transition"
-          >
-            Cerrar
-          </button>
+        <div className="p-6 border-t border-gray-200 space-y-3">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={onEdit}
+              className="flex-1 bg-[#669933] hover:bg-[#5a8a2a] text-white font-medium py-2 rounded-lg transition"
+            >
+              Editar
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 rounded-lg transition"
+            >
+              Cerrar
+            </button>
+          </div>
+          {onPlanQuirurgico && (
+            <button
+              type="button"
+              onClick={() => onPlanQuirurgico(cita.id_paciente)}
+              className="w-full bg-[#1a6b32] hover:bg-[#155529] text-white font-medium py-2 rounded-lg transition flex items-center justify-center space-x-2"
+            >
+              <FileText size={18} />
+              <span>Realizar plan quirúrgico</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

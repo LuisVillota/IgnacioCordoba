@@ -19,8 +19,8 @@ interface UsuarioModalProps {
 
 export function UsuarioModal({ usuario, onClose }: UsuarioModalProps) {
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-md shadow-lg">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-white rounded-lg w-full max-w-md shadow-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-xl font-semibold">Detalle del Usuario</h2>
           <button onClick={onClose}>

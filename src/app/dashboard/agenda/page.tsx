@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight, Plus, Edit2, Calendar, Clock, User, AlertCircle, RefreshCw, AlertTriangle, X, Trash2, AlertCircle as AlertCircleIcon } from "lucide-react"
+import { useState, useEffect, type ChangeEvent, type FormEvent } from "react"
+import { useRouter } from "next/navigation"
+import { ChevronLeft, ChevronRight, Plus, Edit2, Calendar, Clock, User, AlertCircle, RefreshCw, AlertTriangle, X, Trash2, Printer, Search } from "lucide-react"
+import jsPDF from "jspdf"
 import { ProtectedRoute } from "../../../components/ProtectedRoute" 
-import { CitaForm } from "../../../components/CitaForm" 
 import { CitaModal } from "../../../components/CitaModal"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
@@ -13,7 +14,7 @@ interface cita {
   id: string
   id_paciente: string
   id_usuario: string
-  tipo_cita:  "control" | "valoracion" | "programacion_quirurgica" | "visitador_medico" | "valoracion_virtual" | "control_virtual" | "control_postquirurgico"
+  tipo_cita: "consulta" | "control" | "valoracion" | "programacion_quirurgica" | "visitador_medico" | "valoracion_virtual" | "control_virtual" | "control_postquirurgico"
   fecha: string
   hora: string
   duracion: number
@@ -361,21 +362,98 @@ function ConflictoHorarioModal({
   )
 }
 
+// ─── Algoritmo de distribución de columnas para citas solapadas (estilo Google Calendar) ───
+interface CitaConColumna {
+  cita: cita
+  columna: number
+  totalColumnas: number
+}
+
+function minutosDesdeHoraStr(hora: string): number {
+  const [h, m] = hora.split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+
+function calcularColumnasOverlap(citasDelDia: cita[]): CitaConColumna[] {
+  if (citasDelDia.length === 0) return []
+
+  const sorted = [...citasDelDia].sort((a, b) => {
+    const startA = minutosDesdeHoraStr(a.hora)
+    const startB = minutosDesdeHoraStr(b.hora)
+    if (startA !== startB) return startA - startB
+    return b.duracion - a.duracion
+  })
+
+  // Agrupar citas solapadas en clusters
+  const clusters: cita[][] = []
+  let currentCluster: cita[] = [sorted[0]]
+  let clusterEnd = minutosDesdeHoraStr(sorted[0].hora) + sorted[0].duracion
+
+  for (let i = 1; i < sorted.length; i++) {
+    const citaStart = minutosDesdeHoraStr(sorted[i].hora)
+    if (citaStart < clusterEnd) {
+      currentCluster.push(sorted[i])
+      clusterEnd = Math.max(clusterEnd, citaStart + sorted[i].duracion)
+    } else {
+      clusters.push(currentCluster)
+      currentCluster = [sorted[i]]
+      clusterEnd = citaStart + sorted[i].duracion
+    }
+  }
+  clusters.push(currentCluster)
+
+  // Asignar columnas dentro de cada cluster
+  const result: CitaConColumna[] = []
+  for (const cluster of clusters) {
+    const columns: cita[][] = []
+
+    for (const c of cluster) {
+      const cStart = minutosDesdeHoraStr(c.hora)
+      let placed = false
+
+      for (let col = 0; col < columns.length; col++) {
+        const lastInCol = columns[col][columns[col].length - 1]
+        const lastEnd = minutosDesdeHoraStr(lastInCol.hora) + lastInCol.duracion
+        if (cStart >= lastEnd) {
+          columns[col].push(c)
+          placed = true
+          break
+        }
+      }
+
+      if (!placed) {
+        columns.push([c])
+      }
+    }
+
+    const totalColumnas = columns.length
+    for (let col = 0; col < columns.length; col++) {
+      for (const c of columns[col]) {
+        result.push({ cita: c, columna: col, totalColumnas })
+      }
+    }
+  }
+
+  return result
+}
+
 // Modal para mostrar todas las citas de un día con vista tipo Google Calendar - CON INTERVALOS DE 10 MINUTOS CORREGIDO
-function DiaCitasModal({ 
-  fecha, 
+function DiaCitasModal({
+  fecha,
   citas,
   pacientes,
   onClose,
   onEdit,
-  onNuevaCita
-}: { 
+  onNuevaCita,
+  onVerDetalle
+}: {
   fecha: string
   citas: cita[]
   pacientes: paciente[]
   onClose: () => void
   onEdit: (cita: cita) => void
   onNuevaCita: (fecha: string, hora?: string) => void
+  onVerDetalle: (cita: cita) => void
 }) {
   // Usar fecha local corregida
   const fechaCorregida = new Date(fecha + 'T00:00:00')
@@ -412,15 +490,15 @@ function DiaCitasModal({
   const calcularPosicionCita = (hora: string) => {
     const [horas, minutos] = hora.split(':').map(Number);
     const minutosDesdeInicio = (horas - horasInicio) * 60 + minutos;
-    
-    // Convertir a píxeles (cada 10 minutos = 40px)
-    return minutosDesdeInicio * 0.4; // 4px por minuto, 40px por 10 minutos
+
+    // Convertir a píxeles: cada 10 minutos = 40px → 4px por minuto
+    return minutosDesdeInicio * 4;
   };
 
   // Función para calcular la altura de una cita
   const calcularAlturaCita = (duracion: number) => {
-    // 4px por minuto de duración
-    return duracion * 0.4;
+    // 4px por minuto de duración (40px por cada 10 min)
+    return duracion * 4;
   };
 
   // Función para formatear la hora para mostrar
@@ -435,8 +513,8 @@ function DiaCitasModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 border-b">
           <div className="flex items-center justify-between">
             <div>
@@ -538,89 +616,85 @@ function DiaCitasModal({
                   </div>
                 ))}
 
-                {/* Citas posicionadas con precisión */}
-                {citas.map((cita) => {
-                  const paciente = pacientes.find(p => p.id === cita.id_paciente) || 
-                    crearPacientePorDefecto(
-                      cita.id_paciente,
-                      cita.paciente_nombre,
-                      cita.paciente_apellido
-                    );
-                  
-                  const estadoColor = {
-                    confirmada: "bg-[#1a6b32]",
-                    pendiente: "bg-[#669933]",
-                    completada: "bg-blue-500",
-                    cancelada: "bg-gray-400"
-                  }[cita.estado] || "bg-gray-200";
-                  
-                  const tipoColor = {
-                    consulta: "border-l-4 border-l-blue-500",
-                    control: "border-l-4 border-l-green-500",
-                    valoracion: "border-l-4 border-l-purple-500",
-                    programacion_quirurgica: "border-l-4 border-l-red-500",
-                    visitador_medico: "border-l-4 border-l-amber-500",
-                    valoracion_virtual: "border-l-4 border-l-cyan-500",
-                    control_virtual: "border-l-4 border-l-emerald-500",
-                    control_postquirurgico: "border-l-4 border-l-pink-500"
-                  }[cita.tipo_cita] || "border-l-4 border-l-gray-500";
-                  
-                  const posicion = calcularPosicionCita(cita.hora);
-                  const altura = calcularAlturaCita(cita.duracion);
-                  
-                  // Calcular hora de fin
-                  const horaFin = agregarMinutos(cita.hora, cita.duracion);
-                  
-                  return (
-                    <div
-                      key={cita.id}
-                      onClick={() => onEdit(cita)}
-                      className={`absolute left-2 right-2 rounded-md shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all ${estadoColor} ${tipoColor}`}
-                      style={{
-                        top: `${posicion}px`,
-                        height: `${Math.max(altura, 24)}px`,
-                        zIndex: 10,
-                        margin: '0 4px'
-                      }}
-                      title={`${cita.hora} - ${horaFin} | ${paciente.nombres} ${paciente.apellidos} | ${tiposDeVisita[cita.tipo_cita]?.label}`}
-                    >
-                      <div className="p-2 h-full flex flex-col text-white overflow-hidden">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-1 mb-0.5">
-                              <span className="text-xs font-semibold truncate">
-                                {cita.hora}
-                              </span>
-                              <span className="text-[10px] opacity-90 px-1 py-0.5 bg-white/20 rounded">
-                                {tiposDeVisita[cita.tipo_cita]?.label?.substring(0, 3) || cita.tipo_cita.substring(0, 3)}
-                              </span>
+                {/* Citas posicionadas con distribución de columnas (estilo Google Calendar) */}
+                {(() => {
+                  const citasConColumna = calcularColumnasOverlap(citas)
+                  return citasConColumna.map(({ cita: citaItem, columna, totalColumnas }) => {
+                    const paciente = pacientes.find(p => p.id === citaItem.id_paciente) ||
+                      crearPacientePorDefecto(
+                        citaItem.id_paciente,
+                        citaItem.paciente_nombre,
+                        citaItem.paciente_apellido
+                      );
+
+                    const estadoColor = {
+                      confirmada: "bg-[#1a6b32]",
+                      pendiente: "bg-[#669933]",
+                      completada: "bg-blue-500",
+                      cancelada: "bg-gray-400"
+                    }[citaItem.estado] || "bg-gray-200";
+
+                    const tipoColor = {
+                      consulta: "border-l-4 border-l-blue-500",
+                      control: "border-l-4 border-l-green-500",
+                      valoracion: "border-l-4 border-l-purple-500",
+                      programacion_quirurgica: "border-l-4 border-l-red-500",
+                      visitador_medico: "border-l-4 border-l-amber-500",
+                      valoracion_virtual: "border-l-4 border-l-cyan-500",
+                      control_virtual: "border-l-4 border-l-emerald-500",
+                      control_postquirurgico: "border-l-4 border-l-pink-500"
+                    }[citaItem.tipo_cita] || "border-l-4 border-l-gray-500";
+
+                    const posicion = calcularPosicionCita(citaItem.hora);
+                    const altura = calcularAlturaCita(citaItem.duracion);
+                    const horaFin = agregarMinutos(citaItem.hora, citaItem.duracion);
+
+                    // Distribución horizontal por columnas
+                    const columnWidth = 100 / totalColumnas
+                    const leftPercent = columna * columnWidth
+
+                    return (
+                      <div
+                        key={citaItem.id}
+                        onClick={() => onVerDetalle(citaItem)}
+                        className={`absolute rounded-md shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all ${estadoColor} ${tipoColor}`}
+                        style={{
+                          top: `${posicion}px`,
+                          height: `${Math.max(altura, 100)}px`,
+                          left: `calc(${leftPercent}% + 2px)`,
+                          width: `calc(${columnWidth}% - 4px)`,
+                          zIndex: 10,
+                        }}
+                        title={`${citaItem.hora} - ${horaFin} | ${paciente.nombres} ${paciente.apellidos} | ${tiposDeVisita[citaItem.tipo_cita]?.label}`}
+                      >
+                        <div className="p-2 h-full flex flex-col text-white overflow-hidden">
+                          <div className="flex justify-between items-start">
+                            <span className="text-xs font-semibold">
+                              {citaItem.hora} - {horaFin}
+                            </span>
+                            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded whitespace-nowrap ml-1">
+                              {citaItem.estado.charAt(0).toUpperCase() + citaItem.estado.slice(1)}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-bold truncate mt-0.5">
+                            {paciente.nombres?.toUpperCase()} {paciente.apellidos?.toUpperCase()}
+                          </h4>
+                          {paciente.documento && (
+                            <div className="text-[11px] opacity-90">
+                              CC: {paciente.documento}
                             </div>
-                            <h4 className="text-xs font-semibold truncate">
-                              {paciente.nombres.split(' ')[0]} {paciente.apellidos.split(' ')[0].charAt(0)}.
-                            </h4>
+                          )}
+                          <div className="text-[11px] opacity-95 font-medium">
+                            {tiposDeVisita[citaItem.tipo_cita]?.label || citaItem.tipo_cita}
                           </div>
-                          <span className="text-[10px] opacity-90 whitespace-nowrap">
-                            {cita.estado.charAt(0).toUpperCase() + cita.estado.slice(1)}
-                          </span>
+                          <div className="text-[10px] opacity-80">
+                            {citaItem.duracion} min
+                          </div>
                         </div>
-                        
-                        {/* Mostrar duración */}
-                        {altura > 30 && (
-                          <div className="text-[10px] opacity-90 mt-0.5">
-                            {cita.duracion} min
-                          </div>
-                        )}
-                        
-                        {/* Mostrar observaciones si hay espacio */}
-                        {cita.observaciones && altura > 45 && (
-                          <p className="text-[10px] opacity-90 truncate mt-1">
-                            {cita.observaciones.substring(0, 30)}{cita.observaciones.length > 30 ? '...' : ''}
-                          </p>
-                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                })()}
 
                 {/* Indicador de hora actual (solo si es hoy) */}
                 {formatDate(new Date()) === fecha && (
@@ -699,7 +773,7 @@ function ConfirmarEliminacionModal({
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
-              <AlertCircleIcon className="w-6 h-6 text-red-600 mr-2" />
+              <AlertCircle className="w-6 h-6 text-red-600 mr-2" />
               <h3 className="text-lg font-bold text-gray-800">Confirmar Eliminación</h3>
             </div>
             <button
@@ -776,12 +850,13 @@ function ConfirmarEliminacionModal({
 }
 
 // Componente CitaForm actualizado con botón de eliminar Y DURACIONES ESPECÍFICAS
-function CitaForm({ cita, pacientes, onSave, onClose, onDelete }: {
+function CitaForm({ cita, pacientes, onSave, onClose, onDelete, onPlanQuirurgico }: {
   cita?: cita
   pacientes: paciente[]
   onSave: (data: Omit<cita, "id">) => void
   onClose: () => void
   onDelete?: () => void
+  onPlanQuirurgico?: (pacienteId: string) => void
 }) {
   const [formData, setFormData] = useState<Omit<cita, "id">>({
     id_paciente: cita?.id_paciente || "",
@@ -798,8 +873,10 @@ function CitaForm({ cita, pacientes, onSave, onClose, onDelete }: {
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [pacienteCitaSearch, setPacienteCitaSearch] = useState('')
+  const [showPacienteCitaDropdown, setShowPacienteCitaDropdown] = useState(false)
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     
     if (name === "tipo_cita") {
@@ -807,7 +884,7 @@ function CitaForm({ cita, pacientes, onSave, onClose, onDelete }: {
       const nuevaDuracion = tiposDeVisita[value as keyof typeof tiposDeVisita]?.duracion || 60
       setFormData(prev => ({
         ...prev,
-        [name]: value,
+        tipo_cita: value as cita["tipo_cita"],
         duracion: nuevaDuracion
       }))
     } else if (name === "duracion") {
@@ -827,7 +904,7 @@ function CitaForm({ cita, pacientes, onSave, onClose, onDelete }: {
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     
     const newErrors: Record<string, string> = {}
@@ -877,21 +954,60 @@ function CitaForm({ cita, pacientes, onSave, onClose, onDelete }: {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Paciente *
                 </label>
-                <select
-                  name="id_paciente"
-                  value={formData.id_paciente}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-[#1a6b32] transition ${
-                    errors.id_paciente ? "border-red-500" : "border-gray-300"
-                  }`}
-                >
-                  <option value="">Selecciona un paciente</option>
-                  {pacientes.map((paciente) => (
-                    <option key={paciente.id} value={paciente.id}>
-                      {paciente.nombres} {paciente.apellidos} ({paciente.documento})
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar paciente por nombre o documento..."
+                      value={(() => {
+                        if (formData.id_paciente) {
+                          const sel = pacientes.find(p => p.id.toString() === formData.id_paciente)
+                          if (sel) return `${sel.nombres} ${sel.apellidos} (${sel.documento})`
+                        }
+                        return pacienteCitaSearch || ''
+                      })()}
+                      onChange={(e) => {
+                        setPacienteCitaSearch(e.target.value)
+                        if (formData.id_paciente) {
+                          setFormData((prev: any) => ({ ...prev, id_paciente: '' }))
+                        }
+                        setShowPacienteCitaDropdown(true)
+                      }}
+                      onFocus={() => setShowPacienteCitaDropdown(true)}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-[#1a6b32] transition ${
+                        errors.id_paciente ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                  </div>
+                  {showPacienteCitaDropdown && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {[...pacientes]
+                        .sort((a, b) => `${a.nombres} ${a.apellidos}`.localeCompare(`${b.nombres} ${b.apellidos}`))
+                        .filter(p => {
+                          const term = (pacienteCitaSearch || '').toLowerCase()
+                          if (!term) return true
+                          return `${p.nombres} ${p.apellidos}`.toLowerCase().includes(term) || p.documento?.includes(term)
+                        })
+                        .map((paciente) => (
+                          <button
+                            key={paciente.id}
+                            type="button"
+                            onClick={() => {
+                              setFormData((prev: any) => ({ ...prev, id_paciente: paciente.id.toString() }))
+                              setPacienteCitaSearch('')
+                              setShowPacienteCitaDropdown(false)
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-green-50 text-sm border-b border-gray-100 last:border-b-0"
+                          >
+                            <span className="font-medium">{paciente.nombres} {paciente.apellidos}</span>
+                            <span className="text-gray-500 ml-2">({paciente.documento})</span>
+                          </button>
+                        ))
+                      }
+                    </div>
+                  )}
+                </div>
                 {errors.id_paciente && (
                   <p className="text-red-500 text-sm mt-1">{errors.id_paciente}</p>
                 )}
@@ -1062,6 +1178,7 @@ function CitaForm({ cita, pacientes, onSave, onClose, onDelete }: {
 }
 
 export default function AgendaPage() {
+  const router = useRouter()
   const [citas, setcitas] = useState<cita[]>([])
   const [pacientes, setpacientes] = useState<paciente[]>([])
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -1487,6 +1604,125 @@ export default function AgendaPage() {
     return pacientes.find(p => p.id === id)
   }
 
+  // ─── Generar PDF con todas las citas del mes ───
+  const generarAgendaPDF = () => {
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" })
+    const PAGE_W = 210
+    const PAGE_H = 297
+    const MARGIN = 12
+    const INNER_W = PAGE_W - MARGIN * 2
+
+    const drawPageHeader = () => {
+      doc.setFillColor(26, 107, 50)
+      doc.rect(0, 0, PAGE_W, 22, "F")
+      doc.setTextColor(255, 255, 255)
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(13)
+      doc.text("AGENDA DE CITAS", PAGE_W / 2, 10, { align: "center" })
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(8)
+      doc.text(monthName.charAt(0).toUpperCase() + monthName.slice(1), PAGE_W / 2, 16, { align: "center" })
+    }
+
+    const drawPageFooter = () => {
+      doc.setFillColor(26, 107, 50)
+      doc.rect(0, PAGE_H - 10, PAGE_W, 10, "F")
+      doc.setTextColor(255, 255, 255)
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(6)
+      doc.text(
+        "Calle 5D # 38a-35 Edificio Vida Cons 814-815  ·  Tels: 5518244 / 3176688522",
+        PAGE_W / 2, PAGE_H - 4, { align: "center" }
+      )
+    }
+
+    drawPageHeader()
+    drawPageFooter()
+    let y = 28
+
+    const checkPage = (needed: number) => {
+      if (y + needed > PAGE_H - 14) {
+        doc.addPage()
+        drawPageHeader()
+        drawPageFooter()
+        y = 28
+      }
+    }
+
+    let hayCitas = false
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
+      const dateStr = formatDate(date)
+      const dayCitas = citasDelDia(dateStr)
+
+      if (dayCitas.length === 0) continue
+      hayCitas = true
+
+      const neededHeight = 16 + dayCitas.length * 7
+      checkPage(Math.min(neededHeight, 50))
+
+      // Barra del día
+      const diaSemana = date.toLocaleDateString('es-ES', { weekday: 'long' })
+      doc.setFillColor(232, 245, 238)
+      doc.setDrawColor(200, 200, 200)
+      doc.rect(MARGIN, y, INNER_W, 7, "FD")
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(8)
+      doc.setTextColor(26, 107, 50)
+      doc.text(`${diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)}, ${day} — ${dayCitas.length} cita(s)`, MARGIN + 3, y + 5)
+      y += 9
+
+      // Encabezado de tabla
+      doc.setFillColor(245, 245, 245)
+      doc.rect(MARGIN, y, INNER_W, 6, "FD")
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(6.5)
+      doc.setTextColor(80, 80, 80)
+      doc.text("Hora", MARGIN + 2, y + 4)
+      doc.text("Paciente", MARGIN + 30, y + 4)
+      doc.text("Tipo", MARGIN + 110, y + 4)
+      doc.text("Estado", MARGIN + 150, y + 4)
+      y += 7
+
+      // Filas de citas
+      dayCitas.sort((a, b) => minutosDesdeHoraStr(a.hora) - minutosDesdeHoraStr(b.hora))
+      dayCitas.forEach((c) => {
+        checkPage(7)
+        const pac = getpacienteById(c.id_paciente)
+        const nombre = pac
+          ? `${pac.nombres} ${pac.apellidos}`
+          : `${c.paciente_nombre || ''} ${c.paciente_apellido || ''}`
+        const horaFin = agregarMinutos(c.hora, c.duracion)
+        const tipo = tiposDeVisita[c.tipo_cita]?.label || c.tipo_cita
+
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(7)
+        doc.setTextColor(0, 0, 0)
+        doc.text(`${c.hora} - ${horaFin}`, MARGIN + 2, y + 4)
+        doc.text(nombre.substring(0, 45), MARGIN + 30, y + 4)
+        doc.text(tipo.substring(0, 25), MARGIN + 110, y + 4)
+        doc.text(c.estado.charAt(0).toUpperCase() + c.estado.slice(1), MARGIN + 150, y + 4)
+
+        doc.setDrawColor(220, 220, 220)
+        doc.line(MARGIN, y + 6, MARGIN + INNER_W, y + 6)
+        y += 7
+      })
+
+      y += 4
+    }
+
+    if (!hayCitas) {
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(10)
+      doc.setTextColor(120, 120, 120)
+      doc.text("No hay citas programadas para este mes.", PAGE_W / 2, 50, { align: "center" })
+    }
+
+    const mesNombre = monthName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')
+    doc.save(`agenda_${mesNombre}.pdf`)
+  }
+
   const renderCalendarDays = () => {
     const today = new Date()
     const todayStr = formatDate(today)
@@ -1587,7 +1823,6 @@ export default function AgendaPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1a6b32] mx-auto"></div>
           <p className="mt-4 text-gray-600">Cargando agenda...</p>
-          <p className="mt-2 text-sm text-gray-500">Verificando conexión con el backend...</p>
         </div>
       </div>
     )
@@ -1696,25 +1931,33 @@ export default function AgendaPage() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <button 
-                    onClick={() => changeMonth(-1)} 
+                  <button
+                    onClick={() => changeMonth(-1)}
                     className="p-2 hover:bg-gray-100 rounded-lg transition"
                     title="Mes anterior"
                   >
                     <ChevronLeft size={20} />
                   </button>
-                  <button 
-                    onClick={() => setCurrentDate(new Date())} 
+                  <button
+                    onClick={() => setCurrentDate(new Date())}
                     className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition"
                   >
                     Hoy
                   </button>
-                  <button 
-                    onClick={() => changeMonth(1)} 
+                  <button
+                    onClick={() => changeMonth(1)}
                     className="p-2 hover:bg-gray-100 rounded-lg transition"
                     title="Mes siguiente"
                   >
                     <ChevronRight size={20} />
+                  </button>
+                  <button
+                    onClick={generarAgendaPDF}
+                    className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-700"
+                    title="Imprimir agenda del mes"
+                  >
+                    <Printer size={16} />
+                    <span>Imprimir</span>
                   </button>
                 </div>
               </div>
@@ -1860,6 +2103,12 @@ export default function AgendaPage() {
               setEditingId(null)
               setSelectedcita(null)
             }}
+            onPlanQuirurgico={(pacienteId) => {
+              setShowForm(false)
+              setSelectedcita(null)
+              setDiaSeleccionado(null)
+              router.push(`/dashboard/plan-quirurgico?paciente_id=${pacienteId}`)
+            }}
             onDelete={selectedcita ? () => solicitarEliminarCita(selectedcita) : undefined}
           />
         )}
@@ -1867,7 +2116,7 @@ export default function AgendaPage() {
         {selectedcita && !showForm && (
           <CitaModal
             cita={selectedcita}
-            paciente={getpacienteById(selectedcita.id_paciente) || 
+            paciente={getpacienteById(selectedcita.id_paciente) ||
               crearPacientePorDefecto(
                 selectedcita.id_paciente,
                 selectedcita.paciente_nombre,
@@ -1877,6 +2126,11 @@ export default function AgendaPage() {
             onClose={() => setSelectedcita(null)}
             onEdit={() => handleEdit(selectedcita)}
             onDelete={() => solicitarEliminarCita(selectedcita)}
+            onPlanQuirurgico={(pacienteId) => {
+              setSelectedcita(null)
+              setDiaSeleccionado(null)
+              router.push(`/dashboard/plan-quirurgico?paciente_id=${pacienteId}`)
+            }}
           />
         )}
 
@@ -1888,6 +2142,10 @@ export default function AgendaPage() {
             onClose={() => setDiaSeleccionado(null)}
             onEdit={handleEdit}
             onNuevaCita={handleNuevaCitaDesdeModal}
+            onVerDetalle={(cita) => {
+              setDiaSeleccionado(null)
+              setSelectedcita(cita)
+            }}
           />
         )}
 

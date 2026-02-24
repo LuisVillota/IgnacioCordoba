@@ -2029,8 +2029,9 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
       console.log("🗑️ Eliminando plan quirúrgico ID:", id);
       
       try {
-        const result = await fetchAPI(`/api/planes-quirurgicos/${id}`, { 
-          method: 'DELETE' 
+        const numericId = id.replace(/\D/g, '');
+        const result = await fetchAPI(`/api/planes-quirurgicos/${numericId}`, {
+          method: 'DELETE'
         });
         
         if (result.error) {
@@ -2572,6 +2573,28 @@ export const transformBackendToFrontend = {
       selectedProcedure: 'liposuction'
     });
     
+    // Restaurar campos que el backend PUT ignora — usar backup desde JSON
+    const motivo_consulta_final = motivo_consulta || notas_corporales_json._motivo_consulta || '';
+    const ocupacion_final = ocupacion || notas_corporales_json._ocupacion || '';
+    const entidad_final = entidad || notas_corporales_json._entidad || '';
+    const celular_final = celular || notas_corporales_json._celular || '';
+    const email_final = email || notas_corporales_json._email || '';
+    const fecha_nacimiento_final = fecha_nacimiento || notas_corporales_json._fecha_nacimiento || '';
+
+    // Recalcular edad si es 0 y tenemos fecha de nacimiento restaurada
+    if (!edad_calculada && fecha_nacimiento_final) {
+      try {
+        const fnStr = typeof fecha_nacimiento_final === 'string' ? fecha_nacimiento_final : '';
+        if (fnStr) {
+          const fn = fnStr.includes('T') ? new Date(fnStr) : new Date(fnStr + 'T00:00:00');
+          const hoy = new Date();
+          edad_calculada = hoy.getFullYear() - fn.getFullYear();
+          const m = hoy.getMonth() - fn.getMonth();
+          if (m < 0 || (m === 0 && hoy.getDate() < fn.getDate())) edad_calculada--;
+        }
+      } catch (e) { /* ignorar error de fecha */ }
+    }
+
     // Combinar datos de texto plano con JSON
     const enfermedad_actual_combined = {
       hepatitis: false,
@@ -2640,28 +2663,33 @@ export const transformBackendToFrontend = {
       historia_clinica: {
         nombre_completo: nombre_completo,
         identificacion: identificacion,
-        ocupacion: ocupacion,
-        fecha_nacimiento: fecha_nacimiento,
+        ocupacion: ocupacion_final,
+        fecha_nacimiento: fecha_nacimiento_final,
         edad_calculada: edad_calculada,
-        entidad: entidad,
+        entidad: entidad_final,
         telefono: telefono,
-        celular: celular,
+        celular: celular_final,
         direccion: direccion,
-        email: email,
-        motivo_consulta: motivo_consulta,
-        motivo_consulta_detalle: procedimiento_desc,
+        email: email_final,
+        motivo_consulta: motivo_consulta_final,
+        motivo_consulta_detalle: notas_corporales_json.motivo_consulta_detalle || procedimiento_desc || '',
+        referido_por: antecedentes_json.referido_por || '',
+        descripcion_enfermedad_actual: enfermedad_actual_json.descripcion_enfermedad_actual || '',
         enfermedad_actual: enfermedad_actual_combined,
         antecedentes: antecedentes_combined,
-        enfermedades_piel: false,
-        tratamientos_esteticos: '',
-        antecedentes_familiares: '',
+        antecedentes_medicos: antecedentes_json.antecedentes_medicos || '',
+        antecedentes_familiares: antecedentes_json.antecedentes_familiares || '',
+        enfermedades_piel: notas_corporales_json.enfermedades_piel || false,
+        tratamientos_esteticos: notas_corporales_json.tratamientos_esteticos || '',
         peso: peso,
         altura: altura,
         imc: imc,
-        contextura: '',
+        contextura: notas_corporales_json.contextura || '',
         notas_corporales: notas_corporales_combined,
-        diagnostico: descripcion_procedimiento || detalles,
-        plan_conducta: plan_conducta
+        diagnostico: procedimiento_desc || descripcion_procedimiento || detalles,
+        plan_conducta: plan_conducta,
+        tratamiento: notas_corporales_json.tratamiento || '',
+        recomendaciones: notas_corporales_json.recomendaciones || ''
       },
       
       // CONDUCTA QUIRÚRGICA
@@ -3145,10 +3173,33 @@ export const transformBackendToFrontend = {
       JSON.stringify(frontendPlan.imagenes_adjuntas) : 
       frontendPlan.imagenes_adjuntas) : null;
     
-    // Preparar campos JSON
-    const enfermedad_actual = frontendPlan.historia_clinica?.enfermedad_actual || {};
-    const antecedentes = frontendPlan.historia_clinica?.antecedentes || {};
-    const notas_corporales = frontendPlan.historia_clinica?.notas_corporales || {};
+    // Preparar campos JSON — incluir campos extra del formulario
+    const enfermedad_actual = {
+      ...(frontendPlan.historia_clinica?.enfermedad_actual || {}),
+      descripcion_enfermedad_actual: frontendPlan.historia_clinica?.descripcion_enfermedad_actual || '',
+    };
+    const antecedentes = {
+      ...(frontendPlan.historia_clinica?.antecedentes || {}),
+      antecedentes_medicos: frontendPlan.historia_clinica?.antecedentes_medicos || '',
+      antecedentes_familiares: frontendPlan.historia_clinica?.antecedentes_familiares || '',
+      referido_por: frontendPlan.historia_clinica?.referido_por || '',
+    };
+    const notas_corporales = {
+      ...(frontendPlan.historia_clinica?.notas_corporales || {}),
+      contextura: frontendPlan.historia_clinica?.contextura || '',
+      enfermedades_piel: frontendPlan.historia_clinica?.enfermedades_piel || false,
+      tratamientos_esteticos: frontendPlan.historia_clinica?.tratamientos_esteticos || '',
+      tratamiento: frontendPlan.historia_clinica?.tratamiento || '',
+      recomendaciones: frontendPlan.historia_clinica?.recomendaciones || '',
+      motivo_consulta_detalle: frontendPlan.historia_clinica?.motivo_consulta_detalle || '',
+      // Campos que el backend PUT ignora — se guardan aquí como respaldo
+      _motivo_consulta: frontendPlan.historia_clinica?.motivo_consulta || '',
+      _ocupacion: frontendPlan.historia_clinica?.ocupacion || '',
+      _entidad: frontendPlan.historia_clinica?.entidad || '',
+      _celular: frontendPlan.historia_clinica?.celular || '',
+      _email: frontendPlan.historia_clinica?.email || '',
+      _fecha_nacimiento: frontendPlan.historia_clinica?.fecha_nacimiento || '',
+    };
     const esquema_mejorado = frontendPlan.esquema_mejorado || {};
     
     //  CORREGIR: Formatear fechas correctamente
@@ -3197,12 +3248,12 @@ export const transformBackendToFrontend = {
       usuario_id: parseInt(frontendPlan.id_usuario || '1'),
       
       // 2. Datos quirúrgicos básicos
-      procedimiento_desc: frontendPlan.historia_clinica?.diagnostico || 
+      procedimiento_desc: frontendPlan.historia_clinica?.diagnostico ||
                         frontendPlan.historia_clinica?.motivo_consulta || '',
-      anestesiologo: frontendPlan.conducta_quirurgica?.tipo_anestesia || '',
-      materiales_requeridos: frontendPlan.historia_clinica?.diagnostico || '',
+      anestesiologo: frontendPlan.anestesiologo || '',
+      materiales_requeridos: frontendPlan.materiales_requeridos || '',
       notas_preoperatorias: frontendPlan.notas_doctor || '',
-      riesgos: frontendPlan.historia_clinica?.diagnostico || '',
+      riesgos: frontendPlan.riesgos || '',
       hora: horaConsultaFormateada, //  USAR HORA FORMATEADA
       
       // 3. Fecha programada
@@ -3218,7 +3269,7 @@ export const transformBackendToFrontend = {
       // 5. Imagen y procedimiento
       imagen_procedimiento: imagen_procedimiento,
       fecha_ultimo_procedimiento: null,
-      descripcion_procedimiento: frontendPlan.historia_clinica?.plan_conducta || '',
+      descripcion_procedimiento: frontendPlan.historia_clinica?.diagnostico || '',
       detalles: frontendPlan.historia_clinica?.motivo_consulta || '',
       
       // 6. Notas y tiempo cirugía

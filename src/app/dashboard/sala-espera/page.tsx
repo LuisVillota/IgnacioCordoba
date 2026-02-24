@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Clock, AlertCircle, CheckCircle2, Save, UserCheck, UserX, User, Calendar, RefreshCw } from "lucide-react"
+import { Clock, AlertCircle, CheckCircle2, Save, UserCheck, UserX, User, Calendar, RefreshCw, Search } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
@@ -55,7 +55,8 @@ export default function SalaEsperaPage() {
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [cambiosPendientes, setCambiosPendientes] = useState<Record<string, {estado: string, cita_id?: string}>>({})
-  const [mostrarTodos, setMostrarTodos] = useState(true)
+  const [mostrarTodos, setMostrarTodos] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
     loadData()
@@ -417,10 +418,15 @@ export default function SalaEsperaPage() {
     "pendiente", "llegada", "confirmada", "en_consulta", "completada", "no_asistio"
   ]
 
-  // Filtrar pacientes según mostrarTodos
-  const pacientesFiltrados = mostrarTodos 
-    ? pacientes 
-    : pacientes.filter(p => p.tiene_cita_hoy)
+  // Filtrar pacientes según mostrarTodos y término de búsqueda
+  const pacientesFiltrados = pacientes
+    .filter(p => mostrarTodos ? true : p.tiene_cita_hoy)
+    .filter(p => {
+      if (!searchTerm.trim()) return true
+      const term = searchTerm.toLowerCase()
+      const nombre = `${p.nombres} ${p.apellidos}`.toLowerCase()
+      return nombre.includes(term) || p.documento?.toLowerCase().includes(term)
+    })
 
   // Actualizar cuando cambia mostrarTodos
   useEffect(() => {
@@ -483,38 +489,61 @@ export default function SalaEsperaPage() {
         </div>
 
         {/* Filtros y estadísticas */}
-        <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between space-y-4 md:space-y-0">
-          <div className="flex items-center space-x-4">
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setMostrarTodos(true)}
-                className={`px-3 py-1 rounded-lg transition ${
-                  mostrarTodos 
-                    ? "bg-[#1a6b32] text-white" 
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Todos los pacientes ({estadisticas.total})
-              </button>
-              <button
-                onClick={() => setMostrarTodos(false)}
-                className={`px-3 py-1 rounded-lg transition ${
-                  !mostrarTodos 
-                    ? "bg-[#1a6b32] text-white" 
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Con cita Hoy ({estadisticas.con_cita_hoy})
-              </button>
-            </div>
+        <div className="mb-4 flex flex-wrap gap-2 items-center justify-between">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setMostrarTodos(true)}
+              className={`px-3 py-1 rounded-lg transition text-sm ${
+                mostrarTodos
+                  ? "bg-[#1a6b32] text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Todos los pacientes ({estadisticas.total})
+            </button>
+            <button
+              onClick={() => setMostrarTodos(false)}
+              className={`px-3 py-1 rounded-lg transition text-sm ${
+                !mostrarTodos
+                  ? "bg-[#1a6b32] text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Con cita Hoy ({estadisticas.con_cita_hoy})
+            </button>
           </div>
-          
+
           <div className="text-sm text-gray-600">
             <span className="font-medium">Mostrando:</span> {pacientesFiltrados.length} pacientes
             {Object.keys(cambiosPendientes).length > 0 && (
               <span className="ml-4 font-medium text-amber-600">
                 ⚠️ {Object.keys(cambiosPendientes).length} cambios pendientes
               </span>
+            )}
+          </div>
+        </div>
+
+        {/* Buscador */}
+        <div className="mb-6">
+          <div className="relative max-w-md">
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nombre o documento..."
+              className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent outline-none transition"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                type="button"
+              >
+                <span className="text-lg">&times;</span>
+              </button>
             )}
           </div>
         </div>

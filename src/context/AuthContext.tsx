@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { Permission, rolePermissions } from '@/types/permissions';
 
@@ -119,7 +119,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (parsedData.backendUser && parsedData.backendUser.id) {
           console.log('✅ [AUTH] Usando backendUser almacenado');
           backendUserData = parsedData.backendUser;
-          frontendUser = mapBackendToFrontendUser(backendUserData);
+          frontendUser = mapBackendToFrontendUser(backendUserData!);
         } else {
           console.log('ℹ️ [AUTH] Usando solo datos frontend');
           frontendUser = {

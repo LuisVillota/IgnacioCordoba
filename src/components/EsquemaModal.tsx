@@ -431,8 +431,8 @@ const EsquemaModal: React.FC<EsquemaModalProps> = ({ isOpen, onClose, initialDra
     // RENDER DEL MODAL
     // -----------------------------------------------------
     return (
-        <div style={modalOverlayStyle}>
-            <div style={modalContentStyle}>
+        <div style={modalOverlayStyle} onClick={onClose}>
+            <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
                 <div style={{ padding: '20px' }}>
                     
                     {/* ENCABEZADO Y ACCIONES */}

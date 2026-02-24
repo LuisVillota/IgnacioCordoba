@@ -36,6 +36,13 @@ export default function DashboardLayout({
     }
   }, [])
 
+  // Cerrar sidebar en móvil al navegar
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarOpen(false)
+    }
+  }, [pathname])
+
   // 🔥 CORRECCIÓN: Redirigir solo DESPUÉS de que termine de cargar
   useEffect(() => {
     if (!auth?.loading && !auth?.user) {
