@@ -1,37 +1,21 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useRef } from "react"
+import { api } from "../lib/api"
 
 interface EsquemaViewerProps {
   onClose: () => void
   planId?: string
   pacienteId?: string
+  pacienteCedula?: string
   onEsquemaCapturado?: (file: File) => void
 }
 
-export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, pacienteId, onEsquemaCapturado }) => {
-  const [isLoading, setIsLoading] = useState(true)
+export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, pacienteId, pacienteCedula, onEsquemaCapturado }) => {
   const [isSaving, setIsSaving] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
-  // Manejar mensajes del iframe
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === 'CLOSE_ESQUEMA_VIEWER') {
-        onClose()
-      }
-    }
-
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
-  }, [onClose])
-
-  // Manejar carga del iframe
-  const handleIframeLoad = () => {
-    setIsLoading(false)
-  }
-
-  // Capturar esquema como PNG, descargarlo y pasarlo al padre
+  // Capturar el contenedor que ya tiene ambos esquemas lado a lado, subirlo a HC y descargarlo
   const handleGuardarEsquema = async () => {
     const iframe = iframeRef.current
     if (!iframe || !iframe.contentWindow || !iframe.contentDocument) {
@@ -43,20 +27,22 @@ export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, p
 
     try {
       const iframeDoc = iframe.contentDocument
-      const schemasWrapper = iframeDoc.querySelector('.schemas-wrapper') as HTMLElement
-      if (!schemasWrapper) {
-        alert("No se encontró el contenido de esquemas en el editor.")
-        return
-      }
-
       const iframeWindow = iframe.contentWindow as any
+
       if (!iframeWindow.html2canvas) {
         alert("El editor aún no ha cargado completamente. Espera un momento e intenta de nuevo.")
         return
       }
 
-      // html2canvas no puede capturar <object> embeds — hay que inline-ar los SVGs
-      const objectElements = schemasWrapper.querySelectorAll('object[type="image/svg+xml"]')
+      // .body-head-container ya tiene corporal (izq) + facial (der) con display:flex
+      const container = iframeDoc.querySelector('.body-head-container') as HTMLElement
+      if (!container) {
+        alert("No se encontró el contenedor de esquemas en el editor.")
+        return
+      }
+
+      // Inline-ar los SVGs para que html2canvas pueda capturarlos
+      const objectElements = container.querySelectorAll('object[type="image/svg+xml"]')
       const replacements: { original: Element; placeholder: Element; parent: Node }[] = []
 
       objectElements.forEach((obj: any) => {
@@ -66,14 +52,11 @@ export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, p
           const svgEl = svgDoc.documentElement
           if (svgEl.tagName !== 'svg') return
 
-          // Clonar el SVG completo (con marcas, colores, dibujos del usuario)
           const clonedSvg = svgEl.cloneNode(true) as Element
-          // Preservar dimensiones del <object>
           clonedSvg.setAttribute('width', obj.getAttribute('width') || '800')
           clonedSvg.setAttribute('height', obj.getAttribute('height') || '1000')
           clonedSvg.setAttribute('style', 'display:block;')
 
-          // Reemplazar temporalmente <object> con <svg> inline
           obj.parentNode.insertBefore(clonedSvg, obj)
           obj.style.display = 'none'
           replacements.push({ original: obj, placeholder: clonedSvg, parent: obj.parentNode })
@@ -82,7 +65,8 @@ export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, p
         }
       })
 
-      const canvas = await iframeWindow.html2canvas(schemasWrapper, {
+      // Capturar el contenedor completo (corporal + facial lado a lado)
+      const canvas = await iframeWindow.html2canvas(container, {
         backgroundColor: '#ffffff',
         scale: 2,
         useCORS: true,
@@ -90,7 +74,7 @@ export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, p
         allowTaint: true,
       })
 
-      // Restaurar <object> originales
+      // Restaurar SVGs originales
       replacements.forEach(({ original, placeholder, parent }) => {
         ;(original as HTMLElement).style.display = ''
         parent.removeChild(placeholder)
@@ -101,10 +85,44 @@ export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, p
         canvas.toBlob((b: Blob) => resolve(b), 'image/png', 1.0)
       })
 
-      const fileName = `esquema_${pacienteId || 'sin_paciente'}_${Date.now()}.png`
+      const cedulaStr = pacienteCedula || pacienteId || 'sin_paciente'
+      const fileName = `esquema_${cedulaStr}.png`
       const file = new File([blob], fileName, { type: 'image/png' })
 
-      // Descargar el archivo al PC del usuario
+      // 1. Subir a la HC del paciente primero
+      if (pacienteId) {
+        try {
+          const historias = await api.getHistoriasBypaciente(parseInt(pacienteId))
+          let historiasArray: any[] = []
+          if (Array.isArray(historias)) historiasArray = historias
+          else if (historias?.historias) historiasArray = historias.historias
+          else if (historias?.data) historiasArray = historias.data
+
+          if (historiasArray.length > 0) {
+            const hcReciente = historiasArray[historiasArray.length - 1]
+            const historiaId = parseInt(hcReciente.id)
+            const uploadResult = await api.uploadHistoriaFoto(historiaId, file)
+            console.log("✅ Esquema subido a HC:", uploadResult)
+
+            if (uploadResult.url) {
+              const fotosExistentes = hcReciente.fotos ? String(hcReciente.fotos).split(',').filter((f: string) => f.trim()) : []
+              fotosExistentes.push(uploadResult.url)
+              await api.updateHistoriaClinica(historiaId, {
+                ...hcReciente,
+                paciente_id: parseInt(pacienteId),
+                fotos: fotosExistentes.join(',')
+              })
+              console.log("✅ Campo fotos actualizado en HC")
+            }
+          } else {
+            console.warn("⚠️ No hay historia clínica para subir el esquema")
+          }
+        } catch (uploadErr) {
+          console.warn("⚠️ No se pudo subir esquema a HC:", uploadErr)
+        }
+      }
+
+      // 2. Descargar el archivo al PC del usuario
       const url = URL.createObjectURL(blob)
       const a = iframeDoc.createElement('a')
       a.href = url
@@ -114,12 +132,12 @@ export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, p
       iframeDoc.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-      // Pasar el archivo al componente padre para que lo suba al guardar el plan
+      // 3. Pasar el archivo al componente padre
       if (onEsquemaCapturado) {
         onEsquemaCapturado(file)
       }
 
-      alert("Esquema descargado y listo para guardarse en la Historia Clínica al guardar el plan.")
+      alert("Esquema guardado en la Historia Clínica y descargado exitosamente.")
     } catch (error: any) {
       console.error("Error capturando esquema:", error)
       alert(`Error al capturar el esquema: ${error.message || 'Error desconocido'}`)
@@ -145,9 +163,9 @@ export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, p
         </div>
         <button
           onClick={handleGuardarEsquema}
-          disabled={isSaving || isLoading}
+          disabled={isSaving}
           className={`px-5 py-2 rounded-lg font-medium flex items-center gap-2 transition ${
-            isSaving || isLoading
+            isSaving
               ? 'bg-gray-400 cursor-not-allowed'
               : 'bg-white text-[#1a6b32] hover:bg-gray-100'
           }`}
@@ -165,22 +183,11 @@ export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, p
 
       {/* Contenedor principal */}
       <div className="flex-1 relative">
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1a6b32] mx-auto"></div>
-              <p className="mt-4 text-gray-600">Cargando editor de esquemas...</p>
-            </div>
-          </div>
-        )}
-
-        {/* Iframe con el HTML */}
         <iframe
           ref={iframeRef}
           src="/PRUEBA/index.html"
           className="w-full h-full border-0"
           title="Editor de Esquemas Corporales"
-          onLoad={handleIframeLoad}
         />
       </div>
 

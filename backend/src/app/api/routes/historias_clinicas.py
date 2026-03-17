@@ -304,9 +304,13 @@ async def upload_historia_foto(
                 detail="El archivo es demasiado grande. Máximo 10MB."
             )
         
-        # Generar nombre único
+        # Generar nombre único — preservar prefijo "esquema_" si el archivo original lo tiene
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-        filename = f"historia_{historia_id}_{timestamp}"
+        original_name = os.path.splitext(file.filename or "")[0]
+        if original_name.startswith("esquema_"):
+            filename = f"{original_name}_{timestamp}"
+        else:
+            filename = f"historia_{historia_id}_{timestamp}"
         
         if USE_CLOUDINARY:
             # ========== CLOUDINARY ==========

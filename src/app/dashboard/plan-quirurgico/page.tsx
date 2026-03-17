@@ -619,7 +619,7 @@ export default function PlanQuirurgicoPage() {
     // URL del logo de la clínica
     const logoUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQceqGrv0esgBkN1C8B_p7qsRJaV-zVHVk0sw&s';
 
-    // Buscar imagen del esquema en HC del paciente
+    // Buscar imagen de esquema en HC del paciente
     let esquemaUrl = '';
     const pacienteId = plan.id_paciente || plan.datos_paciente?.id;
     console.log("🖼️ Buscando esquema para paciente:", pacienteId);
@@ -631,15 +631,16 @@ export default function PlanQuirurgicoPage() {
         else if (historias?.historias) historiasArray = historias.historias;
         else if (historias?.data) historiasArray = historias.data;
 
-        console.log("🖼️ HCs encontradas:", historiasArray.length);
         if (historiasArray.length > 0) {
           const hcReciente = historiasArray[historiasArray.length - 1];
           const fotosStr = hcReciente.fotos ? String(hcReciente.fotos) : '';
           const fotos = fotosStr.split(',').filter((f: string) => f.trim());
           console.log("🖼️ Fotos en HC:", fotos);
-          // Usar la foto más reciente de la HC (el esquema se sube como última foto)
-          if (fotos.length > 0) {
-            esquemaUrl = fotos[fotos.length - 1];
+
+          // Solo buscar fotos con "esquema_" en la URL
+          const esquemas = fotos.filter((f: string) => f.includes('esquema_'));
+          if (esquemas.length > 0) {
+            esquemaUrl = esquemas[esquemas.length - 1];
             console.log("🖼️ Esquema URL encontrada:", esquemaUrl);
           }
         }
@@ -1040,7 +1041,7 @@ export default function PlanQuirurgicoPage() {
                   </div>
                   <div class="header-right">
                       <div class="logo-container">
-                          <img src="${logoUrl}" alt="Logo Clínica" class="logo" onerror="this.style.display='none'">
+                          <img src="${logoUrl}"  alt="Logo Clínica" class="logo" onerror="this.style.display='none'">
                       </div>
                       <div class="clinic-name">Clínica Especializada</div>
                   </div>
@@ -1289,26 +1290,10 @@ export default function PlanQuirurgicoPage() {
               <div class="compact-section">
                   <div class="section-title">📐 ESQUEMA QUIRÚRGICO</div>
                   <div style="text-align: center; margin: 5px 0;">
-                      <img src="${esquemaUrl}" alt="Esquema Corporal" style="max-width: 55%; max-height: 400px; object-fit: contain; border: 1px solid #dee2e6; border-radius: 6px;" />
+                      <img src="${esquemaUrl}" alt="Esquema Quirúrgico" style="max-width: 90%; max-height: 400px; object-fit: contain; border: 1px solid #dee2e6; border-radius: 6px;" />
                   </div>
               </div>
-              ` : (plan.esquema_mejorado && Object.keys(plan.esquema_mejorado.zoneMarkings || {}).length > 0 ? `
-              <div class="compact-section">
-                  <div class="section-title">📐 ESQUEMA QUIRÚRGICO</div>
-                  <div class="grid-2">
-                      <div class="info-box">
-                          <div class="data-label">Zonas Marcadas</div>
-                          <div class="data-value">${Object.keys(plan.esquema_mejorado.zoneMarkings).length} zona(s)</div>
-                      </div>
-                      <div class="info-box">
-                          <div class="data-label">Procedimiento</div>
-                          <div class="data-value">
-                              ${plan.esquema_mejorado.selectedProcedure === 'liposuction' ? 'Liposucción' : 'Lipotransferencia'}
-                          </div>
-                      </div>
-                  </div>
-              </div>
-              ` : '')}
+              ` : ''}
               
               <!-- ARCHIVOS ADJUNTOS -->
               ${plan.imagenes_adjuntas && plan.imagenes_adjuntas.length > 0 ? `

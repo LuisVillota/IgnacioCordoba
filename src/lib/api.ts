@@ -323,7 +323,7 @@ export const api = {
       return cached;
     }
     
-    const response = await fetchAPI(`/api/pacientes?limit=${limit || 100}&offset=${offset || 0}`);
+    const response = await fetchAPI(`/api/pacientes?limit=${limit || 1000}&offset=${offset || 0}`);
     if (!response.error) {
       setCachedData(cacheKey, response);
     }
@@ -375,9 +375,13 @@ export const api = {
 
   // ===== citaS =====
   getcitas: (limit?: number, offset?: number) =>
-    fetchAPI(`/api/citas?limit=${limit || 100}&offset=${offset || 0}`),
+    fetchAPI(`/api/citas?limit=${limit || 1000}&offset=${offset || 0}`),
   getcita: (id: number) => fetchAPI(`/api/citas/${id}`),
-  createcita: (data: any) => fetchAPI('/api/citas', { method: 'POST', body: JSON.stringify(data) }),
+  createcita: (data: any) => {
+    return preventDuplicateCall('createcita', () =>
+      fetchAPI('/api/citas', { method: 'POST', body: JSON.stringify(data) })
+    );
+  },
   updatecita: (id: number, data: any) => fetchAPI(`/api/citas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletecita: (id: number) => fetchAPI(`/api/citas/${id}`, { method: 'DELETE' }),
   
@@ -701,7 +705,7 @@ export const api = {
   
   // ===== HISTORIA CLÍNICA =====
   getHistoriasClinicas: (limit?: number, offset?: number) =>
-    fetchAPI(`/api/historias-clinicas?limit=${limit || 100}&offset=${offset || 0}`),
+    fetchAPI(`/api/historias-clinicas?limit=${limit || 1000}&offset=${offset || 0}`),
   
   getHistoriasBypaciente: async (pacienteId: number) => {
     console.log(`📋 Obteniendo historias para paciente ${pacienteId}...`);
@@ -2629,7 +2633,7 @@ export const transformBackendToFrontend = {
       abdomen: abdomen_text,
       gluteos: gluteos_text,
       extremidades: extremidades_text,
-      pies_faneras: pies_faneras_text,
+      piel_faneras: pies_faneras_text,
       ...notas_corporales_json
     };
     
@@ -2793,7 +2797,7 @@ export const transformBackendToFrontend = {
         abdomen: '',
         gluteos: '',
         extremidades: '',
-        pies_faneras: ''
+        piel_faneras: ''
       },
       diagnostico: '',
       plan_conducta: ''
@@ -3300,7 +3304,7 @@ export const transformBackendToFrontend = {
       abdomen: frontendPlan.historia_clinica?.notas_corporales?.abdomen || '',
       gluteos: frontendPlan.historia_clinica?.notas_corporales?.gluteos || '',
       extremidades: frontendPlan.historia_clinica?.notas_corporales?.extremidades || '',
-      pies_faneras: frontendPlan.historia_clinica?.notas_corporales?.pies_faneras || '',
+      pies_faneras: frontendPlan.historia_clinica?.notas_corporales?.piel_faneras || '',
       
       // 10. Identificación y consulta
       identificacion: pacienteIdentificacion,

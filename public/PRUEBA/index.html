@@ -208,6 +208,24 @@
       background: linear-gradient(135deg, #2E7D32, #1B5E20);
     }
 
+    .btn-line {
+      background: linear-gradient(135deg, #FF5722, #E64A19);
+      color: white;
+    }
+
+    .btn-line.active {
+      background: linear-gradient(135deg, #D84315, #BF360C);
+    }
+
+    .btn-arrow-text {
+      background: linear-gradient(135deg, #00BCD4, #0097A7);
+      color: white;
+    }
+
+    .btn-arrow-text.active {
+      background: linear-gradient(135deg, #00838F, #006064);
+    }
+
     .btn-print {
       background: linear-gradient(135deg, #FF9800, #F57C00);
       color: white;
@@ -817,7 +835,7 @@
             <div class="schema-section">
               <h3>Esquema Corporal Femenino</h3>
               <div class="svg-container">
-                <object id="body-schema" data="schema.svg" type="image/svg+xml" width="500" height="600">
+                <object id="body-schema" data="schema.svg" type="image/svg+xml" width="700" height="850">
                   Tu navegador no soporta SVG
                 </object>
               </div>
@@ -827,7 +845,7 @@
             <div class="schema-section">
               <h3>Esquema Facial</h3>
               <div class="svg-container">
-                <object id="facial-schema" data="schema-facial.svg" type="image/svg+xml" width="500" height="600">
+                <object id="facial-schema" data="schema-facial.svg" type="image/svg+xml" width="700" height="850">
                   Tu navegador no soporta SVG
                 </object>
               </div>
@@ -848,7 +866,9 @@
         <button class="btn-undo" onclick="undoLastSelection()">Deshacer</button>
         <button class="btn-reset" onclick="resetAllSelections()">Reestablecer</button>
         <button class="btn-draw" onclick="toggleDrawingMode()">✏️ Trazo Libre</button>
+        <button class="btn-line" onclick="toggleLineMode()">📏 Línea Recta</button>
         <button class="btn-text" onclick="toggleTextMode()">📝 Texto</button>
+        <button class="btn-arrow-text" onclick="toggleArrowTextMode()">🏷️ Texto + Flecha</button>
         <button class="btn-print" onclick="simpleBackupExport()">
           🖨️ Imprimir
         </button>
@@ -1072,6 +1092,19 @@ function simpleBackupExport() {
     let currentStrokeWidth = 3;
     let currentTextSize = 16;
     let currentStrokeColor = '#000000';
+
+    // Línea recta
+    let isLineMode = false;
+    let lineStartPoint = null;
+    let lineStartSvgDoc = null;
+    let linePreview = null;
+
+    // Texto con flecha (anotación externa)
+    let isArrowTextMode = false;
+    let arrowTextStep = 0; // 0=esperando clic origen, 1=esperando clic destino
+    let arrowOriginPoint = null;
+    let arrowOriginSvgDoc = null;
+    let arrowPreviewLine = null;
 
     // Configuración actualizada de los elementos
     const elementsConfig = {
@@ -1316,8 +1349,13 @@ function simpleBackupExport() {
     function toggleDrawingMode() {
       isDrawingMode = !isDrawingMode;
       const btn = document.querySelector('.btn-draw');
-      
+
       if (isDrawingMode) {
+        // Desactivar otros modos
+        if (isLineMode) toggleLineMode();
+        if (isArrowTextMode) toggleArrowTextMode();
+        if (isTextMode) toggleTextMode();
+
         btn.classList.add('active');
         btn.textContent = '✏️ Trazo Libre (ON)';
         svgDocuments.forEach(doc => {
@@ -1341,12 +1379,13 @@ function simpleBackupExport() {
     function toggleTextMode() {
       isTextMode = !isTextMode;
       const btn = document.querySelector('.btn-text');
-      
+
       if (isTextMode) {
-        if (isDrawingMode) {
-          toggleDrawingMode();
-        }
-        
+        // Desactivar otros modos
+        if (isDrawingMode) toggleDrawingMode();
+        if (isLineMode) toggleLineMode();
+        if (isArrowTextMode) toggleArrowTextMode();
+
         btn.classList.add('active');
         btn.textContent = '📝 Texto (ON)';
         svgDocuments.forEach(doc => {
@@ -1359,6 +1398,133 @@ function simpleBackupExport() {
           doc.documentElement.classList.remove('text-mode');
         });
       }
+    }
+
+    // ─── Línea recta ───
+    function toggleLineMode() {
+      isLineMode = !isLineMode;
+      const btn = document.querySelector('.btn-line');
+
+      if (isLineMode) {
+        // Desactivar otros modos
+        if (isDrawingMode) toggleDrawingMode();
+        if (isTextMode) toggleTextMode();
+        if (isArrowTextMode) toggleArrowTextMode();
+
+        btn.classList.add('active');
+        btn.textContent = '📏 Línea Recta (ON)';
+        svgDocuments.forEach(doc => {
+          doc.documentElement.style.cursor = 'crosshair';
+        });
+      } else {
+        btn.classList.remove('active');
+        btn.textContent = '📏 Línea Recta';
+        lineStartPoint = null;
+        lineStartSvgDoc = null;
+        if (linePreview && linePreview.parentNode) {
+          linePreview.parentNode.removeChild(linePreview);
+          linePreview = null;
+        }
+        svgDocuments.forEach(doc => {
+          doc.documentElement.style.cursor = '';
+        });
+      }
+    }
+
+    // ─── Texto con flecha (anotación externa) ───
+    function toggleArrowTextMode() {
+      isArrowTextMode = !isArrowTextMode;
+      const btn = document.querySelector('.btn-arrow-text');
+
+      if (isArrowTextMode) {
+        // Desactivar otros modos
+        if (isDrawingMode) toggleDrawingMode();
+        if (isTextMode) toggleTextMode();
+        if (isLineMode) toggleLineMode();
+
+        arrowTextStep = 0;
+        btn.classList.add('active');
+        btn.textContent = '🏷️ Flecha: clic en zona';
+        svgDocuments.forEach(doc => {
+          doc.documentElement.style.cursor = 'crosshair';
+        });
+      } else {
+        btn.classList.remove('active');
+        btn.textContent = '🏷️ Texto + Flecha';
+        arrowTextStep = 0;
+        arrowOriginPoint = null;
+        arrowOriginSvgDoc = null;
+        if (arrowPreviewLine && arrowPreviewLine.parentNode) {
+          arrowPreviewLine.parentNode.removeChild(arrowPreviewLine);
+          arrowPreviewLine = null;
+        }
+        svgDocuments.forEach(doc => {
+          doc.documentElement.style.cursor = '';
+        });
+      }
+    }
+
+    function createArrowWithText(svgDoc, x1, y1, x2, y2, text) {
+      const group = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'g');
+      group.classList.add('arrow-text-annotation');
+
+      // Línea de la flecha
+      const line = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', x1);
+      line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2);
+      line.setAttribute('y2', y2);
+      line.setAttribute('stroke', currentStrokeColor);
+      line.setAttribute('stroke-width', currentStrokeWidth);
+      line.setAttribute('marker-end', 'url(#arrowhead-' + currentStrokeColor.replace('#', '') + ')');
+
+      // Crear marker (punta de flecha) si no existe
+      const markerId = 'arrowhead-' + currentStrokeColor.replace('#', '');
+      if (!svgDoc.getElementById(markerId)) {
+        let defs = svgDoc.querySelector('defs');
+        if (!defs) {
+          defs = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'defs');
+          svgDoc.documentElement.insertBefore(defs, svgDoc.documentElement.firstChild);
+        }
+        const marker = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'marker');
+        marker.setAttribute('id', markerId);
+        marker.setAttribute('markerWidth', '10');
+        marker.setAttribute('markerHeight', '7');
+        marker.setAttribute('refX', '10');
+        marker.setAttribute('refY', '3.5');
+        marker.setAttribute('orient', 'auto');
+        const polygon = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
+        polygon.setAttribute('fill', currentStrokeColor);
+        marker.appendChild(polygon);
+        defs.appendChild(marker);
+      }
+
+      group.appendChild(line);
+
+      // Texto en la posición del destino (x1,y1 es origen en la zona, x2,y2 es donde va el texto)
+      const textEl = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'text');
+      // Posicionar texto un poco después de la punta de la flecha
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const offsetX = (dx / len) * 12;
+      const offsetY = (dy / len) * 12;
+      textEl.setAttribute('x', x2 + offsetX);
+      textEl.setAttribute('y', y2 + offsetY);
+      textEl.setAttribute('fill', currentStrokeColor);
+      textEl.setAttribute('font-size', currentTextSize);
+      textEl.setAttribute('font-family', 'Arial, sans-serif');
+      textEl.setAttribute('font-weight', 'bold');
+      textEl.textContent = text;
+
+      group.appendChild(textEl);
+      svgDoc.documentElement.appendChild(group);
+
+      selectionHistory.push({
+        element: group,
+        type: 'arrowtext'
+      });
     }
 
     function openTextModal(x, y, svgDoc) {
@@ -1380,12 +1546,26 @@ function simpleBackupExport() {
 
     function addTextToSVG() {
       const textValue = document.getElementById('textInput').value.trim();
-      
+
       if (!textValue || !pendingTextPosition || !pendingTextSvgDoc) {
         closeTextModal();
         return;
       }
-      
+
+      // Caso: texto con flecha (anotación externa)
+      if (pendingTextPosition._isArrowText && pendingTextPosition._arrowOrigin) {
+        const origin = pendingTextPosition._arrowOrigin;
+        createArrowWithText(
+          pendingTextSvgDoc,
+          origin.x, origin.y,
+          pendingTextPosition.x, pendingTextPosition.y,
+          textValue
+        );
+        closeTextModal();
+        return;
+      }
+
+      // Caso normal: solo texto
       const textElement = pendingTextSvgDoc.createElementNS('http://www.w3.org/2000/svg', 'text');
       textElement.setAttribute('x', pendingTextPosition.x);
       textElement.setAttribute('y', pendingTextPosition.y);
@@ -1395,14 +1575,14 @@ function simpleBackupExport() {
       textElement.setAttribute('font-weight', 'bold');
       textElement.textContent = textValue;
       textElement.classList.add('user-added-text');
-      
+
       pendingTextSvgDoc.documentElement.appendChild(textElement);
-      
+
       selectionHistory.push({
         element: textElement,
         type: 'text'
       });
-      
+
       closeTextModal();
     }
 
@@ -1410,6 +1590,10 @@ function simpleBackupExport() {
       if (textElement && textElement.parentNode) {
         textElement.parentNode.removeChild(textElement);
       }
+    }
+
+    function removeElement(el) {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
     }
 
     function undoLastSelection() {
@@ -1421,10 +1605,12 @@ function simpleBackupExport() {
           removeFreeDrawPath(lastSelection.element);
         } else if (lastSelection.type === 'text') {
           removeTextElement(lastSelection.element);
+        } else if (lastSelection.type === 'straightline' || lastSelection.type === 'arrowtext') {
+          removeElement(lastSelection.element);
         }
         return;
       }
-      
+
       if (numericSelectionHistory.length > 0) {
         const lastNumericSelection = numericSelectionHistory.pop();
         if (lastNumericSelection) {
@@ -1441,6 +1627,8 @@ function simpleBackupExport() {
           removeFreeDrawPath(selection.element);
         } else if (selection.type === 'text') {
           removeTextElement(selection.element);
+        } else if (selection.type === 'straightline' || selection.type === 'arrowtext') {
+          removeElement(selection.element);
         }
       });
       
@@ -1455,20 +1643,122 @@ function simpleBackupExport() {
     }
 
     function startDrawing(e, svgDoc) {
+      // ─── Texto con flecha ───
+      if (isArrowTextMode) {
+        const pt = getSVGPoint(e, svgDoc);
+        if (arrowTextStep === 0) {
+          // Primer clic: origen (en la zona del cuerpo)
+          arrowOriginPoint = pt;
+          arrowOriginSvgDoc = svgDoc;
+          arrowTextStep = 1;
+          document.querySelector('.btn-arrow-text').textContent = '🏷️ Flecha: clic destino';
+
+          // Preview line
+          arrowPreviewLine = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
+          arrowPreviewLine.setAttribute('x1', pt.x);
+          arrowPreviewLine.setAttribute('y1', pt.y);
+          arrowPreviewLine.setAttribute('x2', pt.x);
+          arrowPreviewLine.setAttribute('y2', pt.y);
+          arrowPreviewLine.setAttribute('stroke', currentStrokeColor);
+          arrowPreviewLine.setAttribute('stroke-width', currentStrokeWidth);
+          arrowPreviewLine.setAttribute('stroke-dasharray', '5,5');
+          arrowPreviewLine.setAttribute('opacity', '0.5');
+          svgDoc.documentElement.appendChild(arrowPreviewLine);
+        } else {
+          // Segundo clic: destino (fuera, donde va el texto)
+          // Abrir modal de texto y al confirmar crear la flecha
+          pendingTextPosition = pt;
+          pendingTextSvgDoc = svgDoc;
+
+          // Remover preview
+          if (arrowPreviewLine && arrowPreviewLine.parentNode) {
+            arrowPreviewLine.parentNode.removeChild(arrowPreviewLine);
+            arrowPreviewLine = null;
+          }
+
+          // Abrir modal pero con handler especial
+          document.getElementById('modalOverlay').classList.add('active');
+          document.getElementById('textModal').classList.add('active');
+          document.getElementById('textInput').value = '';
+          document.getElementById('textInput').focus();
+
+          // Guardar datos para usar en addTextToSVG
+          pendingTextPosition._isArrowText = true;
+          pendingTextPosition._arrowOrigin = { x: arrowOriginPoint.x, y: arrowOriginPoint.y };
+
+          arrowTextStep = 0;
+          arrowOriginPoint = null;
+          document.querySelector('.btn-arrow-text').textContent = '🏷️ Flecha: clic en zona';
+        }
+        return;
+      }
+
+      // ─── Línea recta ───
+      if (isLineMode) {
+        const pt = getSVGPoint(e, svgDoc);
+        if (!lineStartPoint) {
+          // Primer clic: inicio de la línea
+          lineStartPoint = pt;
+          lineStartSvgDoc = svgDoc;
+          document.querySelector('.btn-line').textContent = '📏 Línea: clic fin';
+
+          // Preview
+          linePreview = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
+          linePreview.setAttribute('x1', pt.x);
+          linePreview.setAttribute('y1', pt.y);
+          linePreview.setAttribute('x2', pt.x);
+          linePreview.setAttribute('y2', pt.y);
+          linePreview.setAttribute('stroke', currentStrokeColor);
+          linePreview.setAttribute('stroke-width', currentStrokeWidth);
+          linePreview.setAttribute('stroke-dasharray', '5,5');
+          linePreview.setAttribute('opacity', '0.5');
+          svgDoc.documentElement.appendChild(linePreview);
+        } else {
+          // Segundo clic: fin de la línea
+          if (linePreview && linePreview.parentNode) {
+            linePreview.parentNode.removeChild(linePreview);
+            linePreview = null;
+          }
+
+          const line = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', lineStartPoint.x);
+          line.setAttribute('y1', lineStartPoint.y);
+          line.setAttribute('x2', pt.x);
+          line.setAttribute('y2', pt.y);
+          line.setAttribute('stroke', currentStrokeColor);
+          line.setAttribute('stroke-width', currentStrokeWidth);
+          line.setAttribute('stroke-linecap', 'round');
+          line.classList.add('straight-line');
+          svgDoc.documentElement.appendChild(line);
+
+          selectionHistory.push({
+            element: line,
+            type: 'straightline'
+          });
+
+          lineStartPoint = null;
+          lineStartSvgDoc = null;
+          document.querySelector('.btn-line').textContent = '📏 Línea Recta (ON)';
+        }
+        return;
+      }
+
+      // ─── Texto ───
       if (isTextMode) {
         const pt = getSVGPoint(e, svgDoc);
         openTextModal(pt.x, pt.y, svgDoc);
         return;
       }
-      
+
+      // ─── Trazo libre ───
       if (!isDrawingMode) return;
-      
+
       isDrawing = true;
       pathPoints = [];
-      
+
       const pt = getSVGPoint(e, svgDoc);
       pathPoints.push(pt);
-      
+
       currentPath = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'path');
       currentPath.classList.add('free-draw-path');
       currentPath.setAttribute('fill', 'none');
@@ -1476,26 +1766,43 @@ function simpleBackupExport() {
       currentPath.setAttribute('stroke-width', currentStrokeWidth);
       currentPath.setAttribute('stroke-linecap', 'round');
       currentPath.setAttribute('stroke-linejoin', 'round');
-      
+
       svgDoc.documentElement.appendChild(currentPath);
     }
 
     function continueDrawing(e, svgDoc) {
       if (isTextMode) return;
+
+      // Preview de línea recta
+      if (isLineMode && linePreview && lineStartPoint) {
+        const pt = getSVGPoint(e, svgDoc);
+        linePreview.setAttribute('x2', pt.x);
+        linePreview.setAttribute('y2', pt.y);
+        return;
+      }
+
+      // Preview de flecha
+      if (isArrowTextMode && arrowPreviewLine && arrowTextStep === 1) {
+        const pt = getSVGPoint(e, svgDoc);
+        arrowPreviewLine.setAttribute('x2', pt.x);
+        arrowPreviewLine.setAttribute('y2', pt.y);
+        return;
+      }
+
       if (!isDrawingMode || !isDrawing) return;
-      
+
       const pt = getSVGPoint(e, svgDoc);
       pathPoints.push(pt);
-      
+
       updatePathData();
     }
 
     function stopDrawing(e, svgDoc) {
-      if (isTextMode) return;
+      if (isTextMode || isLineMode || isArrowTextMode) return;
       if (!isDrawingMode || !isDrawing) return;
-      
+
       isDrawing = false;
-      
+
       if (currentPath && pathPoints.length > 2) {
         selectionHistory.push({
           element: currentPath,
@@ -1504,7 +1811,7 @@ function simpleBackupExport() {
       } else if (currentPath) {
         currentPath.parentNode.removeChild(currentPath);
       }
-      
+
       currentPath = null;
       pathPoints = [];
     }
@@ -1615,12 +1922,12 @@ function simpleBackupExport() {
       element.removeAttribute('data-procedure');
     }
 
-    function initializeSchema(objectId) {
+    function initializeSchema(objectId, onReady) {
       const objectElement = document.getElementById(objectId);
-      
-      objectElement.addEventListener('load', function() {
+
+      function doInit() {
         const svgDoc = objectElement.contentDocument;
-        if (!svgDoc) return;
+        if (!svgDoc) { if (onReady) onReady(); return; }
 
         svgDocuments.push(svgDoc);
         createPatterns(svgDoc);
@@ -1690,7 +1997,16 @@ function simpleBackupExport() {
           text.style.userSelect = 'none';
           text.style.webkitUserSelect = 'none';
         });
-      });
+
+        if (onReady) onReady();
+      }
+
+      // Si el SVG ya cargó, inicializar directamente; si no, esperar al load
+      if (objectElement.contentDocument && objectElement.contentDocument.documentElement) {
+        doInit();
+      } else {
+        objectElement.addEventListener('load', doInit);
+      }
     }
 
     document.addEventListener('keydown', function(e) {
@@ -1725,15 +2041,21 @@ function simpleBackupExport() {
 
     // Inicialización
     document.addEventListener('DOMContentLoaded', function() {
-      initializeSchema('body-schema');
-      initializeSchema('facial-schema');
-      
-      if (window.parent !== window) {
-        window.parent.postMessage({ 
-          type: 'ESQUEMA_LOADED',
-          source: 'esquema-editor'
-        }, '*');
+      let schemasLoaded = 0;
+      const totalSchemas = 2;
+
+      function onSchemaReady() {
+        schemasLoaded++;
+        if (schemasLoaded >= totalSchemas && window.parent !== window) {
+          window.parent.postMessage({
+            type: 'ESQUEMA_LOADED',
+            source: 'esquema-editor'
+          }, '*');
+        }
       }
+
+      initializeSchema('body-schema', onSchemaReady);
+      initializeSchema('facial-schema', onSchemaReady);
     });
   </script>
 </body>

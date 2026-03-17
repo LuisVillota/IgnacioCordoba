@@ -154,7 +154,7 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
       setAdicionales(addRes.adicionales || [])
       const oaRes = await api.getOtrosAdicionales()
       setOtrosAdicionales(oaRes.otros_adicionales || [])
-      const pacRes = await api.getpacientes(100)
+      const pacRes = await api.getpacientes(1000)
       setpacientes(pacRes.pacientes || [])
     } catch (error) {
       console.error("Error cargando datos:", error)

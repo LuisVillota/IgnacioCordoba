@@ -161,7 +161,7 @@ export default function SalaEsperaPage() {
       // Obtener pacientes
       let pacientesArray: any[] = []
       try {
-        const pacientesResponse = await api.getpacientes(100, 0)
+        const pacientesResponse = await api.getpacientes(1000, 0)
         
         if (Array.isArray(pacientesResponse)) {
           pacientesArray = pacientesResponse

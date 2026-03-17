@@ -61,7 +61,7 @@ export interface PlanPDFData {
       abdomen: string
       gluteos: string
       extremidades: string
-      pies_faneras: string
+      piel_faneras: string
     }
     diagnostico: string
     plan_conducta: string
@@ -75,6 +75,7 @@ export interface PlanPDFData {
   }
   notasDoctor: string
   esquemaImageDataUrl?: string | null
+  procedimientos?: string[]
 }
 
 // ─── Colores ───────────────────────────────────────────────────────────────
@@ -104,7 +105,7 @@ function drawHeader(doc: jsPDF, page: number, logoBase64?: string) {
   // Logo real o placeholder
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, 'JPEG', MARGIN, 3, 22, 16)
+      doc.addImage(logoBase64, 'JPEG', MARGIN, 2, 36, 18)
     } catch {
       sf(doc, BLANCO); doc.roundedRect(MARGIN, 3, 22, 16, 2, 2, "F")
       st(doc, VERDE); doc.setFont("helvetica", "bold"); doc.setFontSize(7)
@@ -370,7 +371,7 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
     ["Contextura",              hc.contextura                    || ""],
     ["Abdomen",                 hc.notas_corporales.abdomen      || ""],
     ["Glúteos y Extremidades",  `${hc.notas_corporales.gluteos || ""} ${hc.notas_corporales.extremidades || ""}`.trim()],
-    ["Piel y Faneras",          hc.notas_corporales.pies_faneras || ""],
+    ["Piel y Faneras",          hc.notas_corporales.piel_faneras || ""],
   ]
   regiones.forEach(([lbl, val]) => {
     check(ANT_H + 1)
@@ -383,75 +384,121 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
   check(24); textArea(doc, MARGIN, y, INNER_W, 22, "PLAN / CONDUCTA",hc.plan_conducta); y += 24
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PÁGINA 2 — PLAN QUIRÚRGICO (Esquema + Conducta + Notas + Firmas)
+  // PÁGINA 2 — PLAN QUIRÚRGICO (Esquema + Cirugías + Conducta + Firmas)
   // ══════════════════════════════════════════════════════════════════════════
   doc.addPage(); page++
   drawHeader(doc, page, logoBase64)
   drawFooter(doc)
   y = 25
 
-  // Datos resumidos del paciente
+  // Datos resumidos del paciente (compacto)
   y = sectionBar(doc, y, "PLAN QUIRÚRGICO")
 
   const p5 = INNER_W / 5
-  fieldCell(doc, MARGIN,       y, p5,     ROW_H, "Identificación", dp.identificacion)
-  fieldCell(doc, MARGIN+p5,    y, p5*2,   ROW_H, "Nombre Completo", dp.nombre_completo)
-  fieldCell(doc, MARGIN+p5*3,  y, p5,     ROW_H, "Fecha", dp.fecha_consulta || new Date().toLocaleDateString('es-CO'))
-  fieldCell(doc, MARGIN+p5*4,  y, p5,     ROW_H, "Hora", dp.hora_consulta || "")
-  y += ROW_H
+  fieldCell(doc, MARGIN,       y, p5,     10, "Identificación", dp.identificacion)
+  fieldCell(doc, MARGIN+p5,    y, p5*2,   10, "Nombre Completo", dp.nombre_completo)
+  fieldCell(doc, MARGIN+p5*3,  y, p5,     10, "Fecha", dp.fecha_consulta || new Date().toLocaleDateString('es-CO'))
+  fieldCell(doc, MARGIN+p5*4,  y, p5,     10, "Hora", dp.hora_consulta || "")
+  y += 12
 
-  const p4 = INNER_W / 4
-  fieldCell(doc, MARGIN,       y, p4, ROW_H, "Peso (kg)", String(dp.peso || ""))
-  fieldCell(doc, MARGIN+p4,    y, p4, ROW_H, "Talla (m)", String(dp.altura || ""))
-  fieldCell(doc, MARGIN+p4*2,  y, p4, ROW_H, "IMC", dp.imc ? dp.imc.toFixed(1) : "")
-  fieldCell(doc, MARGIN+p4*3,  y, p4, ROW_H, "Clasificación", dp.categoriaIMC || "")
-  y += ROW_H + 2
-
-  // ── Imagen del esquema ─────────────────────────────────────────────────
+  // ── Imagen del esquema (corporal izq + facial der en una sola imagen) ──
   if (data.esquemaImageDataUrl) {
     try {
       const imgW = INNER_W
-      // Calcular altura proporcional: la imagen es ~2800x2084 (ratio ~1.34)
-      // Dejamos margen para que quepa en la página
-      const maxH = PAGE_H - y - 60 // espacio para conducta + firmas abajo
-      const imgH = Math.min(imgW / 1.34, maxH)
+      const maxH = 140
+      const imgH = Math.min(imgW / 1.6, maxH) // Relación horizontal (imagen combinada es ancha)
 
+      sd(doc, GRIS_LIN); sf(doc, BLANCO)
+      doc.rect(MARGIN - 0.5, y - 0.5, imgW + 1, imgH + 1, "FD")
       doc.addImage(data.esquemaImageDataUrl, 'PNG', MARGIN, y, imgW, imgH)
-      y += imgH + 4
+      y += imgH + 3
     } catch (imgError) {
       console.warn("No se pudo agregar la imagen del esquema al PDF:", imgError)
-      // Si falla, agregar texto indicativo
       sf(doc, GRIS_FND); sd(doc, GRIS_LIN)
-      doc.rect(MARGIN, y, INNER_W, 30, "FD")
-      st(doc, GRIS_TXT); doc.setFont("helvetica", "italic"); doc.setFontSize(10)
-      doc.text("(Esquema corporal no disponible)", PAGE_W / 2, y + 16, { align: "center" })
-      y += 34
+      doc.rect(MARGIN, y, INNER_W, 25, "FD")
+      st(doc, GRIS_TXT); doc.setFont("helvetica", "italic"); doc.setFontSize(9)
+      doc.text("(Esquema no disponible)", PAGE_W / 2, y + 13, { align: "center" })
+      y += 28
     }
   } else {
-    // Sin esquema: dejar espacio indicativo
     sf(doc, GRIS_FND); sd(doc, GRIS_LIN)
-    doc.rect(MARGIN, y, INNER_W, 30, "FD")
-    st(doc, GRIS_TXT); doc.setFont("helvetica", "italic"); doc.setFontSize(10)
-    doc.text("(Esquema corporal: abra el editor de esquemas para incluirlo)", PAGE_W / 2, y + 16, { align: "center" })
-    y += 34
+    doc.rect(MARGIN, y, INNER_W, 25, "FD")
+    st(doc, GRIS_TXT); doc.setFont("helvetica", "italic"); doc.setFontSize(9)
+    doc.text("(Abra el editor de esquemas para incluir el esquema)", PAGE_W / 2, y + 13, { align: "center" })
+    y += 28
+  }
+
+  // ── Leyenda de patrones (como en el formulario físico) ──────────────
+  check(14)
+  const legendY = y
+  const legendItems = [
+    { label: "Liposucción", pattern: "///" },
+    { label: "Lipoinyección", pattern: "\\\\\\"},
+    { label: "Amarre", pattern: "---" },
+    { label: "Incisión", pattern: "___" },
+  ]
+  const legendBoxW = 12, legendBoxH = 6, legendGap = INNER_W / legendItems.length
+  legendItems.forEach((item, i) => {
+    const lx = MARGIN + i * legendGap
+    sd(doc, NEGRO); sf(doc, BLANCO)
+    doc.rect(lx, legendY, legendBoxW, legendBoxH, "FD")
+    // Dibujar patrón dentro del cuadro
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7); st(doc, NEGRO)
+    doc.text(item.pattern, lx + legendBoxW / 2, legendY + 4.2, { align: "center" })
+    doc.setFont("helvetica", "bold"); doc.setFontSize(6.5); st(doc, NEGRO)
+    doc.text(item.label, lx + legendBoxW + 2, legendY + 4.2)
+  })
+  y = legendY + legendBoxH + 4
+
+  // ══ CIRUGÍAS (procedimientos seleccionados) ════════════════════════════
+  const procs = data.procedimientos || []
+  if (procs.length > 0) {
+    check(10 + procs.length * 5)
+    y = sectionBar(doc, y, "CIRUGÍAS")
+
+    sf(doc, BLANCO); sd(doc, GRIS_LIN)
+    const listH = Math.max(procs.length * 5 + 4, 12)
+    doc.rect(MARGIN, y, INNER_W, listH, "FD")
+
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); st(doc, NEGRO)
+    procs.forEach((proc, i) => {
+      doc.text(`${i + 1}. ${proc}`, MARGIN + 4, y + 4 + i * 5)
+    })
+    y += listH + 2
   }
 
   // ══ CONDUCTA QUIRÚRGICA ════════════════════════════════════════════════════
-  check(22)
-  y = sectionBar(doc, y, "CONDUCTA QUIRÚRGICA")
+  check(40)
+  y = sectionBar(doc, y, "CONDUCTA")
 
-  const q = INNER_W / 4
-  fieldCell(doc, MARGIN,     y, q, ROW_H, "Tiempo QX (min)",    String(cq.duracion_estimada || ""))
-  fieldCell(doc, MARGIN+q,   y, q, ROW_H, "Tipo Anestesia",     cq.tipo_anestesia || "")
-  fieldCell(doc, MARGIN+q*2, y, q, ROW_H, "Hospitalización",
+  // Fila 1: Tipo de anestesia con checkboxes
+  sf(doc, BLANCO); sd(doc, GRIS_LIN)
+  doc.rect(MARGIN, y, INNER_W, 10, "FD")
+  doc.setFont("helvetica", "bold"); doc.setFontSize(7); st(doc, GRIS_TXT)
+  doc.text("Tipo de Anestesia:", MARGIN + 2, y + 6)
+
+  const anestesias = ["General", "Sedación", "Local", "Local + Sedación", "Epidural"]
+  let ax = MARGIN + 38
+  anestesias.forEach(a => {
+    const checked = (cq.tipo_anestesia || "").toLowerCase().includes(a.toLowerCase())
+    cbBox(doc, ax, y + 3, checked, a)
+    ax += doc.getTextWidth(a) + 12
+  })
+  y += 10
+
+  // Fila 2: Hospitalización + Tiempo QX + Resección
+  const q3 = INNER_W / 3
+  fieldCell(doc, MARGIN,       y, q3, 10, "Hospitalización",
     cq.requiere_hospitalizacion ? `Sí – ${cq.tiempo_hospitalizacion || ""}` : "No")
-  fieldCell(doc, MARGIN+q*3, y, q, ROW_H, "Resección estimada", cq.reseccion_estimada || "")
-  y += ROW_H + 2
+  fieldCell(doc, MARGIN+q3,    y, q3, 10, "Tiempo Quirúrgico (min)", String(cq.duracion_estimada || ""))
+  fieldCell(doc, MARGIN+q3*2,  y, q3, 10, "Resección Estimada", cq.reseccion_estimada || "")
+  y += 12
 
+  // Notas del doctor
   if (notasDoctor) {
-    check(22)
-    textArea(doc, MARGIN, y, INNER_W, 20, "NOTAS DEL DOCTOR", notasDoctor)
-    y += 22
+    check(18)
+    textArea(doc, MARGIN, y, INNER_W, 16, "NOTAS DEL DOCTOR", notasDoctor)
+    y += 18
   }
 
   // ══ FIRMAS ═════════════════════════════════════════════════════════════════

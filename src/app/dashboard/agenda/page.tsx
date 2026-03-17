@@ -1272,7 +1272,7 @@ export default function AgendaPage() {
         
         let pacientesResponse
         try {
-          pacientesResponse = await api.getpacientes(100, 0)
+          pacientesResponse = await api.getpacientes(1000, 0)
         } catch (pacienteError: any) {
           throw new Error(`No se pudieron cargar los pacientes: ${handleApiError(pacienteError)}`)
         }

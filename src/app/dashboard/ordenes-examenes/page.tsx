@@ -37,7 +37,7 @@ export default function OrdenExamenesPage() {
     try {
       setLoading(true)
 
-      const response = await api.getpacientes(100, 0)
+      const response = await api.getpacientes(1000, 0)
 
       let pacientesArray: paciente[] = []
 

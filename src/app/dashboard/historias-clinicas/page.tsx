@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Plus, Edit2, Eye, ArrowLeft, Upload, Search, X, Trash2, Loader2 } from "lucide-react"
+import { Edit2, Eye, ArrowLeft, Upload, Search, X, Trash2, Loader2, Camera } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { HistoriaForm } from "../../../components/HistoriaForm"
 import { HistoriaModal } from "../../../components/HistoriaModal"
@@ -57,7 +57,7 @@ export default function HistoriaClinicaPage() {
       setLoading(prev => ({ ...prev, pacientes: true }))
       setError(null)
       
-      const response = await api.getpacientes(100, 0)
+      const response = await api.getpacientes(1000, 0)
       
       const pacientesTransformados = response.pacientes?.map((paciente: any) => 
         transformBackendToFrontend.paciente(paciente)
@@ -171,7 +171,7 @@ export default function HistoriaClinicaPage() {
       <ProtectedRoute permissions={["ver_historia_clinica"]}>
         <div className="p-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">Historia Clínica</h1>
+            <h1 className="text-3xl font-bold text-gray-800">Archivo de Pacientes</h1>
             <p className="text-gray-600 mt-2">Selecciona un paciente para ver su historia</p>
           </div>
 
@@ -299,7 +299,7 @@ export default function HistoriaClinicaPage() {
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">Historia Clínica</h1>
+            <h1 className="text-3xl font-bold text-gray-800">Archivo de Pacientes</h1>
             <p className="text-gray-600 mt-1">
               {paciente?.nombres} {paciente?.apellidos}
             </p>
@@ -351,46 +351,17 @@ export default function HistoriaClinicaPage() {
               </div>
             )}
           </div>
-          <ProtectedRoute permissions={["crear_historia_clinica"]}>
-            <button
-              onClick={() => {
-                setEditingId(null)
-                setSelectedHistoria(null)
-                setShowForm(true)
-              }}
-              disabled={loading.historias || loading.saving}
-              className="flex items-center space-x-2 bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-              type="button"
-            >
-              <Plus size={20} />
-              <span>Nueva Historia</span>
-            </button>
-          </ProtectedRoute>
+          {/* Los registros se crean desde Plan Quirúrgico */}
         </div>
 
         {loading.historias ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#1a6b32]"></div>
-            <p className="text-gray-600 mt-4">Cargando historias clínicas...</p>
+            <p className="text-gray-600 mt-4">Cargando los archivos de los pacientes...</p>
           </div>
         ) : pacienteHistorias.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-            <p className="text-gray-600 mb-4">No hay registros de historia clínica</p>
-            <ProtectedRoute permissions={["crear_historia_clinica"]}>
-              <button
-                onClick={() => {
-                  setEditingId(null)
-                  setSelectedHistoria(null)
-                  setShowForm(true)
-                }}
-                disabled={loading.saving}
-                className="inline-flex items-center space-x-2 bg-[#1a6b32] hover:bg-[#155529] text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
-                type="button"
-              >
-                <Plus size={20} />
-                <span>Crear Primer Registro</span>
-              </button>
-            </ProtectedRoute>
+            <p className="text-gray-600 mb-2">No hay registros</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -414,17 +385,15 @@ export default function HistoriaClinicaPage() {
                     >
                       <Eye size={18} />
                     </button>
-                    <ProtectedRoute permissions={["editar_historia_clinica"]}>
-                      <button
-                        onClick={() => handleEdit(historia)}
-                        className="p-2 text-[#669933] hover:bg-green-50 rounded-lg transition"
-                        title="Editar"
-                        disabled={loading.saving}
-                        type="button"
-                      >
-                        <Edit2 size={18} />
-                      </button>
-                    </ProtectedRoute>
+                    <button
+                      onClick={() => handleEdit(historia)}
+                      className="p-2 text-[#669933] hover:bg-green-50 rounded-lg transition"
+                      title="Agregar fotos"
+                      disabled={loading.saving}
+                      type="button"
+                    >
+                      <Camera size={18} />
+                    </button>
                     <button
                       onClick={() => handleDeleteHistoria(historia)}
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"

@@ -68,7 +68,7 @@ export default function pacientesPage() {
     try {
       setLoading(true)
       setError(null)
-      const response = await api.getpacientes(100)
+      const response = await api.getpacientes(1000)
       
       // Usar la transformación local en lugar de la de api.ts
       const transformedpacientes = response.pacientes.map(transformpacienteLocal)

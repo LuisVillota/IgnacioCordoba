@@ -45,7 +45,7 @@ def get_sala_espera(mostrarTodos: bool = Query(True, description="Mostrar todos 
                 
                 if mostrarTodos:
                     query = """
-                        SELECT 
+                        SELECT
                             p.id,
                             p.nombre,
                             p.apellido,
@@ -59,24 +59,28 @@ def get_sala_espera(mostrarTodos: bool = Query(True, description="Mostrar todos 
                             TIME(se.fecha_hora_ingreso) as hora_cita,
                             DATE(se.fecha_hora_ingreso) as fecha_cita,
                             se.hora_cita_programada,
-                            CASE 
-                                WHEN c.id IS NOT NULL AND DATE(c.fecha_hora) = %s THEN 1
+                            CASE
+                                WHEN c_hoy.id IS NOT NULL THEN 1
                                 ELSE 0
                             END as tiene_cita_hoy,
-                            c.fecha_hora as cita_fecha_hora,
-                            c.id as cita_id_real
+                            c_hoy.fecha_hora as cita_fecha_hora,
+                            c_hoy.id as cita_id_real
                         FROM paciente p
-                        LEFT JOIN sala_espera se ON p.id = se.paciente_id 
+                        LEFT JOIN sala_espera se ON p.id = se.paciente_id
                             AND DATE(se.fecha_hora_ingreso) = %s
                         LEFT JOIN estado_sala_espera ese ON se.estado_id = ese.id
-                        LEFT JOIN cita c ON p.id = c.paciente_id 
-                            AND DATE(c.fecha_hora) = %s
+                        LEFT JOIN (
+                            SELECT paciente_id, MIN(id) as id, MIN(fecha_hora) as fecha_hora
+                            FROM cita
+                            WHERE DATE(fecha_hora) = %s
+                            GROUP BY paciente_id
+                        ) c_hoy ON p.id = c_hoy.paciente_id
                         ORDER BY se.fecha_hora_ingreso DESC, p.apellido, p.nombre
                     """
-                    params = [hoy, hoy, hoy]
+                    params = [hoy, hoy]
                 else:
                     query = """
-                        SELECT 
+                        SELECT
                             p.id,
                             p.nombre,
                             p.apellido,
@@ -91,15 +95,19 @@ def get_sala_espera(mostrarTodos: bool = Query(True, description="Mostrar todos 
                             DATE(se.fecha_hora_ingreso) as fecha_cita,
                             se.hora_cita_programada,
                             1 as tiene_cita_hoy,
-                            c.fecha_hora as cita_fecha_hora,
-                            c.id as cita_id_real
+                            c_hoy.fecha_hora as cita_fecha_hora,
+                            c_hoy.id as cita_id_real
                         FROM paciente p
-                        INNER JOIN cita c ON p.id = c.paciente_id 
-                            AND DATE(c.fecha_hora) = %s
-                        LEFT JOIN sala_espera se ON p.id = se.paciente_id 
+                        INNER JOIN (
+                            SELECT paciente_id, MIN(id) as id, MIN(fecha_hora) as fecha_hora
+                            FROM cita
+                            WHERE DATE(fecha_hora) = %s
+                            GROUP BY paciente_id
+                        ) c_hoy ON p.id = c_hoy.paciente_id
+                        LEFT JOIN sala_espera se ON p.id = se.paciente_id
                             AND DATE(se.fecha_hora_ingreso) = %s
                         LEFT JOIN estado_sala_espera ese ON se.estado_id = ese.id
-                        ORDER BY c.fecha_hora ASC, p.apellido, p.nombre
+                        ORDER BY c_hoy.fecha_hora ASC, p.apellido, p.nombre
                     """
                     params = [hoy, hoy]
                 
