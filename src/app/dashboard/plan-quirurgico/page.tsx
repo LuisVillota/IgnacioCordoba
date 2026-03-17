@@ -637,11 +637,14 @@ export default function PlanQuirurgicoPage() {
           const fotos = fotosStr.split(',').filter((f: string) => f.trim());
           console.log("🖼️ Fotos en HC:", fotos);
 
-          // Solo buscar fotos con "esquema_" en la URL
+          // Buscar fotos con "esquema_" en la URL
           const esquemas = fotos.filter((f: string) => f.includes('esquema_'));
           if (esquemas.length > 0) {
             esquemaUrl = esquemas[esquemas.length - 1];
             console.log("🖼️ Esquema URL encontrada:", esquemaUrl);
+          } else {
+            console.warn("⚠️ No se encontraron fotos con 'esquema_' en la URL. Fotos disponibles:", fotos);
+            console.warn("⚠️ Guarda el esquema desde el editor para que aparezca en el PDF.");
           }
         }
       } catch (err) {
