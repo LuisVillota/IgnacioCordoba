@@ -2,15 +2,17 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-import { useSearchParams } from "next/navigation"
-import { Plus, Edit2, Eye, Calendar, Scale, User, FileText, RefreshCw, Download, Printer, Trash2, Search, Loader2 } from "lucide-react"
+import { useSearchParams, useRouter } from "next/navigation"
+import { Plus, Edit2, Eye, Calendar, Scale, User, FileText, RefreshCw, Download, Printer, Trash2, Search, Loader2, Camera } from "lucide-react"
 import type { PlanQuirurgico } from "../../../types/planQuirurgico"
 import { PlanQuirurgicoForm } from "../../../components/PlanQuirurgicoForm"
 import { api } from "../../../lib/api"
 
 export default function PlanQuirurgicoPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
-  const pacienteIdFromQuery = searchParams.get("paciente_id")
+  const pacienteIdFromQuery = searchParams.get("paciente_id") || searchParams.get("pacienteId")
+  const verPlanIdFromQuery = searchParams.get("verPlan")
 
   const [planesQuirurgicos, setPlanesQuirurgicos] = useState<PlanQuirurgico[]>([])
   const [loading, setLoading] = useState(true)
@@ -36,6 +38,20 @@ export default function PlanQuirurgicoPage() {
     }
   }, [])
 
+  // Si viene verPlan en la URL, abrir el modal de detalles automáticamente
+  useEffect(() => {
+    if (verPlanIdFromQuery && !loading && planesQuirurgicos.length > 0) {
+      const plan = planesQuirurgicos.find(p =>
+        String(p.id).replace('plan_', '') === String(verPlanIdFromQuery) ||
+        String(p.id) === String(verPlanIdFromQuery) ||
+        String(p.id) === `plan_${verPlanIdFromQuery}`
+      )
+      if (plan) {
+        handleVerDetalles(plan)
+      }
+    }
+  }, [verPlanIdFromQuery, loading, planesQuirurgicos])
+
   const cargarPlanes = async () => {
     // Evitar llamadas duplicadas
     if (isFetching.current) {
@@ -47,7 +63,7 @@ export default function PlanQuirurgicoPage() {
       isFetching.current = true
       setLoading(true)
       setError(null)
-      console.log("📥 Iniciando carga de planes quirúrgicos...")
+      console.log("📥 Iniciando carga de historias clinicas...")
       
       const response = await api.getPlanesQuirurgicos(100, 0)
       
@@ -71,7 +87,7 @@ export default function PlanQuirurgicoPage() {
       }
       
       if (response.planes && Array.isArray(response.planes)) {
-        console.log(`✅ Cargados ${response.planes.length} planes quirúrgicos`)
+        console.log(`✅ Cargados ${response.planes.length} historias clinicas`)
         setPlanesQuirurgicos(response.planes)
         
         // Debug: mostrar primeros 2 planes
@@ -123,10 +139,10 @@ export default function PlanQuirurgicoPage() {
     try {
       setDeletingPlanId(plan.id)
       await api.deletePlanQuirurgico(plan.id)
-      alert("Plan quirúrgico eliminado exitosamente")
+      alert("Historia Clinica eliminada exitosamente")
       await cargarPlanes()
     } catch (err: any) {
-      console.error("Error eliminando plan:", err)
+      console.error("Error eliminando la Historia Clinica:", err)
       alert(`Error: ${err.message || 'Error desconocido'}`)
     } finally {
       setDeletingPlanId(null)
@@ -137,10 +153,12 @@ export default function PlanQuirurgicoPage() {
   const filteredPlanes = planesQuirurgicos
     .filter((plan) => {
       if (!searchTermPlan.trim()) return true
-      const term = searchTermPlan.toLowerCase()
-      const nombre = (plan.datos_paciente?.nombre_completo || '').toLowerCase()
+      const term = searchTermPlan.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      const nombre = (plan.datos_paciente?.nombre_completo || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       const doc = (plan.datos_paciente?.identificacion || '').toLowerCase()
-      return nombre.includes(term) || doc.includes(term)
+      const proc = ((plan as any).procedimiento_desc || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      const telefono = (plan.historia_clinica?.telefono || plan.historia_clinica?.celular || '').toLowerCase()
+      return nombre.includes(term) || doc.includes(term) || proc.includes(term) || telefono.includes(term)
     })
     .sort((a, b) => {
       const nameA = (a.datos_paciente?.nombre_completo || '').toLowerCase()
@@ -194,15 +212,44 @@ export default function PlanQuirurgicoPage() {
 
   const [planParaVer, setPlanParaVer] = useState<PlanQuirurgico | null>(null)
   const [showDetallesModal, setShowDetallesModal] = useState(false)
+  const [esquemaUrlVer, setEsquemaUrlVer] = useState<string>('')
 
-  const handleVerDetalles = (plan: PlanQuirurgico) => {
+  const handleVerDetalles = async (plan: PlanQuirurgico) => {
     setPlanParaVer(plan)
     setShowDetallesModal(true)
+    setEsquemaUrlVer('')
+
+    // Buscar imagen de esquema en HC del paciente
+    const pacienteId = plan.id_paciente || plan.datos_paciente?.id
+    if (pacienteId) {
+      try {
+        const historias = await api.getHistoriasBypaciente(parseInt(pacienteId as string))
+        let historiasArray: any[] = []
+        if (Array.isArray(historias)) historiasArray = historias
+        else if (historias?.historias) historiasArray = historias.historias
+        else if (historias?.data) historiasArray = historias.data
+
+        if (historiasArray.length > 0) {
+          const hcReciente = historiasArray[historiasArray.length - 1]
+          const fotosStr = hcReciente.fotos ? String(hcReciente.fotos) : ''
+          const fotos = fotosStr.split(',').filter((f: string) => f.trim())
+          const cedula = plan.datos_paciente?.identificacion || ''
+          // Buscar esquema por cedula o por "esquema_"
+          const esquemas = fotos.filter((f: string) => f.includes(`esquema_${cedula}`) || f.includes('esquema_'))
+          if (esquemas.length > 0) {
+            setEsquemaUrlVer(esquemas[esquemas.length - 1])
+          }
+        }
+      } catch (err) {
+        console.warn("No se pudo obtener esquema de HC:", err)
+      }
+    }
   }
 
   const cerrarDetallesModal = () => {
     setShowDetallesModal(false)
     setPlanParaVer(null)
+    setEsquemaUrlVer('')
   }
 
   // Función para eliminar un archivo adjunto
@@ -659,7 +706,7 @@ export default function PlanQuirurgicoPage() {
       <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Plan Quirúrgico - ${plan.datos_paciente.nombre_completo}</title>
+          <title>Historia Clinica - ${plan.datos_paciente.nombre_completo}</title>
           <style>
               @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
               
@@ -703,11 +750,7 @@ export default function PlanQuirurgicoPage() {
               }
               
               .logo-container {
-                  width: 80px;
-                  height: 80px;
                   overflow: hidden;
-                  border-radius: 10px;
-                  border: 2px solid #1a6b32;
                   background: white;
                   display: flex;
                   align-items: center;
@@ -1034,7 +1077,7 @@ export default function PlanQuirurgicoPage() {
               
               <div class="header">
                   <div class="header-left">
-                      <h1>📋 PLAN QUIRÚRGICO</h1>
+                      <h1>📋 Historia Clinica</h1>
                       <div class="subtitle">Documento Médico - Sistema de Gestión Quirúrgica</div>
                       <div class="patient-info">
                           <strong>Paciente:</strong> ${plan.datos_paciente.nombre_completo} | 
@@ -1293,7 +1336,7 @@ export default function PlanQuirurgicoPage() {
               <div class="compact-section">
                   <div class="section-title">📐 ESQUEMA QUIRÚRGICO</div>
                   <div style="text-align: center; margin: 5px 0;">
-                      <img src="${esquemaUrl}" alt="Esquema Quirúrgico" style="max-width: 90%; max-height: 400px; object-fit: contain; border: 1px solid #dee2e6; border-radius: 6px;" />
+                      <img src="${esquemaUrl}" alt="Esquema Quirúrgico" style="max-width: 230%; max-height: 500px; object-fit: contain; border: 1px solid #dee2e6; border-radius: 6px;" />
                   </div>
               </div>
               ` : ''}
@@ -1364,7 +1407,7 @@ export default function PlanQuirurgicoPage() {
               </div>
               
               <div class="footer">
-                  <div>Documento confidencial - Generado por Sistema de Gestión de Planes Quirúrgicos</div>
+                  <div>Documento confidencial - Generado por Sistema de Gestión de Historias Clinicas</div>
                   <div style="margin-top: 3px;">© ${new Date().getFullYear()} - Clínica Especializada - Todos los derechos reservados</div>
               </div>
           </div>
@@ -1700,7 +1743,7 @@ export default function PlanQuirurgicoPage() {
             ← Volver a Lista
           </button>
           <h1 className="text-3xl font-bold text-[#1a6b32]">
-            {planSeleccionado ? "Editar Plan Quirúrgico" : "Crear Nuevo Plan Quirúrgico"}
+            {planSeleccionado ? "Editar Historia Clinica" : "Crear Nueva Historia Clinica"}
           </h1>
           {planSeleccionado && (
             <p className="text-gray-600 mt-2">
@@ -1722,9 +1765,9 @@ export default function PlanQuirurgicoPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-[#1a6b32]">Planes Quirúrgicos</h1>
+          <h1 className="text-3xl font-bold text-[#1a6b32]">Historias Clinicas</h1>
           <p className="text-gray-600 mt-2">
-            Gestiona los planes quirúrgicos de los pacientes
+            Gestiona las historias clinicas de los pacientes
           </p>
         </div>
         <div className="flex gap-3">
@@ -1741,7 +1784,7 @@ export default function PlanQuirurgicoPage() {
             className="flex items-center gap-2 bg-[#1a6b32] hover:bg-[#155228] text-white px-6 py-3 rounded-lg font-medium transition"
           >
             <Plus className="w-5 h-5" />
-            Crear Nuevo Plan
+            Crear Nueva Historia Clinica
           </button>
         </div>
       </div>
@@ -1750,7 +1793,7 @@ export default function PlanQuirurgicoPage() {
       {!loading && planesQuirurgicos.length > 0 && vistaActual === "lista" && (
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Buscar plan quirúrgico ({filteredPlanes.length} de {planesQuirurgicos.length} planes)
+            Buscar Historia Clinica ({filteredPlanes.length} de {planesQuirurgicos.length} planes)
           </label>
           <div className="relative max-w-md">
             <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
@@ -1779,14 +1822,14 @@ export default function PlanQuirurgicoPage() {
       {loading ? (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#1a6b32]"></div>
-          <p className="text-gray-500 mt-4">Cargando planes quirúrgicos...</p>
+          <p className="text-gray-500 mt-4">Cargando historias clinicas...</p>
         </div>
       ) : error ? (
         <div className="bg-red-50 border border-red-200 text-red-800 px-6 py-4 rounded-lg mb-4">
           <div className="flex items-start gap-3">
             <div className="text-red-500 text-xl">⚠️</div>
             <div>
-              <p className="font-bold">Error al cargar planes quirúrgicos</p>
+              <p className="font-bold">Error al cargar historias clinicas</p>
               <p className="mt-1">{error}</p>
               <button
                 onClick={handleRefresh}
@@ -1800,8 +1843,8 @@ export default function PlanQuirurgicoPage() {
       ) : planesQuirurgicos.length === 0 ? (
         <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
           <div className="text-gray-400 mb-4 text-5xl">📋</div>
-          <p className="text-gray-500 text-lg mb-2">No hay planes quirúrgicos registrados</p>
-          <p className="text-gray-400 mb-6">Comienza creando tu primer plan quirúrgico</p>
+          <p className="text-gray-500 text-lg mb-2">No hay historias clinicas</p>
+          <p className="text-gray-400 mb-6">Comienza creando tu primera historia clinica</p>
           <button
             onClick={handleCrearNuevo}
             className="bg-[#1a6b32] hover:bg-[#155228] text-white px-6 py-3 rounded-lg font-medium"
@@ -1984,7 +2027,7 @@ export default function PlanQuirurgicoPage() {
             <div className="p-6 border-b bg-[#1a6b32] text-white rounded-t-lg">
               <div className="flex justify-between items-start">
                 <div>
-                  <h2 className="text-2xl font-bold mb-2">Plan Quirúrgico Completo</h2>
+                  <h2 className="text-2xl font-bold mb-2">Historia Clinica Completo</h2>
                   <p className="text-green-100">
                     paciente: {planParaVer.datos_paciente.nombre_completo}
                   </p>
@@ -2360,33 +2403,21 @@ export default function PlanQuirurgicoPage() {
                 </section>
               )}
 
-              {/* ESQUEMA QUIRÚRGICO */}
-              {planParaVer.esquema_mejorado && Object.keys(planParaVer.esquema_mejorado.zoneMarkings || {}).length > 0 && (
-                <section className="mb-6 p-4 bg-gray-50 rounded-lg border">
-                  <h3 className="text-lg font-bold text-[#1a6b32] mb-4">Esquema Quirúrgico</h3>
-                  <div className="bg-white p-3 rounded border">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-semibold text-gray-600">Zonas Marcadas</label>
-                        <p className="text-gray-800">
-                          {Object.keys(planParaVer.esquema_mejorado.zoneMarkings).length} zona(s)
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-semibold text-gray-600">Procedimiento Principal</label>
-                        <p className="text-gray-800 capitalize">
-                          {planParaVer.esquema_mejorado.selectedProcedure === 'liposuction' 
-                            ? 'Liposucción' 
-                            : 'Lipotransferencia'}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Nota: Abra el editor de esquemas en modo edición para ver las marcas detalladas
-                    </p>
+              {/* ESQUEMA QUIRÚRGICO - Imagen de HC */}
+              <section className="mb-6 p-4 bg-gray-50 rounded-lg border">
+                <h3 className="text-lg font-bold text-[#1a6b32] mb-4">Esquema Quirúrgico</h3>
+                {esquemaUrlVer ? (
+                  <div className="bg-white p-3 rounded border text-center">
+                    <img
+                      src={esquemaUrlVer}
+                      alt={`Esquema de ${planParaVer.datos_paciente.nombre_completo}`}
+                      className="max-w-full max-h-[500px] object-contain mx-auto rounded border"
+                    />
                   </div>
-                </section>
-              )}
+                ) : (
+                  <p className="text-sm text-gray-500 italic">No se encontró imagen de esquema para este paciente</p>
+                )}
+              </section>
 
 
               {/* FECHAS */}
@@ -2414,6 +2445,17 @@ export default function PlanQuirurgicoPage() {
                 Plan ID: {planParaVer.id}
               </div>
               <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    const pacId = planParaVer.id_paciente || planParaVer.datos_paciente?.id
+                    cerrarDetallesModal()
+                    router.push(`/dashboard/historias-clinicas?pacienteId=${pacId}`)
+                  }}
+                  className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-2"
+                >
+                  <Camera className="w-4 h-4" />
+                  Agregar Fotos
+                </button>
                 <button
                   onClick={imprimirPlan}
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"

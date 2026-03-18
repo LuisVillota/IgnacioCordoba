@@ -44,6 +44,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
   const [showEditor, setShowEditor] = useState(false)
   const [editorKey, setEditorKey] = useState(0)
   const editorIframeRef = useRef<HTMLIFrameElement>(null)
+  const esquemaPendienteRef = useRef<{ dataUrl: string; fileName: string } | null>(null)
 
   // (cotización se crea automáticamente desde la selección de procedimientos)
 
@@ -98,38 +99,17 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
     hora_consulta: plan?.datos_paciente?.hora_consulta ?? "",
   })
 
-  // Escuchar datos del iframe para subir a HC
+  // Escuchar datos del iframe - guardar en ref para subir cuando se guarde el plan
   useEffect(() => {
-    const handleMessage = async (event: MessageEvent) => {
+    const handleMessage = (event: MessageEvent) => {
       if (event.data?.type !== 'ESQUEMA_SVG_DATA') return
       const { dataUrl, fileName } = event.data
-      console.log("📸 Esquema recibido para HC:", fileName)
-
-      if (datospaciente.id) {
-        try {
-          const res = await fetch(dataUrl)
-          const blob = await res.blob()
-          const file = new File([blob], fileName, { type: 'image/png' })
-          const historias = await api.getHistoriasBypaciente(parseInt(datospaciente.id))
-          const historiasArray: any[] = Array.isArray(historias) ? historias : (historias?.historias || historias?.data || [])
-          if (historiasArray.length > 0) {
-            const hc = historiasArray[historiasArray.length - 1]
-            const uploadResult = await api.uploadHistoriaFoto(parseInt(hc.id), file)
-            if (uploadResult.url) {
-              const fotos = hc.fotos ? String(hc.fotos).split(',').filter((f: string) => f.trim()) : []
-              fotos.push(uploadResult.url)
-              await api.updateHistoriaClinica(parseInt(hc.id), { paciente_id: parseInt(datospaciente.id), fotos: fotos.join(',') })
-            }
-          }
-          console.log("✅ Esquema subido a HC exitosamente")
-        } catch (err) {
-          console.warn("Error subiendo esquema a HC:", err)
-        }
-      }
+      esquemaPendienteRef.current = { dataUrl, fileName }
+      console.log("📸 Esquema guardado pendiente para subir a HC:", fileName)
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [datospaciente.id])
+  }, [])
 
   // ---------------------------
   // Historia clínica
@@ -1594,14 +1574,28 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
             }
 
             await api.createCotizacion(cotizacionData)
-            console.log("✅ Cotización creada automáticamente desde plan quirúrgico")
+            console.log("✅ Cotización creada automáticamente desde historia clinica")
           }
         } catch (cotError) {
           console.warn("⚠️ No se pudo crear la cotización automática:", cotError)
         }
       }
 
-      onGuardar(nuevoPlan, esquemaCapturado)
+      // Si hay esquema pendiente del iframe, convertirlo a File
+      let esquemaParaGuardar = esquemaCapturado
+      if (!esquemaParaGuardar && esquemaPendienteRef.current) {
+        try {
+          const { dataUrl, fileName } = esquemaPendienteRef.current
+          const res = await fetch(dataUrl)
+          const blob = await res.blob()
+          esquemaParaGuardar = new File([blob], fileName, { type: 'image/png' })
+          esquemaPendienteRef.current = null
+          console.log("📸 Esquema pendiente convertido a File para subir a HC")
+        } catch (err) {
+          console.warn("Error convirtiendo esquema pendiente:", err)
+        }
+      }
+      onGuardar(nuevoPlan, esquemaParaGuardar)
     } finally {
       setGuardando(false)
     }
@@ -1685,7 +1679,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
               <div className="p-4 border-b flex justify-between items-center bg-[#1a6b32] text-white">
                 <div>
                   <h3 className="text-lg font-semibold">Seleccionar Paciente</h3>
-                  <p className="text-sm opacity-90">Seleccione un paciente para el plan quirúrgico</p>
+                  <p className="text-sm opacity-90">Seleccione un paciente para la historia clinica</p>
                 </div>
                 <button onClick={() => setShowSelectorpacientes(false)} className="text-white hover:text-gray-200 text-xl">✕</button>
               </div>
@@ -2159,121 +2153,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
               )}
             </div>
 
-            {/* ── Dropdown Adicionales ── */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Adicionales</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Buscar adicional..."
-                    value={searchAdicDropdown}
-                    onChange={(e) => { setSearchAdicDropdown(e.target.value); setShowAdicDropdown(true) }}
-                    onFocus={() => setShowAdicDropdown(true)}
-                    onBlur={() => setTimeout(() => setShowAdicDropdown(false), 150)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a6b32] text-sm"
-                  />
-                  {showAdicDropdown && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                      {catalogoAdicionales
-                        .filter((a: any) => !searchAdicDropdown.trim() || a.nombre.toLowerCase().includes(searchAdicDropdown.toLowerCase()))
-                        .filter((a: any) => !adicionalesSeleccionados.includes(a.id))
-                        .map((a: any) => (
-                          <button
-                            key={a.id}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => { setAdicionalesSeleccionados(prev => [...prev, a.id]); setSearchAdicDropdown(''); setShowAdicDropdown(false) }}
-                            className="w-full px-3 py-2 text-left hover:bg-gray-100 text-sm"
-                          >
-                            {a.nombre}
-                          </button>
-                        ))}
-                      {catalogoAdicionales.filter((a: any) => !searchAdicDropdown.trim() || a.nombre.toLowerCase().includes(searchAdicDropdown.toLowerCase())).filter((a: any) => !adicionalesSeleccionados.includes(a.id)).length === 0 && (
-                        <p className="px-3 py-2 text-sm text-gray-400">Sin resultados</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {adicionalesSeleccionados.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {adicionalesSeleccionados.map(id => {
-                    const adic = catalogoAdicionales.find((a: any) => a.id === id)
-                    return adic ? (
-                      <span key={id} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full text-sm text-blue-800">
-                        {adic.nombre}
-                        <button type="button" onClick={() => setAdicionalesSeleccionados(prev => prev.filter(x => x !== id))} className="text-blue-600 hover:text-red-500 ml-1">
-                          <X size={14} />
-                        </button>
-                      </span>
-                    ) : null
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* ── Dropdown Otros Adicionales ── */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Otros Adicionales</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Buscar otro adicional..."
-                    value={searchOtroDropdown}
-                    onChange={(e) => { setSearchOtroDropdown(e.target.value); setShowOtroDropdown(true) }}
-                    onFocus={() => setShowOtroDropdown(true)}
-                    onBlur={() => setTimeout(() => setShowOtroDropdown(false), 150)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a6b32] text-sm"
-                  />
-                  {showOtroDropdown && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                      {catalogoOtrosAdicionales
-                        .filter((o: any) => !searchOtroDropdown.trim() || o.nombre.toLowerCase().includes(searchOtroDropdown.toLowerCase()))
-                        .filter((o: any) => !otrosAdicionalesSeleccionados.includes(o.id))
-                        .map((o: any) => (
-                          <button
-                            key={o.id}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => { setOtrosAdicionalesSeleccionados(prev => [...prev, o.id]); setSearchOtroDropdown(''); setShowOtroDropdown(false) }}
-                            className="w-full px-3 py-2 text-left hover:bg-gray-100 text-sm"
-                          >
-                            {o.nombre}
-                          </button>
-                        ))}
-                      {catalogoOtrosAdicionales.filter((o: any) => !searchOtroDropdown.trim() || o.nombre.toLowerCase().includes(searchOtroDropdown.toLowerCase())).filter((o: any) => !otrosAdicionalesSeleccionados.includes(o.id)).length === 0 && (
-                        <p className="px-3 py-2 text-sm text-gray-400">Sin resultados</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {otrosAdicionalesSeleccionados.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {otrosAdicionalesSeleccionados.map(id => {
-                    const otro = catalogoOtrosAdicionales.find((o: any) => o.id === id)
-                    return otro ? (
-                      <span key={id} className="inline-flex items-center gap-1 px-3 py-1 bg-purple-50 border border-purple-200 rounded-full text-sm text-purple-800">
-                        {otro.nombre}
-                        <button type="button" onClick={() => setOtrosAdicionalesSeleccionados(prev => prev.filter(x => x !== id))} className="text-purple-600 hover:text-red-500 ml-1">
-                          <X size={14} />
-                        </button>
-                      </span>
-                    ) : null
-                  })}
-                </div>
-              )}
-            </div>
-
             {/* Resumen */}
-            {(procedimientosSeleccionados.length > 0 || adicionalesSeleccionados.length > 0 || otrosAdicionalesSeleccionados.length > 0) && (
+            {procedimientosSeleccionados.length > 0 && (
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-sm font-medium text-blue-800">
-                  Seleccionados: {procedimientosSeleccionados.length} procedimiento(s), {adicionalesSeleccionados.length} adicional(es), {otrosAdicionalesSeleccionados.length} otro(s) adicional(es)
+                  Seleccionados: {procedimientosSeleccionados.length} procedimiento(s)
                 </p>
                 <p className="text-xs text-blue-600 mt-1">
                   La cotización se creará automáticamente al guardar el plan.
@@ -2315,7 +2199,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
             ) : (
               <>
                 <span>📋</span>
-                {plan ? "Actualizar Plan Quirúrgico" : "Guardar Plan Quirúrgico"}
+                {plan ? "Actualizar Historia Clinica" : "Guardar Historia Clinica"}
               </>
             )}
           </button>

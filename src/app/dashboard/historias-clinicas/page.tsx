@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { Edit2, Eye, ArrowLeft, Upload, Search, X, Trash2, Loader2, Camera } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { HistoriaForm } from "../../../components/HistoriaForm"
@@ -10,10 +11,12 @@ import type { HistoriaClinica } from "../../../types/historia-clinica"
 import type { paciente } from "../../../types/paciente"
 
 export default function HistoriaClinicaPage() {
+  const searchParams = useSearchParams()
+  const pacienteIdFromQuery = searchParams.get("pacienteId")
   const [historias, setHistorias] = useState<HistoriaClinica[]>([])
   const [pacientes, setpacientes] = useState<paciente[]>([])
   const [filteredPacientes, setFilteredPacientes] = useState<paciente[]>([])
-  const [selectedpacienteId, setSelectedpacienteId] = useState<string>("")
+  const [selectedpacienteId, setSelectedpacienteId] = useState<string>(pacienteIdFromQuery || "")
   const [selectedHistoria, setSelectedHistoria] = useState<HistoriaClinica | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)

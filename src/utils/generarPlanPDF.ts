@@ -505,12 +505,12 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
   doc.line(fx2, y + 14, fx2 + fw, y + 14)
 
   doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); st(doc, NEGRO)
-  doc.text("Firma del Médico Responsable", fx1 + fw/2, y + 18, { align: "center" })
-  doc.text("Firma del Paciente",           fx2 + fw/2, y + 18, { align: "center" })
+  doc.text("Firma del Paciente",           fx1 + fw/2, y + 18, { align: "center" })
+  doc.text("Firma del Médico Responsable", fx2 + fw/2, y + 18, { align: "center" })
 
   doc.setFont("helvetica", "normal"); doc.setFontSize(7); st(doc, GRIS_TXT)
-  doc.text("CMP / Reg. Médico: _______________", fx1 + fw/2, y + 23, { align: "center" })
-  doc.text("C.C.: ___________________________",  fx2 + fw/2, y + 23, { align: "center" })
+  doc.text("C.C.: ___________________________",  fx1 + fw/2, y + 23, { align: "center" })
+  doc.text("CMP / Reg. Médico: _______________", fx2 + fw/2, y + 23, { align: "center" })
 
   // ── Descargar ───────────────────────────────────────────────────────────
   const nombre = dp.nombre_completo

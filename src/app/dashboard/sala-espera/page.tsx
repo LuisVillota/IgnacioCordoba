@@ -1,8 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Clock, AlertCircle, CheckCircle2, Save, UserCheck, UserX, User, Calendar, RefreshCw, Search } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Clock, AlertCircle, CheckCircle2, Save, UserCheck, UserX, User, Calendar, RefreshCw, Search, Eye, FileText, Printer, Camera, X as XIcon, Edit2 } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
+import { useAuth } from "../../../hooks/useAuth"
 import { api, handleApiError } from "@/lib/api"
 import { toast } from "sonner"
 
@@ -37,6 +39,8 @@ interface EstadisticasSalaEspera {
 }
 
 export default function SalaEsperaPage() {
+  const router = useRouter()
+  const { user } = useAuth()
   const [pacientes, setpacientes] = useState<pacienteSalaEspera[]>([])
   const [estadisticas, setEstadisticas] = useState<EstadisticasSalaEspera>({
     total: 0,
@@ -57,6 +61,56 @@ export default function SalaEsperaPage() {
   const [cambiosPendientes, setCambiosPendientes] = useState<Record<string, {estado: string, cita_id?: string}>>({})
   const [mostrarTodos, setMostrarTodos] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+
+  // Modal de ver plan quirúrgico
+  const [showPlanModal, setShowPlanModal] = useState(false)
+  const [planParaVer, setPlanParaVer] = useState<any>(null)
+  const [esquemaUrlModal, setEsquemaUrlModal] = useState('')
+  const [loadingPlan, setLoadingPlan] = useState(false)
+
+  const abrirPlanPaciente = async (paciente: pacienteSalaEspera) => {
+    setLoadingPlan(true)
+    try {
+      const res = await api.getPlanesQuirurgicos(100, 0)
+      const planes = Array.isArray(res) ? res : (res?.planes || res?.data || [])
+      const planExistente = planes.find((p: any) => {
+        const planPacId = String(p.paciente_id || p.id_paciente || p.datos_paciente?.id || '')
+        return planPacId === String(paciente.id)
+      })
+
+      if (planExistente) {
+        setPlanParaVer(planExistente)
+        setShowPlanModal(true)
+        setEsquemaUrlModal('')
+
+        // Buscar esquema en HC
+        const pacId = planExistente.id_paciente || planExistente.datos_paciente?.id
+        if (pacId) {
+          try {
+            const historias = await api.getHistoriasBypaciente(parseInt(pacId))
+            let historiasArray: any[] = []
+            if (Array.isArray(historias)) historiasArray = historias
+            else if (historias?.historias) historiasArray = historias.historias
+            else if (historias?.data) historiasArray = historias.data
+            if (historiasArray.length > 0) {
+              const hcReciente = historiasArray[historiasArray.length - 1]
+              const fotosStr = hcReciente.fotos ? String(hcReciente.fotos) : ''
+              const fotos = fotosStr.split(',').filter((f: string) => f.trim())
+              const esquemas = fotos.filter((f: string) => f.includes('esquema_'))
+              if (esquemas.length > 0) setEsquemaUrlModal(esquemas[esquemas.length - 1])
+            }
+          } catch { /* ignore */ }
+        }
+      } else {
+        // No tiene plan: crear nuevo
+        router.push(`/dashboard/plan-quirurgico?pacienteId=${paciente.id}&nombre=${encodeURIComponent(paciente.nombres + ' ' + paciente.apellidos)}&cedula=${encodeURIComponent(paciente.documento)}`)
+      }
+    } catch {
+      router.push(`/dashboard/plan-quirurgico?pacienteId=${paciente.id}&nombre=${encodeURIComponent(paciente.nombres + ' ' + paciente.apellidos)}&cedula=${encodeURIComponent(paciente.documento)}`)
+    } finally {
+      setLoadingPlan(false)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -658,7 +712,14 @@ export default function SalaEsperaPage() {
                     {getEstadoIcon(paciente.estado_sala)}
                     <div className="flex-1">
                       <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-2">
-                        <p className="font-semibold text-gray-800 text-lg">
+                        <p
+                          className={`font-semibold text-gray-800 text-lg ${user?.rol === 'doctor' ? 'cursor-pointer hover:text-[#1a6b32] hover:underline' : ''}`}
+                          onClick={() => {
+                            if (user?.rol === 'doctor') {
+                              abrirPlanPaciente(paciente)
+                            }
+                          }}
+                        >
                           {paciente.nombres} {paciente.apellidos}
                         </p>
                         {paciente.tiene_cita_hoy && (
@@ -734,6 +795,152 @@ export default function SalaEsperaPage() {
           )}
         </div>
       </div>
+
+      {/* Loading overlay al buscar plan */}
+      {loadingPlan && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl p-8 text-center shadow-xl">
+            <div className="w-10 h-10 border-4 border-gray-200 border-t-[#1a6b32] rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-700 font-medium">Buscando historia clínica...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de ver plan quirúrgico */}
+      {showPlanModal && planParaVer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl my-8">
+            {/* Header */}
+            <div className="p-6 border-b bg-[#1a6b32] text-white rounded-t-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold mb-1">Historia Clínica</h2>
+                  <p className="text-green-100">
+                    {planParaVer.datos_paciente?.nombre_completo || planParaVer.nombre || 'Paciente'}
+                  </p>
+                  <p className="text-sm text-green-100">
+                    Documento: {planParaVer.datos_paciente?.identificacion || planParaVer.identificacion || '—'}
+                  </p>
+                </div>
+                <button onClick={() => { setShowPlanModal(false); setPlanParaVer(null); setEsquemaUrlModal('') }} className="text-white hover:text-gray-200 text-2xl font-bold">
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Contenido */}
+            <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto">
+              {/* Datos del paciente */}
+              <section className="mb-6 p-4 bg-gray-50 rounded-lg border">
+                <h3 className="text-lg font-bold text-[#1a6b32] mb-3 flex items-center gap-2">
+                  <User className="w-5 h-5" />
+                  Datos del Paciente
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">Nombre</label>
+                    <p className="text-gray-800">{planParaVer.datos_paciente?.nombre_completo || '—'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">Identificación</label>
+                    <p className="text-gray-800">{planParaVer.datos_paciente?.identificacion || '—'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600">Fecha Consulta</label>
+                    <p className="text-gray-800">{planParaVer.datos_paciente?.fecha_consulta || '—'}</p>
+                  </div>
+                  {planParaVer.datos_paciente?.peso && (
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Peso</label>
+                      <p className="text-gray-800">{planParaVer.datos_paciente.peso} kg</p>
+                    </div>
+                  )}
+                  {planParaVer.datos_paciente?.altura && (
+                    <div>
+                      <label className="text-sm font-semibold text-gray-600">Altura</label>
+                      <p className="text-gray-800">{planParaVer.datos_paciente.altura} m</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Historia Clínica */}
+              {planParaVer.historia_clinica && (
+                <section className="mb-6 p-4 bg-gray-50 rounded-lg border">
+                  <h3 className="text-lg font-bold text-[#1a6b32] mb-3 flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Historia Clínica
+                  </h3>
+                  <div className="space-y-3">
+                    {planParaVer.historia_clinica.motivo_consulta && (
+                      <div>
+                        <label className="text-sm font-semibold text-gray-600">Motivo de Consulta</label>
+                        <p className="text-gray-800 whitespace-pre-wrap bg-white p-2 rounded border text-sm">{planParaVer.historia_clinica.motivo_consulta}</p>
+                      </div>
+                    )}
+                    {planParaVer.historia_clinica.diagnostico && (
+                      <div>
+                        <label className="text-sm font-semibold text-gray-600">Diagnóstico</label>
+                        <p className="text-gray-800 whitespace-pre-wrap bg-white p-2 rounded border text-sm">{planParaVer.historia_clinica.diagnostico}</p>
+                      </div>
+                    )}
+                    {planParaVer.historia_clinica.plan_conducta && (
+                      <div>
+                        <label className="text-sm font-semibold text-gray-600">Plan de Conducta</label>
+                        <p className="text-gray-800 whitespace-pre-wrap bg-white p-2 rounded border text-sm">{planParaVer.historia_clinica.plan_conducta}</p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* Esquema */}
+              <section className="mb-6 p-4 bg-gray-50 rounded-lg border">
+                <h3 className="text-lg font-bold text-[#1a6b32] mb-3">Esquema Quirúrgico</h3>
+                {esquemaUrlModal ? (
+                  <div className="bg-white p-3 rounded border text-center">
+                    <img src={esquemaUrlModal} alt="Esquema quirúrgico" className="max-w-full max-h-[400px] object-contain mx-auto rounded border" />
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">No se encontró imagen de esquema</p>
+                )}
+              </section>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t flex flex-wrap justify-end gap-3 bg-gray-50 rounded-b-lg">
+              <button
+                onClick={() => {
+                  const pacId = planParaVer.id_paciente || planParaVer.datos_paciente?.id
+                  setShowPlanModal(false)
+                  router.push(`/dashboard/historias-clinicas?pacienteId=${pacId}`)
+                }}
+                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-2 text-sm"
+              >
+                <Camera className="w-4 h-4" />
+                Agregar Fotos
+              </button>
+              <button
+                onClick={() => {
+                  setShowPlanModal(false)
+                  const planId = String(planParaVer.id).replace('plan_', '')
+                  router.push(`/dashboard/plan-quirurgico?verPlan=${planId}`)
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-sm"
+              >
+                <Eye className="w-4 h-4" />
+                Ver Completo
+              </button>
+              <button
+                onClick={() => { setShowPlanModal(false); setPlanParaVer(null); setEsquemaUrlModal('') }}
+                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 text-sm"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </ProtectedRoute>
   )
 }

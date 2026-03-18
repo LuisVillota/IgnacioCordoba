@@ -82,7 +82,7 @@ export default function DashboardLayout({
     if (pathname.includes('/usuarios')) return "Usuarios"
     if (pathname.includes('/procedimientos')) return "Procedimientos"
     if (pathname.includes('/programacion-quirurgica')) return "Programación Quirúrgica"
-    if (pathname.includes('/plan-quirurgico')) return "Plan Quirúrgico"
+    if (pathname.includes('/plan-quirurgico')) return "Historia Clínica"
     if (pathname.includes('/ordenes-examenes')) return "Órdenes de Exámenes"
     return "Dashboard"
   }
