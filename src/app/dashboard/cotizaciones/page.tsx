@@ -30,6 +30,8 @@ export default function CotizacionesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 100
 
   useEffect(() => {
     fetchData()
@@ -286,10 +288,38 @@ export default function CotizacionesPage() {
                   <input
                     type="text"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1) }}
                     placeholder="Buscar por paciente, documento o número..."
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a6b32]/30 focus:border-[#1a6b32]"
                   />
+                </div>
+              </div>
+            )}
+
+            {/* Paginación superior */}
+            {filteredCotizaciones.length > ITEMS_PER_PAGE && (
+              <div className="mb-4 flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg">
+                <span className="text-sm text-gray-600">
+                  Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredCotizaciones.length)} de {filteredCotizaciones.length} cotizaciones
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-sm font-medium text-gray-700">
+                    Página {currentPage} de {Math.ceil(filteredCotizaciones.length / ITEMS_PER_PAGE)}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredCotizaciones.length / ITEMS_PER_PAGE), p + 1))}
+                    disabled={currentPage >= Math.ceil(filteredCotizaciones.length / ITEMS_PER_PAGE)}
+                    className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Siguiente
+                  </button>
                 </div>
               </div>
             )}
@@ -322,7 +352,7 @@ export default function CotizacionesPage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredCotizaciones.map((cot) => (
+                      filteredCotizaciones.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((cot) => (
                         <tr key={cot.id} className="hover:bg-gray-50 transition">
                           <td className="px-6 py-4 text-sm">
                             <p className="font-medium text-gray-800">
@@ -401,7 +431,7 @@ export default function CotizacionesPage() {
             {!loading && !refreshing && filteredCotizaciones.length > 0 && (
               <div className="mt-4 flex justify-between items-center text-sm text-gray-600">
                 <span>
-                  Mostrando {filteredCotizaciones.length} de {cotizaciones.length} cotizaciones
+                  Mostrando {Math.min(((currentPage - 1) * ITEMS_PER_PAGE) + 1, filteredCotizaciones.length)} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredCotizaciones.length)} de {filteredCotizaciones.length} cotizaciones
                 </span>
                 <button
                   onClick={refreshData}
@@ -411,6 +441,34 @@ export default function CotizacionesPage() {
                   <Loader2 size={14} className={refreshing ? "animate-spin" : ""} />
                   {refreshing ? "Refrescando..." : "Refrescar datos"}
                 </button>
+              </div>
+            )}
+
+            {/* Paginación */}
+            {!loading && !refreshing && filteredCotizaciones.length > ITEMS_PER_PAGE && (
+              <div className="mt-4 flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg">
+                <span className="text-sm text-gray-600">
+                  Página {currentPage} de {Math.ceil(filteredCotizaciones.length / ITEMS_PER_PAGE)}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-sm font-medium text-gray-700">
+                    {currentPage} / {Math.ceil(filteredCotizaciones.length / ITEMS_PER_PAGE)}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredCotizaciones.length / ITEMS_PER_PAGE), p + 1))}
+                    disabled={currentPage >= Math.ceil(filteredCotizaciones.length / ITEMS_PER_PAGE)}
+                    className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Siguiente
+                  </button>
+                </div>
               </div>
             )}
           </>

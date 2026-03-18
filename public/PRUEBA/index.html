@@ -817,10 +817,13 @@
         <p class="subtitle">Sistema de planificación quirúrgica profesional</p>
       </div>
       <div class="logo-container">
-        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQceqGrv0esgBkN1C8B_p7qsRJaV-zVHVk0sw&s" 
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQceqGrv0esgBkN1C8B_p7qsRJaV-zVHVk0sw&s"
              alt="Logo del Consultorio" class="logo-img">
         <div class="clinic-name">CONSULTORIO MÉDICO</div>
       </div>
+      <button id="btnGuardarEsquema" style="display:none; background:#1a6b32; color:white; border:none; padding:10px 24px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px; margin-left:10px;">
+        Guardar Esquema
+      </button>
     </div>
 
     <!-- Contenido principal compacto -->
@@ -833,7 +836,7 @@
           <div class="body-head-container">
             <!-- Esquema Corporal -->
             <div class="schema-section">
-              <h3>Esquema Corporal Femenino</h3>
+              <h3>Esquema Corporal</h3>
               <div class="svg-container">
                 <object id="body-schema" data="schema.svg" type="image/svg+xml" width="700" height="850">
                   Tu navegador no soporta SVG
@@ -1072,10 +1075,12 @@ function simpleBackupExport() {
 
     function returnToForm() {
       if (window.parent !== window) {
-        window.parent.postMessage({ 
+        window.parent.postMessage({
           type: 'CLOSE_ESQUEMA_VIEWER',
           source: 'esquema-editor'
         }, '*');
+      } else {
+        window.close();
       }
     }
 
@@ -2057,6 +2062,148 @@ function simpleBackupExport() {
       initializeSchema('body-schema', onSchemaReady);
       initializeSchema('facial-schema', onSchemaReady);
     });
+  </script>
+
+  <!-- Script separado: botón guardar esquema (usa XMLSerializer, NO toca el DOM) -->
+  <script>
+  (function() {
+    var params = new URLSearchParams(window.location.search);
+    var pacienteId = params.get('pacienteId');
+    var cedula = params.get('cedula');
+
+    var btn = document.getElementById('btnGuardarEsquema');
+    if (!btn) return;
+
+    btn.style.display = 'inline-block';
+
+    function svgToImage(svgEl, width, height, svgString) {
+      return new Promise(function(resolve, reject) {
+        // Si no se pasó el string, leerlo del elemento (pero preferimos recibir el string)
+        if (!svgString) {
+          svgString = svgEl.outerHTML;
+        }
+        // Asegurar xmlns
+        if (svgString.indexOf('xmlns=') === -1) {
+          svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+        // Asegurar dimensiones
+        svgString = svgString.replace(/<svg([^>]*)>/, function(match, attrs) {
+          var newAttrs = attrs.replace(/width="[^"]*"/g, '').replace(/height="[^"]*"/g, '');
+          return '<svg' + newAttrs + ' width="' + width + '" height="' + height + '">';
+        });
+        var dataUri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+        var img = new Image();
+        img.onload = function() {
+          resolve(img);
+        };
+        img.onerror = function(e) {
+          reject(new Error('No se pudo cargar el SVG como imagen'));
+        };
+        img.src = dataUri;
+      });
+    }
+
+    // Escuchar postMessage del padre para disparar guardado
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'SAVE_ESQUEMA') {
+        btn.click();
+      }
+    });
+
+    btn.addEventListener('click', function() {
+      btn.textContent = 'Guardando...';
+      btn.disabled = true;
+
+      var objects = document.querySelectorAll('object[type="image/svg+xml"]');
+      var svgData = [];
+
+      objects.forEach(function(obj) {
+        try {
+          var svgDoc = obj.contentDocument;
+          if (!svgDoc || !svgDoc.documentElement || svgDoc.documentElement.tagName !== 'svg') return;
+          var w = parseInt(obj.getAttribute('width') || '800');
+          var h = parseInt(obj.getAttribute('height') || '1000');
+          var svgString = svgDoc.documentElement.outerHTML;
+          svgData.push({ svgString: svgString, width: w, height: h });
+        } catch (e) { console.warn('SVG read error:', e); }
+      });
+
+      if (svgData.length === 0) {
+        btn.textContent = 'Guardar Esquema';
+        btn.disabled = false;
+        return;
+      }
+
+      var svgPromises = svgData.map(function(item) {
+        return svgToImage(null, item.width, item.height, item.svgString).then(function(img) {
+          return { img: img, width: item.width, height: item.height };
+        });
+      });
+
+      Promise.all(svgPromises).then(function(images) {
+        var totalWidth = 0;
+        var maxHeight = 0;
+        images.forEach(function(item) {
+          totalWidth += item.width;
+          if (item.height > maxHeight) maxHeight = item.height;
+        });
+
+        var scale = 2;
+        var canvas = document.createElement('canvas');
+        canvas.width = totalWidth * scale;
+        canvas.height = maxHeight * scale;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        var x = 0;
+        images.forEach(function(item) {
+          ctx.drawImage(item.img, x * scale, 0, item.width * scale, item.height * scale);
+          x += item.width;
+        });
+
+        var dataUrl = canvas.toDataURL('image/png', 1.0);
+        var ced = cedula || pacienteId || 'sin_paciente';
+        var fileName = 'esquema_' + ced + '.png';
+
+        // Descargar
+        var link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = fileName;
+        link.click();
+
+        // Enviar al padre para subir a HC
+        if (window.parent !== window) {
+          window.parent.postMessage({
+            type: 'ESQUEMA_SVG_DATA',
+            dataUrl: dataUrl,
+            fileName: fileName,
+            pacienteId: pacienteId,
+            cedula: cedula
+          }, '*');
+        }
+
+        btn.textContent = 'Guardar Esquema';
+        btn.disabled = false;
+
+        // RE-INICIALIZAR los esquemas para restaurar event listeners
+        setTimeout(function() {
+          initializeSchema('body-schema', function() { console.log('body-schema re-inicializado'); });
+          initializeSchema('facial-schema', function() { console.log('facial-schema re-inicializado'); });
+        }, 500);
+
+      }).catch(function(err) {
+        console.warn('Error al capturar:', err);
+        btn.textContent = 'Guardar Esquema';
+        btn.disabled = false;
+        // Re-inicializar incluso si falla
+        setTimeout(function() {
+          initializeSchema('body-schema', function() {});
+          initializeSchema('facial-schema', function() {});
+        }, 500);
+      });
+    });
+  })();
   </script>
 </body>
 </html>

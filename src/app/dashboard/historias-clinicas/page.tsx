@@ -21,6 +21,8 @@ export default function HistoriaClinicaPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [deletingHcId, setDeletingHcId] = useState<number | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 100
 
   const isSavingRef = useRef(false)
 
@@ -172,7 +174,7 @@ export default function HistoriaClinicaPage() {
         <div className="p-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Archivo de Pacientes</h1>
-            <p className="text-gray-600 mt-2">Selecciona un paciente para ver su historia</p>
+            <p className="text-gray-600 mt-2">Selecciona un paciente para ver su registro fotografico</p>
           </div>
 
           {error && (
@@ -208,7 +210,7 @@ export default function HistoriaClinicaPage() {
                   <input
                     type="text"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1) }}
                     placeholder="Buscar por nombre, apellido o documento..."
                     className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a6b32] focus:border-transparent outline-none transition"
                   />
@@ -249,28 +251,86 @@ export default function HistoriaClinicaPage() {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredPacientes.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setSelectedpacienteId(p.id)}
-                      className="p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-[#1a6b32] transition text-left group"
-                      type="button"
-                    >
-                      <p className="font-semibold text-gray-800 group-hover:text-[#1a6b32] transition">
-                        {p.nombres} {p.apellidos}
-                      </p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {p.tipo_documento}: {p.documento}
-                      </p>
-                      <div className="flex justify-between items-center mt-2">
-                        <p className="text-xs text-gray-500">{p.ciudad}</p>
-                        <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 group-hover:bg-[#1a6b32] group-hover:text-white transition">
-                          {p.estado_paciente}
+                <div>
+                  {/* Paginación superior */}
+                  {filteredPacientes.length > ITEMS_PER_PAGE && (
+                    <div className="mb-4 flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg">
+                      <span className="text-sm text-gray-600">
+                        Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredPacientes.length)} de {filteredPacientes.length} pacientes
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Anterior
+                        </button>
+                        <span className="text-sm font-medium text-gray-700">
+                          Página {currentPage} de {Math.ceil(filteredPacientes.length / ITEMS_PER_PAGE)}
                         </span>
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredPacientes.length / ITEMS_PER_PAGE), p + 1))}
+                          disabled={currentPage >= Math.ceil(filteredPacientes.length / ITEMS_PER_PAGE)}
+                          className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Siguiente
+                        </button>
                       </div>
-                    </button>
-                  ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredPacientes.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => setSelectedpacienteId(p.id)}
+                        className="p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-[#1a6b32] transition text-left group"
+                        type="button"
+                      >
+                        <p className="font-semibold text-gray-800 group-hover:text-[#1a6b32] transition">
+                          {p.nombres} {p.apellidos}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {p.tipo_documento}: {p.documento}
+                        </p>
+                        <div className="flex justify-between items-center mt-2">
+                          <p className="text-xs text-gray-500">{p.ciudad}</p>
+                          <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 group-hover:bg-[#1a6b32] group-hover:text-white transition">
+                            {p.estado_paciente}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Paginación */}
+                  {filteredPacientes.length > ITEMS_PER_PAGE && (
+                    <div className="mt-4 flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg">
+                      <span className="text-sm text-gray-600">
+                        Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredPacientes.length)} de {filteredPacientes.length} pacientes
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Anterior
+                        </button>
+                        <span className="text-sm font-medium text-gray-700">
+                          Página {currentPage} de {Math.ceil(filteredPacientes.length / ITEMS_PER_PAGE)}
+                        </span>
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredPacientes.length / ITEMS_PER_PAGE), p + 1))}
+                          disabled={currentPage >= Math.ceil(filteredPacientes.length / ITEMS_PER_PAGE)}
+                          className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Siguiente
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

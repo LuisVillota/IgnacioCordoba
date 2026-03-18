@@ -50,6 +50,8 @@ export default function pacientesPage() {
   const [selectedpaciente, setSelectedpaciente] = useState<paciente | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 100
 
   useEffect(() => {
     fetchpacientes()
@@ -215,7 +217,7 @@ export default function pacientesPage() {
             type="text"
             placeholder="Buscar por nombre, apellido o documento..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1) }}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8]"
             disabled={loading}
           />
@@ -230,7 +232,36 @@ export default function pacientesPage() {
       )}
 
       {!loading && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div>
+          {/* Paginación superior */}
+          {filteredpacientes.length > ITEMS_PER_PAGE && (
+            <div className="mb-4 flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg">
+              <span className="text-sm text-gray-600">
+                Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredpacientes.length)} de {filteredpacientes.length} pacientes
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </button>
+                <span className="text-sm font-medium text-gray-700">
+                  Página {currentPage} de {Math.ceil(filteredpacientes.length / ITEMS_PER_PAGE)}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredpacientes.length / ITEMS_PER_PAGE), p + 1))}
+                  disabled={currentPage >= Math.ceil(filteredpacientes.length / ITEMS_PER_PAGE)}
+                  className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -252,7 +283,7 @@ export default function pacientesPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredpacientes.map((paciente) => (
+                  filteredpacientes.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((paciente) => (
                     <tr key={paciente.id} className="hover:bg-gray-50 transition">
                       <td className="px-6 py-4 text-sm">
                         <p className="font-medium text-gray-800">
@@ -304,6 +335,35 @@ export default function pacientesPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Paginación inferior */}
+          {filteredpacientes.length > ITEMS_PER_PAGE && (
+            <div className="mt-4 flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg">
+              <span className="text-sm text-gray-600">
+                Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredpacientes.length)} de {filteredpacientes.length} pacientes
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </button>
+                <span className="text-sm font-medium text-gray-700">
+                  Página {currentPage} de {Math.ceil(filteredpacientes.length / ITEMS_PER_PAGE)}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredpacientes.length / ITEMS_PER_PAGE), p + 1))}
+                  disabled={currentPage >= Math.ceil(filteredpacientes.length / ITEMS_PER_PAGE)}
+                  className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         </div>
       )}
 

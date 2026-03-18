@@ -100,34 +100,28 @@ const sd = (d: jsPDF, c: [number,number,number]) => d.setDrawColor(c[0], c[1], c
 const st = (d: jsPDF, c: [number,number,number]) => d.setTextColor(c[0], c[1], c[2])
 
 function drawHeader(doc: jsPDF, page: number, logoBase64?: string) {
-  sf(doc, VERDE); doc.rect(0, 0, PAGE_W, 22, "F")
+  // Logo grande centrado (imagen original 314x160 → ratio 1.96:1)
+  const logoW = 90, logoH = 46
+  const logoAreaH = 49
 
-  // Logo real o placeholder
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, 'JPEG', MARGIN, 2, 36, 18)
+      doc.addImage(logoBase64, 'JPEG', PAGE_W / 2 - logoW / 2, 1, logoW, logoH)
     } catch {
-      sf(doc, BLANCO); doc.roundedRect(MARGIN, 3, 22, 16, 2, 2, "F")
-      st(doc, VERDE); doc.setFont("helvetica", "bold"); doc.setFontSize(7)
-      doc.text("LOGO", MARGIN + 11, 12, { align: "center" })
+      // placeholder si falla
     }
-  } else {
-    sf(doc, BLANCO); doc.roundedRect(MARGIN, 3, 22, 16, 2, 2, "F")
-    st(doc, VERDE); doc.setFont("helvetica", "bold"); doc.setFontSize(7)
-    doc.text("LOGO", MARGIN + 11, 12, { align: "center" })
   }
 
-  // Título centro
-  st(doc, BLANCO); doc.setFont("helvetica", "bold"); doc.setFontSize(13)
-  doc.text("PLAN QUIRÚRGICO", PAGE_W / 2, 10, { align: "center" })
-  doc.setFont("helvetica", "normal"); doc.setFontSize(7)
-  doc.text("Historia Clínica · Cirugía Plástica", PAGE_W / 2, 16, { align: "center" })
+  // Barra verde debajo del logo
+  const barY = logoAreaH
+  const barH = 10
+  sf(doc, VERDE); doc.rect(0, barY, PAGE_W, barH, "F")
 
-  // Info derecha
-  doc.setFontSize(6.5)
-  doc.text("N° Registro: _______________", PAGE_W - MARGIN, 8,  { align: "right" })
-  doc.text("Fecha: _____________________", PAGE_W - MARGIN, 13, { align: "right" })
-  doc.text(`Página: ${page}`,              PAGE_W - MARGIN, 18, { align: "right" })
+  st(doc, BLANCO); doc.setFont("helvetica", "bold"); doc.setFontSize(10)
+  doc.text("PLAN QUIRÚRGICO — Historia Clínica · Cirugía Plástica", PAGE_W / 2, barY + 4.5, { align: "center" })
+
+  doc.setFont("helvetica", "normal"); doc.setFontSize(6.5)
+  doc.text(`N° Registro: _______________    Fecha: _______________    Página: ${page}`, PAGE_W / 2, barY + 8.5, { align: "center" })
 }
 
 function drawFooter(doc: jsPDF) {
@@ -211,7 +205,7 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
 
   const doc  = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" })
   let page   = 1
-  let y      = 25
+  let y      = 62
 
   drawHeader(doc, page, logoBase64)
   drawFooter(doc)
@@ -221,7 +215,7 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
       doc.addPage(); page++
       drawHeader(doc, page, logoBase64)
       drawFooter(doc)
-      y = 25
+      y = 62
     }
   }
 
@@ -389,7 +383,7 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
   doc.addPage(); page++
   drawHeader(doc, page, logoBase64)
   drawFooter(doc)
-  y = 25
+  y = 62
 
   // Datos resumidos del paciente (compacto)
   y = sectionBar(doc, y, "PLAN QUIRÚRGICO")

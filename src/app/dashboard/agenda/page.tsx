@@ -561,11 +561,8 @@ function DiaCitasModal({
                       borderBottomStyle: intervalo.esHoraCompleta ? 'solid' : 'dashed'
                     }}
                   >
-                    <div className="text-xs text-gray-600">
-                      {intervalo.esHoraCompleta ? formatHoraDisplay(intervalo.hora) : ''}
-                      {!intervalo.esHoraCompleta && intervalo.esMediaHora && (
-                        <span className="text-gray-400">•</span>
-                      )}
+                    <div className={`text-xs ${intervalo.esHoraCompleta ? 'text-gray-700 font-semibold' : 'text-gray-400'}`}>
+                      {formatHoraDisplay(intervalo.hora)}
                     </div>
                   </div>
                 ))}

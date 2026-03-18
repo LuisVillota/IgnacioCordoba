@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react"
 import { PlanQuirurgico } from "../types/planQuirurgico"
 import { Search, Upload, X, Eye, Download, FileText } from "lucide-react"
 import { api } from "../lib/api"
-import { EsquemaViewer } from "../components/EsquemaViewer"
+// EsquemaViewer ya no se usa - se abre en pestaña nueva
 import { generarPlanPDF } from "../utils/generarPlanPDF"
 
 type ProcedureType = 'liposuction' | 'lipotransfer';
@@ -40,8 +40,10 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
   // ---------------------------
   // Estado para el visor de esquemas
   // ---------------------------
-  const [showEsquemaViewer, setShowEsquemaViewer] = useState(false)
   const [esquemaCapturado, setEsquemaCapturado] = useState<File | null>(null)
+  const [showEditor, setShowEditor] = useState(false)
+  const [editorKey, setEditorKey] = useState(0)
+  const editorIframeRef = useRef<HTMLIFrameElement>(null)
 
   // (cotización se crea automáticamente desde la selección de procedimientos)
 
@@ -95,6 +97,39 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
     fecha_consulta: plan?.datos_paciente?.fecha_consulta ?? "",
     hora_consulta: plan?.datos_paciente?.hora_consulta ?? "",
   })
+
+  // Escuchar datos del iframe para subir a HC
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data?.type !== 'ESQUEMA_SVG_DATA') return
+      const { dataUrl, fileName } = event.data
+      console.log("📸 Esquema recibido para HC:", fileName)
+
+      if (datospaciente.id) {
+        try {
+          const res = await fetch(dataUrl)
+          const blob = await res.blob()
+          const file = new File([blob], fileName, { type: 'image/png' })
+          const historias = await api.getHistoriasBypaciente(parseInt(datospaciente.id))
+          const historiasArray: any[] = Array.isArray(historias) ? historias : (historias?.historias || historias?.data || [])
+          if (historiasArray.length > 0) {
+            const hc = historiasArray[historiasArray.length - 1]
+            const uploadResult = await api.uploadHistoriaFoto(parseInt(hc.id), file)
+            if (uploadResult.url) {
+              const fotos = hc.fotos ? String(hc.fotos).split(',').filter((f: string) => f.trim()) : []
+              fotos.push(uploadResult.url)
+              await api.updateHistoriaClinica(parseInt(hc.id), { paciente_id: parseInt(datospaciente.id), fotos: fotos.join(',') })
+            }
+          }
+          console.log("✅ Esquema subido a HC exitosamente")
+        } catch (err) {
+          console.warn("Error subiendo esquema a HC:", err)
+        }
+      }
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [datospaciente.id])
 
   // ---------------------------
   // Historia clínica
@@ -2010,44 +2045,48 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
 
       {/* EDITOR DE ESQUEMAS */}
       <section className="p-4 border rounded bg-white">
-        <div className="flex justify-between items-center">
-          <h3 className="font-bold text-lg text-[#1a6b32] mb-3">Editor de Esquemas</h3>
-          <button
-            onClick={() => setShowEsquemaViewer(true)}
-            className="px-6 py-2 bg-[#1a6b32] text-white rounded-lg hover:bg-[#155427] flex items-center gap-2"
-          >
-            Abrir Editor de Esquemas
-          </button>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-bold text-lg text-[#1a6b32]">Editor de Esquemas</h3>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setShowEditor(!showEditor)
+              }}
+              className={`px-6 py-2 rounded-lg flex items-center gap-2 ${
+                showEditor
+                  ? 'bg-red-500 text-white hover:bg-red-600'
+                  : 'bg-[#1a6b32] text-white hover:bg-[#155427]'
+              }`}
+            >
+              {showEditor ? 'Cerrar Editor' : 'Abrir Editor de Esquemas'}
+            </button>
+          </div>
         </div>
-        <p className="text-sm text-gray-600">
-          Abre el editor interactivo para marcar zonas de liposucción, lipotransferencia, agregar texto y dibujos libres.
-          Dentro del editor usa "Guardar Esquema" para capturar la imagen. Se adjuntará a la Historia Clínica al guardar el plan.
-        </p>
+        {!showEditor && (
+          <p className="text-sm text-gray-600">
+            Abre el editor interactivo para marcar zonas de liposucción, lipotransferencia, agregar texto y dibujos libres.
+          </p>
+        )}
         {esquemaCapturado && (
-          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+          <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-green-600 text-lg">&#10003;</span>
-              <span className="text-sm text-green-800 font-medium">
-                Esquema capturado: {esquemaCapturado.name}
-              </span>
+              <span className="text-sm text-green-800 font-medium">Esquema capturado: {esquemaCapturado.name}</span>
             </div>
             <button onClick={() => setEsquemaCapturado(null)} className="text-red-500 hover:text-red-700 text-sm">Quitar</button>
           </div>
         )}
+        {showEditor && (
+          <div className="mt-3 border rounded-lg" style={{ height: '750px' }}>
+            <iframe
+              ref={editorIframeRef}
+              src={`/PRUEBA/index.html?pacienteId=${datospaciente.id || ''}&cedula=${datospaciente.identificacion || ''}`}
+              style={{ width: '100%', height: '100%', border: 'none' }}
+              title="Editor de Esquemas Corporales"
+            />
+          </div>
+        )}
       </section>
-
-      {showEsquemaViewer && (
-        <EsquemaViewer
-          onClose={() => setShowEsquemaViewer(false)}
-          planId={plan?.id}
-          pacienteId={datospaciente.id}
-          pacienteCedula={datospaciente.identificacion}
-          onEsquemaCapturado={(file) => {
-            setEsquemaCapturado(file)
-            setShowEsquemaViewer(false)
-          }}
-        />
-      )}
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* PROCEDIMIENTOS, ADICIONALES Y OTROS ADICIONALES                    */}

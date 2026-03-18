@@ -32,6 +32,8 @@ export default function ProcedimientosPage() {
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<ItemBase | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 100
 
   const dataMap = {
     procedimientos: [procedimientos, setProcedimientos],
@@ -288,6 +290,7 @@ export default function ProcedimientosPage() {
     setSelected(null)
     setShowForm(false)
     setEditingId(null)
+    setCurrentPage(1)
   }
 
   return (
@@ -374,6 +377,34 @@ export default function ProcedimientosPage() {
 
         {!loading && !refreshing && !error && (
           <>
+            {/* Paginación superior */}
+            {data.length > ITEMS_PER_PAGE && (
+              <div className="mb-4 flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg">
+                <span className="text-sm text-gray-600">
+                  Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, data.length)} de {data.length} {tab}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-sm font-medium text-gray-700">
+                    Página {currentPage} de {Math.ceil(data.length / ITEMS_PER_PAGE)}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(data.length / ITEMS_PER_PAGE), p + 1))}
+                    disabled={currentPage >= Math.ceil(data.length / ITEMS_PER_PAGE)}
+                    className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white border rounded-lg overflow-hidden">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -398,7 +429,7 @@ export default function ProcedimientosPage() {
                       </td>
                     </tr>
                   ) : (
-                    data.map((item, index) => (
+                    data.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((item, index) => (
                       <tr 
                         key={item.id} 
                         className={`border-t hover:bg-gray-50 transition-colors ${
@@ -406,7 +437,7 @@ export default function ProcedimientosPage() {
                         }`}
                         onClick={() => setSelected(item)}
                       >
-                        <td className="px-6 py-4">{index + 1}</td>
+                        <td className="px-6 py-4">{(currentPage - 1) * ITEMS_PER_PAGE + index + 1}</td>
                         <td className="px-6 py-4 font-medium">{item.nombre}</td>
                         <td className="px-6 py-4 text-right">
                           {item.precio === 0 ? "Incluido" : `$${item.precio.toLocaleString("es-CO")}`}
@@ -446,7 +477,7 @@ export default function ProcedimientosPage() {
 
             <div className="mt-4 flex justify-between items-center text-sm text-gray-600">
               <span>
-                Mostrando {data.length} {tab}
+                Mostrando {Math.min(((currentPage - 1) * ITEMS_PER_PAGE) + 1, data.length)} - {Math.min(currentPage * ITEMS_PER_PAGE, data.length)} de {data.length} {tab}
               </span>
               <button
                 onClick={refreshData}
@@ -457,6 +488,34 @@ export default function ProcedimientosPage() {
                 {refreshing ? "Refrescando..." : "Refrescar datos"}
               </button>
             </div>
+
+            {/* Paginación */}
+            {data.length > ITEMS_PER_PAGE && (
+              <div className="mt-4 flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg">
+                <span className="text-sm text-gray-600">
+                  Página {currentPage} de {Math.ceil(data.length / ITEMS_PER_PAGE)}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-sm font-medium text-gray-700">
+                    {currentPage} / {Math.ceil(data.length / ITEMS_PER_PAGE)}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(data.length / ITEMS_PER_PAGE), p + 1))}
+                    disabled={currentPage >= Math.ceil(data.length / ITEMS_PER_PAGE)}
+                    className="px-3 py-1 text-sm rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
 
