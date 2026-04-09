@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(taskkill:*)",
+      "Bash(netstat:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:ignaciocordoba-backend.onrender.com)",
+      "Bash(npx tsc:*)",
+      "Bash(python3:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
