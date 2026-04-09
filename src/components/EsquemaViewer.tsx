@@ -155,7 +155,7 @@ export const EsquemaViewer: React.FC<EsquemaViewerProps> = ({ onClose, planId, p
             onClick={onClose}
             className="px-4 py-2 bg-white text-[#1a6b32] rounded-lg hover:bg-gray-100 flex items-center gap-2"
           >
-            ← Volver al Plan Quirúrgico
+            ← Volver al Historia Clinica
           </button>
           <h1 className="text-xl font-bold">
             {planId ? `Editor de Esquemas - Plan ${planId}` : "Editor de Esquemas Corporales"}

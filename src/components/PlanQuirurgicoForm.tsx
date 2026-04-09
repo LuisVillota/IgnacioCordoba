@@ -1989,17 +1989,30 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo QX (Horas)</label>
-            <input className="w-full border p-2 rounded" type="number" placeholder="Ej: 120" value={conductaQuirurgica.duracion_estimada} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, duracion_estimada: e.target.value}))} min="0" />
+            <input className="w-full border p-2 rounded" type="number" step="0.5" placeholder="Ej: 2.5" value={conductaQuirurgica.duracion_estimada} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, duracion_estimada: e.target.value}))} min="0" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de anestesia</label>
-            <select className="w-full border p-2 rounded" value={conductaQuirurgica.tipo_anestesia} onChange={e => setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tipo_anestesia: e.target.value}))}>
-              <option value="general">General</option>
-              <option value="peridural">Peridural</option>
-              <option value="sedacion">Sedación</option>
-              <option value="local">Local</option>
-              <option value="ninguna">Ninguna</option>
-            </select>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de anestesia (puede seleccionar varias)</label>
+            <div className="flex flex-wrap gap-3">
+              {["General", "Sedación", "Local", "Local+Sedación", "Epidural"].map(tipo => {
+                const tiposActuales = (conductaQuirurgica.tipo_anestesia || "").split(",").map((t: string) => t.trim()).filter(Boolean)
+                const checked = tiposActuales.some((t: string) => t.toLowerCase() === tipo.toLowerCase())
+                return (
+                  <label key={tipo} className="flex items-center gap-1 text-sm cursor-pointer">
+                    <input type="checkbox" checked={checked} onChange={e => {
+                      let nuevos: string[]
+                      if (e.target.checked) {
+                        nuevos = [...tiposActuales, tipo]
+                      } else {
+                        nuevos = tiposActuales.filter((t: string) => t.toLowerCase() !== tipo.toLowerCase())
+                      }
+                      setConductaQuirurgica((prev: ConductaQuirurgica) => ({...prev, tipo_anestesia: nuevos.join(", ")}))
+                    }} />
+                    {tipo}
+                  </label>
+                )
+              })}
+            </div>
           </div>
           <div className="flex items-center">
             <label className="flex items-center gap-2">

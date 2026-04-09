@@ -252,12 +252,17 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
   y += 22
 
   // ══ SECCIÓN 2 — ENFERMEDAD ACTUAL ══════════════════════════════════════════
-  check(70)
+  check(30)
   y = sectionBar(doc, y, "SECCIÓN 2 — ENFERMEDAD ACTUAL")
 
-  textArea(doc, MARGIN, y, INNER_W, 16, "Descripción de la enfermedad actual", hc.descripcion_enfermedad_actual || "")
-  y += 18
+  textArea(doc, MARGIN, y, INNER_W, 24, "Descripción de la enfermedad actual", hc.descripcion_enfermedad_actual || "")
+  y += 26
 
+  // ══ SECCIÓN 3 — ANTECEDENTES ═══════════════════════════════════════════════
+  check(20)
+  y = sectionBar(doc, y, "SECCIÓN 3 — ANTECEDENTES")
+
+  // Enfermedades (antes en Enfermedad Actual, ahora en Antecedentes)
   const ENF_MAP: Record<string, string> = {
     acido_peptica:       "Enf. Ácido Péptica",
     cardiopatias:        "Cardiopatías",
@@ -288,10 +293,6 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
     y += cbH
   })
   y += 4
-
-  // ══ SECCIÓN 3 — ANTECEDENTES ═══════════════════════════════════════════════
-  check(20)
-  y = sectionBar(doc, y, "SECCIÓN 3 — ANTECEDENTES")
 
   const ants: [string, string][] = [
     ["Farmacológicos",               hc.antecedentes.farmacologicos || ""],
@@ -484,7 +485,7 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
   const q3 = INNER_W / 3
   fieldCell(doc, MARGIN,       y, q3, 10, "Hospitalización",
     cq.requiere_hospitalizacion ? `Sí – ${cq.tiempo_hospitalizacion || ""}` : "No")
-  fieldCell(doc, MARGIN+q3,    y, q3, 10, "Tiempo Quirúrgico (min)", String(cq.duracion_estimada || ""))
+  fieldCell(doc, MARGIN+q3,    y, q3, 10, "Tiempo Quirúrgico (horas)", String(cq.duracion_estimada || ""))
   fieldCell(doc, MARGIN+q3*2,  y, q3, 10, "Resección Estimada", cq.reseccion_estimada || "")
   y += 12
 

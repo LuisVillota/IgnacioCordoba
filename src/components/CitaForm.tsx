@@ -280,7 +280,7 @@ export function CitaForm({ cita, pacientes = [], onSave, onClose, onPlanQuirurgi
               className="w-full bg-[#1a6b32] hover:bg-[#155529] text-white font-medium py-2 rounded-lg transition flex items-center justify-center space-x-2"
             >
               <FileText size={18} />
-              <span>Realizar plan quirúrgico</span>
+              <span>Realizar Historia Clinica</span>
             </button>
           )}
 

@@ -171,8 +171,8 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               }
               
               .logo {
-                max-width: 140px;
-                max-height: 80px;
+                max-width: 220px;
+                max-height: 120px;
                 width: auto;
                 height: auto;
                 object-fit: contain;
@@ -443,7 +443,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
             <!-- ENCABEZADO MEJOR ORGANIZADO -->
             <div class="header-container">
               <div class="logo-container">
-                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQceqGrv0esgBkN1C8B_p7qsRJaV-zVHVk0sw&s" alt="Logo del consultorio" class="logo" onerror="this.onerror=null; this.style.display='none'; document.getElementById('logo-placeholder').style.display='flex';" />
+                <img src="${baseUrl}/images/logo.jpg" alt="Logo del consultorio" class="logo" onerror="this.onerror=null; this.style.display='none'; document.getElementById('logo-placeholder').style.display='flex';" />
                 <div id="logo-placeholder" class="logo-placeholder" style="display: none;">
                   LOGO CONSULTORIO
                 </div>
@@ -469,6 +469,10 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 <div class="info-row">
                   <span class="info-label">Teléfono:</span>
                   <span class="info-value">${paciente?.telefono || 'No especificado'}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Correo:</span>
+                  <span class="info-value">${paciente?.email || paciente?.correo || 'No especificado'}</span>
                 </div>
               </div>
             </div>
@@ -723,11 +727,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
           {/* Encabezado reorganizado para vista previa */}
           <div className="flex items-start gap-6 mb-4">
             <div className="flex-shrink-0">
-              <div className="bg-[#1a6b32] rounded-lg p-3 w-32 h-24 flex items-center justify-center">
-                <span className="text-white font-bold text-center text-sm">
-                  LOGO<br />CONSULTORIO
-                </span>
-              </div>
+              <img src="/images/logo.jpg" alt="Logo consultorio" className="w-40 h-auto object-contain" />
             </div>
             <div className="flex-1 grid grid-cols-2 gap-y-2 gap-x-4">
               <div>

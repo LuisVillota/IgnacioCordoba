@@ -1093,7 +1093,7 @@ export default function PlanQuirurgicoPage() {
                   </div>
               </div>
               
-              <!-- DATOS DEL PACIENTE -->
+              <!-- DATOS DEL PACIENTE (sin peso/altura/IMC, con referido por) -->
               <div class="compact-section">
                   <div class="section-title">👤 DATOS DEL PACIENTE</div>
                   <div class="compact-table">
@@ -1102,8 +1102,8 @@ export default function PlanQuirurgicoPage() {
                               <tr>
                                   <th style="width: 25%">Información</th>
                                   <th style="width: 25%">Datos Personales</th>
-                                  <th style="width: 25%">Medidas Corporales</th>
                                   <th style="width: 25%">Consulta</th>
+                                  <th style="width: 25%">Referencia</th>
                               </tr>
                           </thead>
                           <tbody>
@@ -1117,12 +1117,12 @@ export default function PlanQuirurgicoPage() {
                                       <div class="data-value">${plan.datos_paciente.nombre_completo}</div>
                                   </td>
                                   <td>
-                                      <div class="data-label">Peso</div>
-                                      <div class="data-value">${plan.datos_paciente.peso || '—'} kg</div>
-                                  </td>
-                                  <td>
                                       <div class="data-label">Fecha Consulta</div>
                                       <div class="data-value">${formatFecha(plan.datos_paciente.fecha_consulta)}</div>
+                                  </td>
+                                  <td>
+                                      <div class="data-label">Referido por</div>
+                                      <div class="data-value">${plan.historia_clinica?.referido_por || '—'}</div>
                                   </td>
                               </tr>
                               <tr>
@@ -1137,22 +1137,12 @@ export default function PlanQuirurgicoPage() {
                                       ` : '<div class="data-value">—</div>'}
                                   </td>
                                   <td>
-                                      <div class="data-label">Altura</div>
-                                      <div class="data-value">${plan.datos_paciente.altura || '—'} m</div>
-                                  </td>
-                                  <td>
                                       <div class="data-label">Hora Consulta</div>
                                       <div class="data-value">${formatHora12(plan.datos_paciente.hora_consulta)}</div>
                                   </td>
-                              </tr>
-                              <tr>
-                                  <td colspan="2">
+                                  <td>
                                       <div class="data-label">Entidad</div>
                                       <div class="data-value">${plan.historia_clinica?.entidad || '—'}</div>
-                                  </td>
-                                  <td colspan="2">
-                                      <div class="data-label">IMC</div>
-                                      <div class="data-value">${imcData.imc || '—'} ${imcData.categoria ? `(${imcData.categoria})` : ''}</div>
                                   </td>
                               </tr>
                           </tbody>
@@ -1218,28 +1208,30 @@ export default function PlanQuirurgicoPage() {
                       <div class="text-content" style="margin: 0; max-height: 80px;">${plan.historia_clinica.plan_conducta}</div>
                   </div>` : ''}
                   
-                  <!-- Enfermedad Actual -->
-                  ${plan.historia_clinica.enfermedad_actual ? `
+                  <!-- Enfermedad Actual (texto libre) -->
+                  ${plan.historia_clinica.descripcion_enfermedad_actual ? `
                   <div class="info-box">
                       <div style="font-weight: 600; margin-bottom: 8px; color: #1a6b32; font-size: 11px;">🩺 Enfermedad Actual</div>
-                      <div style="display: flex; flex-wrap: wrap; gap: 5px;">
-                          ${Object.entries(plan.historia_clinica.enfermedad_actual)
-                              .filter(([_, value]) => value)
-                              .map(([key, _]) => `
-                              <span class="badge badge-yes">${key.replace(/_/g, ' ').toUpperCase()}</span>
-                              `).join('')}
-                          ${Object.entries(plan.historia_clinica.enfermedad_actual)
-                              .filter(([_, value]) => !value)
-                              .map(([key, _]) => `
-                              <span class="badge badge-neutral">${key.replace(/_/g, ' ').toUpperCase()}</span>
-                              `).join('')}
-                      </div>
+                      <div style="white-space: pre-wrap; font-size: 11px; line-height: 1.4;">${plan.historia_clinica.descripcion_enfermedad_actual}</div>
                   </div>` : ''}
-                  
-                  <!-- Antecedentes (en 2 columnas para ahorrar espacio) -->
-                  ${plan.historia_clinica.antecedentes ? `
+
+                  <!-- Antecedentes (checkboxes de enfermedades + antecedentes) -->
+                  ${plan.historia_clinica.antecedentes || plan.historia_clinica.enfermedad_actual ? `
                   <div class="info-box">
                       <div style="font-weight: 600; margin-bottom: 8px; color: #1a6b32; font-size: 11px;">📋 Antecedentes</div>
+
+                      ${plan.historia_clinica.enfermedad_actual ? `
+                      <div style="margin-bottom: 8px;">
+                          <div style="font-size: 10px; font-weight: 600; color: #555; margin-bottom: 4px;">Enfermedades:</div>
+                          <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                              ${Object.entries(plan.historia_clinica.enfermedad_actual)
+                                  .filter(([_, value]) => value)
+                                  .map(([key, _]) => `<span class="badge badge-yes">${key.replace(/_/g, ' ').toUpperCase()}</span>`).join('')}
+                              ${Object.entries(plan.historia_clinica.enfermedad_actual)
+                                  .filter(([_, value]) => !value)
+                                  .map(([key, _]) => `<span class="badge badge-neutral">${key.replace(/_/g, ' ').toUpperCase()}</span>`).join('')}
+                          </div>
+                      </div>` : ''}
                       <div class="two-column">
                           ${Object.entries(plan.historia_clinica.antecedentes)
                               .map(([key, value]) => {
@@ -1268,21 +1260,38 @@ export default function PlanQuirurgicoPage() {
                       </div>
                   </div>` : ''}
                   
-                  <!-- Examen Físico -->
-                  ${plan.historia_clinica.notas_corporales ? `
+                  <!-- Examen Físico (peso/altura/IMC + notas corporales) -->
                   <div class="info-box">
                       <div style="font-weight: 600; margin-bottom: 8px; color: #1a6b32; font-size: 11px;">🔍 Examen Físico</div>
+
+                      <!-- Peso, Altura, IMC -->
+                      <div style="display: flex; gap: 16px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eee;">
+                          <div class="data-item">
+                              <div class="data-label">Peso</div>
+                              <div class="data-value">${plan.datos_paciente.peso || '—'} kg</div>
+                          </div>
+                          <div class="data-item">
+                              <div class="data-label">Altura</div>
+                              <div class="data-value">${plan.datos_paciente.altura || '—'} m</div>
+                          </div>
+                          <div class="data-item">
+                              <div class="data-label">IMC</div>
+                              <div class="data-value">${imcData.imc || '—'} ${imcData.categoria ? `(${imcData.categoria})` : ''}</div>
+                          </div>
+                      </div>
+
+                      ${plan.historia_clinica.notas_corporales ? `
                       <div class="two-column">
-                          ${Object.entries(plan.historia_clinica.notas_corporales)
-                              .filter(([_, value]) => typeof value === 'string' && value.trim())
-                              .map(([key, value]) => `
+                          ${['cabeza', 'mamas', 'tcs', 'abdomen', 'gluteos', 'extremidades', 'piel_faneras']
+                              .filter(key => plan.historia_clinica.notas_corporales[key] && String(plan.historia_clinica.notas_corporales[key]).trim())
+                              .map(key => `
                               <div class="data-item">
                                   <div class="data-label" style="text-transform: capitalize;">${key.replace(/_/g, ' ')}</div>
-                                  <div class="data-value">${value}</div>
+                                  <div class="data-value">${plan.historia_clinica.notas_corporales[key]}</div>
                               </div>
                               `).join('')}
-                      </div>
-                  </div>` : ''}
+                      </div>` : ''}
+                  </div>
               </div>
               ` : ''}
               
@@ -1294,7 +1303,7 @@ export default function PlanQuirurgicoPage() {
                       ${plan.conducta_quirurgica.duracion_estimada ? `
                       <div class="info-box">
                           <div class="data-label">Duración</div>
-                          <div class="data-value">${plan.conducta_quirurgica.duracion_estimada} min</div>
+                          <div class="data-value">${plan.conducta_quirurgica.duracion_estimada} horas</div>
                       </div>` : ''}
                       
                       ${plan.conducta_quirurgica.tipo_anestesia ? `

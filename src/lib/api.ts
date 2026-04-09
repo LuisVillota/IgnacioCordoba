@@ -2549,7 +2549,8 @@ export const transformBackendToFrontend = {
     const pies_faneras_text = backendPlan.pies_faneras || '';
     
     // Conducta quirúrgica
-    const duracion_estimada = backendPlan.duracion_estimada ? parseInt(backendPlan.duracion_estimada) : 0;
+    const duracion_estimada_min = backendPlan.duracion_estimada ? parseInt(backendPlan.duracion_estimada) : 0;
+    const duracion_estimada = duracion_estimada_min > 0 ? parseFloat((duracion_estimada_min / 60).toFixed(1)) : 0;
     const tipo_anestesia = backendPlan.tipo_anestesia || 'general';
     const requiere_hospitalizacion = Boolean(backendPlan.requiere_hospitalizacion);
     const tiempo_hospitalizacion = backendPlan.tiempo_hospitalizacion || '';
@@ -3278,7 +3279,7 @@ export const transformBackendToFrontend = {
       
       // 6. Notas y tiempo cirugía
       notas_doctor: frontendPlan.notas_doctor || '',
-      tiempo_cirugia_minutos: frontendPlan.conducta_quirurgica?.duracion_estimada || null,
+      tiempo_cirugia_minutos: Math.round(Number(frontendPlan.conducta_quirurgica?.duracion_estimada || 0) * 60) || null,
       
       // 7. Entidad y datos contacto
       entidad: frontendPlan.historia_clinica?.entidad || '',
@@ -3320,8 +3321,8 @@ export const transformBackendToFrontend = {
       notas_corporales: notas_corporales,
       
       // 12. Datos quirúrgicos específicos
-      duracion_estimada: frontendPlan.conducta_quirurgica?.duracion_estimada || null,
-      tipo_anestesia: frontendPlan.conducta_quirurgica?.tipo_anestesia || '',
+      duracion_estimada: Math.round(Number(frontendPlan.conducta_quirurgica?.duracion_estimada || 0) * 60) || null,
+      tipo_anestesia: (frontendPlan.conducta_quirurgica?.tipo_anestesia || '').substring(0, 50),
       requiere_hospitalizacion: frontendPlan.conducta_quirurgica?.requiere_hospitalizacion || false,
       tiempo_hospitalizacion: frontendPlan.conducta_quirurgica?.tiempo_hospitalizacion || '',
       reseccion_estimada: frontendPlan.conducta_quirurgica?.reseccion_estimada || '',
