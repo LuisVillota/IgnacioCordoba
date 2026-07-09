@@ -374,8 +374,15 @@ function minutosDesdeHoraStr(hora: string): number {
   return h * 60 + (m || 0)
 }
 
+// Duración mínima (en minutos) que se considera al calcular solapamiento visual.
+// Permite que citas cortas y muy cercanas en horario queden en columnas distintas
+// para que el nombre del paciente no se vea sobrescrito por la siguiente cita.
+const DURACION_VISUAL_MINIMA = 25
+
 function calcularColumnasOverlap(citasDelDia: cita[]): CitaConColumna[] {
   if (citasDelDia.length === 0) return []
+
+  const duracionVisual = (c: cita) => Math.max(c.duracion, DURACION_VISUAL_MINIMA)
 
   const sorted = [...citasDelDia].sort((a, b) => {
     const startA = minutosDesdeHoraStr(a.hora)
@@ -384,25 +391,25 @@ function calcularColumnasOverlap(citasDelDia: cita[]): CitaConColumna[] {
     return b.duracion - a.duracion
   })
 
-  // Agrupar citas solapadas en clusters
+  // Agrupar citas solapadas en clusters (usando duración visual)
   const clusters: cita[][] = []
   let currentCluster: cita[] = [sorted[0]]
-  let clusterEnd = minutosDesdeHoraStr(sorted[0].hora) + sorted[0].duracion
+  let clusterEnd = minutosDesdeHoraStr(sorted[0].hora) + duracionVisual(sorted[0])
 
   for (let i = 1; i < sorted.length; i++) {
     const citaStart = minutosDesdeHoraStr(sorted[i].hora)
     if (citaStart < clusterEnd) {
       currentCluster.push(sorted[i])
-      clusterEnd = Math.max(clusterEnd, citaStart + sorted[i].duracion)
+      clusterEnd = Math.max(clusterEnd, citaStart + duracionVisual(sorted[i]))
     } else {
       clusters.push(currentCluster)
       currentCluster = [sorted[i]]
-      clusterEnd = citaStart + sorted[i].duracion
+      clusterEnd = citaStart + duracionVisual(sorted[i])
     }
   }
   clusters.push(currentCluster)
 
-  // Asignar columnas dentro de cada cluster
+  // Asignar columnas dentro de cada cluster (usando duración visual)
   const result: CitaConColumna[] = []
   for (const cluster of clusters) {
     const columns: cita[][] = []
@@ -413,7 +420,7 @@ function calcularColumnasOverlap(citasDelDia: cita[]): CitaConColumna[] {
 
       for (let col = 0; col < columns.length; col++) {
         const lastInCol = columns[col][columns[col].length - 1]
-        const lastEnd = minutosDesdeHoraStr(lastInCol.hora) + lastInCol.duracion
+        const lastEnd = minutosDesdeHoraStr(lastInCol.hora) + duracionVisual(lastInCol)
         if (cStart >= lastEnd) {
           columns[col].push(c)
           placed = true
@@ -650,43 +657,66 @@ function DiaCitasModal({
                     const columnWidth = 100 / totalColumnas
                     const leftPercent = columna * columnWidth
 
+                    // Modo compacto cuando hay poco espacio vertical u horizontal
+                    const esCompacta = altura < 60 || totalColumnas >= 3
+                    const esMuyCompacta = altura < 40
+
                     return (
                       <div
                         key={citaItem.id}
                         onClick={() => onVerDetalle(citaItem)}
-                        className={`absolute rounded-md shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all ${estadoColor} ${tipoColor}`}
+                        className={`group absolute rounded-md shadow-sm cursor-pointer transition-all hover:shadow-lg hover:z-30 ring-1 ring-black/5 ${estadoColor} ${tipoColor}`}
                         style={{
                           top: `${posicion}px`,
-                          height: `${Math.max(altura, 100)}px`,
+                          height: `${Math.max(altura - 2, 24)}px`,
                           left: `calc(${leftPercent}% + 2px)`,
                           width: `calc(${columnWidth}% - 4px)`,
-                          zIndex: 10,
+                          zIndex: 10 + columna,
                         }}
-                        title={`${citaItem.hora} - ${horaFin} | ${paciente.nombres} ${paciente.apellidos} | ${tiposDeVisita[citaItem.tipo_cita]?.label}`}
+                        title={`${citaItem.hora} - ${horaFin} | ${paciente.nombres} ${paciente.apellidos}${paciente.documento ? ' (CC: ' + paciente.documento + ')' : ''} | ${tiposDeVisita[citaItem.tipo_cita]?.label} | ${citaItem.estado}`}
                       >
-                        <div className="p-2 h-full flex flex-col text-white overflow-hidden">
-                          <div className="flex justify-between items-start">
-                            <span className="text-xs font-semibold">
-                              {citaItem.hora} - {horaFin}
-                            </span>
-                            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded whitespace-nowrap ml-1">
-                              {citaItem.estado.charAt(0).toUpperCase() + citaItem.estado.slice(1)}
-                            </span>
-                          </div>
-                          <h4 className="text-sm font-bold truncate mt-0.5">
-                            {paciente.nombres?.toUpperCase()} {paciente.apellidos?.toUpperCase()}
-                          </h4>
-                          {paciente.documento && (
-                            <div className="text-[11px] opacity-90">
-                              CC: {paciente.documento}
+                        <div className={`h-full flex flex-col text-white overflow-hidden ${esMuyCompacta ? 'px-1.5 py-0.5' : 'p-2'}`}>
+                          {esMuyCompacta ? (
+                            <div className="flex items-center gap-1 text-[11px] leading-tight">
+                              <span className="font-semibold whitespace-nowrap">{citaItem.hora}</span>
+                              <span className="font-bold truncate">
+                                {paciente.nombres?.split(' ')[0]} {paciente.apellidos?.split(' ')[0]}
+                              </span>
                             </div>
+                          ) : (
+                            <>
+                              <div className="flex justify-between items-start gap-1">
+                                <span className="text-[11px] font-semibold whitespace-nowrap">
+                                  {citaItem.hora}{!esCompacta && ` - ${horaFin}`}
+                                </span>
+                                {!esCompacta && (
+                                  <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                    {citaItem.estado.charAt(0).toUpperCase() + citaItem.estado.slice(1)}
+                                  </span>
+                                )}
+                              </div>
+                              <h4 className={`font-bold leading-tight mt-0.5 ${esCompacta ? 'text-[12px] truncate' : 'text-sm break-words'}`}>
+                                {esCompacta
+                                  ? `${paciente.nombres?.split(' ')[0] || ''} ${paciente.apellidos?.split(' ')[0] || ''}`.toUpperCase()
+                                  : `${paciente.nombres || ''} ${paciente.apellidos || ''}`.toUpperCase()}
+                              </h4>
+                              {!esCompacta && paciente.documento && (
+                                <div className="text-[11px] opacity-90 truncate">
+                                  CC: {paciente.documento}
+                                </div>
+                              )}
+                              {altura >= 70 && (
+                                <div className="text-[11px] opacity-95 font-medium truncate">
+                                  {tiposDeVisita[citaItem.tipo_cita]?.label || citaItem.tipo_cita}
+                                </div>
+                              )}
+                              {altura >= 90 && (
+                                <div className="text-[10px] opacity-80">
+                                  {citaItem.duracion} min
+                                </div>
+                              )}
+                            </>
                           )}
-                          <div className="text-[11px] opacity-95 font-medium">
-                            {tiposDeVisita[citaItem.tipo_cita]?.label || citaItem.tipo_cita}
-                          </div>
-                          <div className="text-[10px] opacity-80">
-                            {citaItem.duracion} min
-                          </div>
                         </div>
                       </div>
                     );
