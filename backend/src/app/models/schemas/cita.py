@@ -58,6 +58,7 @@ class CitaInDB(CitaBase):
     estado_nombre: Optional[str] = None
     estado_color: Optional[str] = None
     fecha_creacion: Optional[datetime] = None
-    
+    fecha_modificacion: Optional[datetime] = None
+
     class Config:
         from_attributes = True
