@@ -200,18 +200,6 @@ export function PacienteForm({ paciente, onSave, onClose }: pacienteFormProps) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-            <select
-              value={formData.estado_paciente}
-              onChange={(e) => setFormData({ ...formData, estado_paciente: e.target.value as "activo" | "inactivo" })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99d6e8]"
-            >
-              <option value="activo">Activo</option>
-              <option value="inactivo">Inactivo</option>
-            </select>
-          </div>
-
           {/* Buttons */}
           <div className="flex items-center space-x-3 pt-4">
             <button

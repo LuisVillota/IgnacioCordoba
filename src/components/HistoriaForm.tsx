@@ -55,7 +55,6 @@ export function HistoriaForm({ historia, onSave, onClose, loading = false }: His
           setPhotoUrls(prev => [...prev, uploadResponse.url!])
         }
       } catch (error) {
-        console.error('Error subiendo foto:', error)
         alert(`Error subiendo ${file.name}`)
       }
     }
@@ -85,7 +84,6 @@ export function HistoriaForm({ historia, onSave, onClose, loading = false }: His
           fotos: fotosString
         })
       } catch (error) {
-        console.error('Error eliminando foto:', error)
         alert('Error al eliminar la foto')
         setPhotoUrls(photoUrls)
       }
@@ -121,7 +119,6 @@ export function HistoriaForm({ historia, onSave, onClose, loading = false }: His
       onSave(historiaData)
       setTimeout(() => onClose(), 300)
     } catch (error) {
-      console.error('Error guardando fotos:', error)
       alert('Error al guardar. Intenta nuevamente.')
       formSubmitted.current = false
     } finally {

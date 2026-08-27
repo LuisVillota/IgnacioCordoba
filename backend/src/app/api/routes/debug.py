@@ -124,21 +124,3 @@ def test_file_existence():
         "resultados": results,
         "contenido_uploads": contenido
     }
-
-@router.get("/endpoints", response_model=dict)
-def debug_endpoints():
-    """
-    Listar todos los endpoints disponibles
-    """
-    from fastapi import FastAPI
-    from main import app
-    
-    routes = []
-    for route in app.routes:
-        routes.append({
-            "path": route.path,
-            "name": route.name,
-            "methods": getattr(route, "methods", None)
-        })
-    
-    return {"endpoints": routes}

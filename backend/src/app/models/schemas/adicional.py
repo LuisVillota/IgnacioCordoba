@@ -10,16 +10,16 @@ class AdicionalBase(BaseModel):
 
 class AdicionalCreate(BaseModel):
     nombre: str
-    precio: int
+    precio: float
 
 class AdicionalUpdate(BaseModel):
     nombre: Optional[str] = None
-    precio: Optional[int] = None
+    precio: Optional[float] = None
 
 class AdicionalSimple(BaseModel):
     id: int
     nombre: str
-    precio: int
+    precio: float
     created_at: Optional[str] = None
 
 class AdicionalInDB(AdicionalBase):

@@ -50,7 +50,6 @@ const formatHora = (hora: string): string => {
     
     return hora;
   } catch (error) {
-    console.error("❌ Error formateando hora:", error, "hora original:", hora);
     return hora;
   }
 };

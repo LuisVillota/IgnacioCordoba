@@ -7,7 +7,6 @@ const CACHE_DURATION = 30000;
 const getCachedData = (key: string) => {
   const cached = apiCache.get(key);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    console.log(`📦 Usando datos cacheados para: ${key}`);
     return cached.data;
   }
   return null;
@@ -17,25 +16,21 @@ const setCachedData = (key: string, data: any) => {
   apiCache.set(key, { data, timestamp: Date.now() });
 };
 
-// Función para eliminar archivo
-export const deletePlanFile = async (nombreArchivo: string, planId: string) => {
-  try {
-    const response = await fetch(`/api/planes/${planId}/archivos/${encodeURIComponent(nombreArchivo)}`, {
-      method: 'DELETE',
-    });
-    return await response.json();
-  } catch (error) {
-    return { error: true, message: error.message };
-  }
+// fecha.toISOString().split('T')[0] usa componentes UTC: adelanta/atrasa un día al
+// convertir a la hora local de Colombia (UTC-5), sobre todo entre las 7pm y medianoche.
+const toLocalDateString = (fecha: Date): string => {
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
-// Función para visualizar archivo (si es necesario)
-export const viewPlanFile = async (nombreArchivo: string, planId: string) => {
-  try {
-    const response = await fetch(`/api/planes/${planId}/archivos/${encodeURIComponent(nombreArchivo)}?view=true`);
-    return await response.json();
-  } catch (error) {
-    return { error: true, message: error.message };
+const handleUnauthorized = () => {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('user');
+  localStorage.removeItem('token');
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
   }
 };
 
@@ -51,13 +46,8 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       }
     }
   } catch (e) {
-    console.log('⚠️ No se pudo parsear body para logging:', options?.body);
   }
   
-  console.log(`📤 API Request: ${API_URL}${endpoint}`, { 
-    method: options?.method || 'GET',
-    body: bodyForLog
-  });
   
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -85,21 +75,21 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
     
     clearTimeout(timeoutId);
     
-    console.log(`📥 API Response Status: ${response.status} ${response.statusText}`);
     const responseText = await response.text();
     
     let responseData;
     try {
       responseData = responseText ? JSON.parse(responseText) : {};
-      console.log(`📥 API Response Body (parsed):`, responseData);
     } catch (parseError) {
-      console.log(`⚠️ Response is not JSON, treating as text`);
       responseData = responseText;
     }
     
     if (!response.ok) {
-      console.log(`⚠️ API Error ${response.status}:`, responseData);
-      
+
+      if (response.status === 401 && endpoint !== '/api/usuarios/login') {
+        handleUnauthorized();
+      }
+
       if (typeof responseData === 'string') {
         return {
           success: false,
@@ -218,7 +208,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
   } catch (error) {
     clearTimeout(timeoutId);
       if (error instanceof Error && error.name === 'AbortError') {
-      console.error('❌ Request timeout después de', TIMEOUT_MS, 'ms');
       return {
         success: false,
         error: true,
@@ -227,7 +216,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
       };
     }
     
-    console.error('❌ API Fetch Error (network):', error);
     
     // Para errores de red, devolver objeto de error
     return {
@@ -242,7 +230,6 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
 const preventDuplicateCall = async (callType: string, callFn: () => Promise<any>): Promise<any> => {
   // Verificar si ya hay una llamada similar en progreso
   if (callsInProgress.has(callType)) {
-    console.warn(`⚠️ Ya hay una llamada ${callType} en proceso, ignorando llamada duplicada`);
     return {
       success: false,
       error: true,
@@ -252,14 +239,11 @@ const preventDuplicateCall = async (callType: string, callFn: () => Promise<any>
   }
   
   callsInProgress.add(callType);
-  console.log(`🔄 [${callType}] Iniciando llamada protegida`);
   
   try {
     const result = await callFn();
-    console.log(`✅ [${callType}] Llamada completada exitosamente`);
     return result;
   } catch (error) {
-    console.error(`❌ [${callType}] Error en llamada:`, error);
     
     // Si el error ya es un objeto de error, retornarlo
     if (error && typeof error === 'object' && 'error' in error) {
@@ -275,7 +259,6 @@ const preventDuplicateCall = async (callType: string, callFn: () => Promise<any>
   } finally {
     // Siempre limpiar después de completar
     callsInProgress.delete(callType);
-    console.log(`🧹 [${callType}] Llamada limpiada de registro`);
   }
 };
 
@@ -283,10 +266,9 @@ const preventDuplicateCall = async (callType: string, callFn: () => Promise<any>
 export const api = {
   // ===== AUTH =====
   login: (username: string, password: string) => {
-    const encodedUsername = encodeURIComponent(username);
-    const encodedPassword = encodeURIComponent(password);
-    return fetchAPI(`/api/usuarios/login?username=${encodedUsername}&password=${encodedPassword}`, {
-      method: 'GET',
+    return fetchAPI(`/api/usuarios/login`, {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
     });
   },
     
@@ -330,41 +312,46 @@ export const api = {
     return response;
   },
   getpaciente: (id: number) => fetchAPI(`/api/pacientes/${id}`),
-  createpaciente: (data: any) => 
-    fetchAPI('/api/pacientes', { 
-      method: 'POST', 
-      body: JSON.stringify(data) 
-    }),
-  updatepaciente: (id: number, data: any) =>
-    fetchAPI(`/api/pacientes/${id}`, { 
-      method: 'PUT', 
-      body: JSON.stringify(data) 
-    }),
-  deletepaciente: (id: number) =>
-    fetchAPI(`/api/pacientes/${id}`, { method: 'DELETE' }),
+  createpaciente: async (data: any) => {
+    const response = await fetchAPI('/api/pacientes', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    // Invalidar caché: un paciente nuevo no debe quedar oculto por una lista cacheada
+    // de otra pantalla (agenda, historias clínicas, programación, sala de espera...)
+    apiCache.clear();
+    return response;
+  },
+  updatepaciente: async (id: number, data: any) => {
+    const response = await fetchAPI(`/api/pacientes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+    apiCache.clear();
+    return response;
+  },
+  deletepaciente: async (id: number) => {
+    const response = await fetchAPI(`/api/pacientes/${id}`, { method: 'DELETE' });
+    apiCache.clear();
+    return response;
+  },
 
   // AGREGAR ESTO en la sección de pacientes del objeto api:
 
   getTodospacientes: async () => {
     try {
-      console.log("📥 Llamando a /api/pacientes para obtener todos los pacientes...");
       
       const response = await fetchAPI('/api/pacientes?limit=1000&offset=0');
       
-      console.log("✅ Respuesta cruda del backend:", response);
       
       if (response && response.pacientes && Array.isArray(response.pacientes)) {
-        console.log(`✅ Encontrados ${response.pacientes.length} pacientes`);
         return response.pacientes;
       } else if (Array.isArray(response)) {
-        console.log(`✅ Encontrados ${response.length} pacientes (formato array)`);
         return response;
       } else {
-        console.warn("⚠️ Formato de respuesta inesperado:", response);
         return [];
       }
     } catch (error) {
-      console.error("❌ Error en getTodospacientes:", error);
       return [];
     }
   },
@@ -378,7 +365,9 @@ export const api = {
     fetchAPI(`/api/citas?limit=${limit || 1000}&offset=${offset || 0}`),
   getcita: (id: number) => fetchAPI(`/api/citas/${id}`),
   createcita: (data: any) => {
-    return preventDuplicateCall('createcita', () =>
+    // La clave incluye los datos: dos creaciones con contenido distinto no deben
+    // bloquearse entre sí, solo un verdadero doble-envío del mismo formulario.
+    return preventDuplicateCall(`createcita:${JSON.stringify(data)}`, () =>
       fetchAPI('/api/citas', { method: 'POST', body: JSON.stringify(data) })
     );
   },
@@ -411,24 +400,18 @@ export const api = {
     fetchAPI(`/api/agenda-procedimientos/${id}`),
 
   createAgendaProcedimiento: (data: any) => {
-    return preventDuplicateCall('createAgendaProcedimiento', async () => {
-      console.log("📤 Creando procedimiento agendado, datos recibidos EN API:", data);
+    return preventDuplicateCall(`createAgendaProcedimiento:${JSON.stringify(data)}`, async () => {
       
       // **CORRECCIÓN CRÍTICA: Crear una copia profunda y convertir tipos**
       const dataParaEnviar = { ...data };
       
       // Asegurar que procedimiento_id sea un NÚMERO
       if (dataParaEnviar.procedimiento_id !== undefined && dataParaEnviar.procedimiento_id !== null) {
-        console.log("🔧 API: Convirtiendo procedimiento_id a número:", {
-          original: dataParaEnviar.procedimiento_id,
-          tipo_original: typeof dataParaEnviar.procedimiento_id
-        });
         
         // Intentar convertir a número
         const procedimientoIdNum = parseInt(dataParaEnviar.procedimiento_id);
         
         if (isNaN(procedimientoIdNum)) {
-          console.error("❌ API: Error - procedimiento_id no es un número válido:", dataParaEnviar.procedimiento_id);
           // Devolver error en lugar de lanzar excepción
           return {
             success: false,
@@ -440,9 +423,7 @@ export const api = {
         
         // Asignar el número convertido
         dataParaEnviar.procedimiento_id = procedimientoIdNum;
-        console.log("✅ API: procedimiento_id convertido a número:", dataParaEnviar.procedimiento_id);
       } else {
-        console.error("❌ API: Error - procedimiento_id es undefined o null");
         return {
           success: false,
           error: true,
@@ -456,8 +437,6 @@ export const api = {
         dataParaEnviar.duracion = parseInt(dataParaEnviar.duracion) || 60;
       }
       
-      console.log("📤 API: Datos finales para enviar al backend (después de conversión):", dataParaEnviar);
-      console.log("📤 API: Tipo de procedimiento_id final:", typeof dataParaEnviar.procedimiento_id);
       
       return fetchAPI('/api/agenda-procedimientos', { 
         method: 'POST', 
@@ -467,8 +446,7 @@ export const api = {
   },
 
   updateAgendaProcedimiento: (id: number, data: any) => {
-    return preventDuplicateCall('updateAgendaProcedimiento', () => {
-      console.log("📤 Actualizando procedimiento agendado ID:", id, "datos recibidos:", data);
+    return preventDuplicateCall(`updateAgendaProcedimiento:${id}`, () => {
       
       const dataParaEnviar = { ...data };
       
@@ -478,9 +456,7 @@ export const api = {
         
         if (!isNaN(procedimientoIdNum)) {
           dataParaEnviar.procedimiento_id = procedimientoIdNum;
-          console.log("✅ API: procedimiento_id convertido para update:", dataParaEnviar.procedimiento_id);
         } else {
-          console.warn("⚠️ API: procedimiento_id no es número válido para update, manteniendo valor original");
         }
       }
       
@@ -489,7 +465,6 @@ export const api = {
         dataParaEnviar.duracion = parseInt(dataParaEnviar.duracion) || 60;
       }
       
-      console.log("📤 API: Datos para update:", dataParaEnviar);
       
       return fetchAPI(`/api/agenda-procedimientos/${id}`, { 
         method: 'PUT', 
@@ -523,7 +498,6 @@ export const api = {
       }
 
       const url = `/api/agenda-procedimientos/disponibilidad?${params.toString()}`;
-      console.log("📤 URL completa para disponibilidad:", url);
 
       return fetchAPI(url);
   },
@@ -549,8 +523,7 @@ export const api = {
   getCotizacion: (id: number) => fetchAPI(`/api/cotizaciones/${id}`),
   
   createCotizacion: (data: any) => {
-    return preventDuplicateCall('createCotizacion', async () => {
-      console.log("📤 Creando cotización, datos recibidos:", data);
+    return preventDuplicateCall(`createCotizacion:${JSON.stringify(data)}`, async () => {
       
       // Primero preparar los datos usando la transformación
       let dataParaEnviar = { ...transformBackendToFrontend.cotizacionToBackend(data) };
@@ -565,8 +538,6 @@ export const api = {
       // 3. También eliminar cualquier campo que pueda ser calculado automáticamente
       // como subtotales si es que también son GENERATED (depende de tu esquema de BD)
       
-      console.log("📤 Datos para crear (SIN 'total' y SIN 'id'):", dataParaEnviar);
-      console.log("🔍 Campos que se enviarán:", Object.keys(dataParaEnviar));
       
       const url = '/api/cotizaciones';
       
@@ -575,31 +546,24 @@ export const api = {
           method: 'POST', 
           body: JSON.stringify(dataParaEnviar) 
         });
-        console.log("✅ Cotización creada exitosamente:", result);
         return result;
       } catch (error: any) {
-        console.error("❌ Error creando cotización:", error);
         
         // Manejar específicamente el error de columna GENERATED
         if (error.message && error.message.includes("generated column 'total'")) {
-          console.error("⚠️ Error de columna GENERATED detectado:");
-          console.error("Datos que intentaron enviarse:", dataParaEnviar);
           
           // Verificar si 'total' sigue presente
           if (dataParaEnviar.total !== undefined) {
-            console.error("❌ 'total' aún estaba presente en los datos!");
             delete dataParaEnviar.total;
           }
           
           // Intentar nuevamente sin campos problemáticos
-          console.log("🔄 Reintentando con datos limpiados...");
           const cleanData = { ...dataParaEnviar };
           
           // Asegurarse de eliminar cualquier campo que pueda causar problemas
           const problematicFields = ['total', 'id', 'fecha_creacion', 'fecha_emision'];
           problematicFields.forEach(field => {
             if (cleanData[field] !== undefined) {
-              console.log(`Eliminando campo problemático: ${field}`);
               delete cleanData[field];
             }
           });
@@ -609,10 +573,8 @@ export const api = {
               method: 'POST', 
               body: JSON.stringify(cleanData) 
             });
-            console.log("✅ Reintento exitoso:", retryResult);
             return retryResult;
           } catch (retryError: any) {
-            console.error("❌ Error en reintento:", retryError);
             throw new Error(`No se pudo crear la cotización después de intentar corregir el error: ${retryError.message}`);
           }
         }
@@ -622,8 +584,7 @@ export const api = {
   },
 
   updateCotizacion: (id: number, data: any) => {
-    return preventDuplicateCall('updateCotizacion', async () => {
-      console.log("📤 Actualizando cotización ID:", id, "datos recibidos:", data);
+    return preventDuplicateCall(`updateCotizacion:${id}`, async () => {
       
       // Usar la transformación
       let dataParaEnviar = { ...transformBackendToFrontend.cotizacionToBackend(data) };
@@ -634,23 +595,17 @@ export const api = {
       // También eliminar 'id' del objeto de datos (no del endpoint)
       delete dataParaEnviar.id;
       
-      console.log("📤 Datos para enviar al backend (SIN 'total' y SIN 'id'):", dataParaEnviar);
-      console.log("🔍 Campos que se enviarán:", Object.keys(dataParaEnviar));
       
       try {
         const result = await fetchAPI(`/api/cotizaciones/${id}`, { 
           method: 'PUT', 
           body: JSON.stringify(dataParaEnviar) 
         });
-        console.log("✅ Cotización actualizada exitosamente:", result);
         return result;
       } catch (error: any) {
-        console.error("❌ Error actualizando cotización:", error);
         
         // Manejar específicamente el error de columna GENERATED
         if (error.message && error.message.includes("generated column 'total'")) {
-          console.error("⚠️ Error de columna GENERATED detectado en update:");
-          console.error("Datos que intentaron enviarse:", dataParaEnviar);
           
           // Limpiar aún más los datos
           const cleanData = { ...dataParaEnviar };
@@ -658,7 +613,6 @@ export const api = {
           
           fieldsToRemove.forEach(field => {
             if (cleanData[field] !== undefined) {
-              console.log(`Eliminando campo problemático en update: ${field}`);
               delete cleanData[field];
             }
           });
@@ -677,17 +631,14 @@ export const api = {
             }
           });
           
-          console.log("🔄 Reintentando update con datos filtrados:", filteredData);
           
           try {
             const retryResult = await fetchAPI(`/api/cotizaciones/${id}`, { 
               method: 'PUT', 
               body: JSON.stringify(filteredData) 
             });
-            console.log("✅ Reintento de update exitoso:", retryResult);
             return retryResult;
           } catch (retryError: any) {
-            console.error("❌ Error en reintento de update:", retryError);
             throw new Error(`No se pudo actualizar la cotización después de intentar corregir el error: ${retryError.message}`);
           }
         }
@@ -708,31 +659,15 @@ export const api = {
     fetchAPI(`/api/historias-clinicas?limit=${limit || 1000}&offset=${offset || 0}`),
   
   getHistoriasBypaciente: async (pacienteId: number) => {
-    console.log(`📋 Obteniendo historias para paciente ${pacienteId}...`);
-    
-    try {
-      return await fetchAPI(`/api/historias-clinicas/paciente/${pacienteId}`);
-    } catch (error) {
-      console.log(`⚠️ Endpoint específico falló, usando endpoint general para paciente ${pacienteId}`);
-      const allHistorias = await api.getHistoriasClinicas(100, 0);
-      
-      if (Array.isArray(allHistorias.historias)) {
-        return allHistorias.historias.filter((historia: any) => {
-          const matches = historia.paciente_id === pacienteId;
-          console.log(`🔍 Historia ${historia.id}: paciente_id=${historia.paciente_id}, matches=${matches}`);
-          return matches;
-        });
-      }
-      
-      return [];
-    }
+    // fetchAPI nunca lanza (siempre devuelve un objeto, incluso en error), así que un
+    // try/catch acá nunca entraba a su catch - el fallback nunca se ejecutaba.
+    return await fetchAPI(`/api/historias-clinicas/paciente/${pacienteId}`);
   },
   
   getHistoriaClinica: (id: number) => fetchAPI(`/api/historias-clinicas/${id}`),
   
   createHistoriaClinica: (data: any) => {
-    return preventDuplicateCall('createHistoriaClinica', async () => {
-      console.log("📤 Creando historia clínica con datos:", data);
+    return preventDuplicateCall(`createHistoriaClinica:${JSON.stringify(data)}`, async () => {
       
       const backendData = {
         paciente_id: parseInt(data.paciente_id || data.id_paciente),
@@ -748,7 +683,6 @@ export const api = {
         fotos: ""
       };
       
-      console.log("📤 Enviando al backend:", backendData);
       
       return fetchAPI('/api/historias-clinicas', {
         method: 'POST',
@@ -758,8 +692,7 @@ export const api = {
   },
   
   updateHistoriaClinica: (id: number, data: any) => {
-    return preventDuplicateCall('updateHistoriaClinica', async () => {
-      console.log("📤 Actualizando historia clínica ID:", id, "con datos:", data);
+    return preventDuplicateCall(`updateHistoriaClinica:${id}`, async () => {
       
       const backendData = {
         paciente_id: parseInt(data.paciente_id || data.id_paciente),
@@ -775,7 +708,6 @@ export const api = {
         fotos: data.fotos || ''
       };
       
-      console.log("📤 Enviando al backend:", backendData);
       
       return fetchAPI(`/api/historias-clinicas/${id}`, {
         method: 'PUT',
@@ -785,7 +717,6 @@ export const api = {
   },
   
   deleteHistoriaClinica: async (id: number) => {
-    console.log(`🗑️ Eliminando historia clínica ID: ${id}`)
     
     try {
       const response = await fetch(`${API_URL}/api/historias-clinicas/${id}`, {
@@ -796,11 +727,10 @@ export const api = {
         },
       })
       
-      console.log(`📥 Delete response: ${response.status} ${response.statusText}`)
       
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         if (response.status === 404) {
-          console.log(`ℹ️ Historia ${id} no encontrada (posiblemente ya eliminada)`)
           return { success: true, message: "Historia ya eliminada" }
         }
         
@@ -821,10 +751,8 @@ export const api = {
       }
       
       const responseData = await response.json();
-      console.log(`✅ Historia eliminada exitosamente:`, responseData);
       return responseData;
     } catch (error) {
-      console.error('❌ Error eliminando historia:', error);
       throw error;
     }
   },
@@ -836,8 +764,6 @@ export const api = {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     
     try {
-      console.log("📤 Subiendo foto para historia:", historiaId);
-      console.log("📁 Archivo:", file.name, file.type, file.size);
       
       const response = await fetch(`${API_URL}/api/historias-clinicas/${historiaId}/foto`, {
         method: 'POST',
@@ -847,15 +773,14 @@ export const api = {
         body: formData,
       });
       
-      console.log("📥 Response:", response.status, response.statusText);
       
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         const errorData = await response.json().catch(() => ({ detail: response.statusText }));
         throw new Error(errorData.detail || `Error ${response.status}`);
       }
-      
+
       const result = await response.json();
-      console.log("✅ Foto subida:", result);
       
       // Si la URL es relativa (almacenamiento local), convertir a absoluta
       let finalUrl = result.url;
@@ -871,7 +796,6 @@ export const api = {
       };
       
     } catch (error) {
-      console.error('❌ Error subiendo foto:', error);
       throw error;
     }
   },
@@ -891,7 +815,7 @@ export const api = {
   
   // Crear - versión protegida
   createProcedimiento: (data: any) => {
-    return preventDuplicateCall('createProcedimiento', () => 
+    return preventDuplicateCall(`createProcedimiento:${JSON.stringify(data)}`, () =>
       fetchAPI('/api/procedimientos', { 
         method: 'POST', 
         body: JSON.stringify(data) 
@@ -904,7 +828,7 @@ export const api = {
   
   // Actualizar - versión protegida
   updateProcedimiento: (id: number, data: any) => {
-    return preventDuplicateCall('updateProcedimiento', () => 
+    return preventDuplicateCall(`updateProcedimiento:${id}`, () =>
       fetchAPI(`/api/procedimientos/${id}`, { 
         method: 'PUT', 
         body: JSON.stringify(data) 
@@ -928,7 +852,7 @@ export const api = {
   
   // Crear - versión protegida
   createAdicional: (data: any) => {
-    return preventDuplicateCall('createAdicional', () => 
+    return preventDuplicateCall(`createAdicional:${JSON.stringify(data)}`, () =>
       fetchAPI('/api/adicionales', { 
         method: 'POST', 
         body: JSON.stringify(data) 
@@ -938,7 +862,7 @@ export const api = {
   
   // Actualizar - versión protegida
   updateAdicional: (id: number, data: any) => {
-    return preventDuplicateCall('updateAdicional', () => 
+    return preventDuplicateCall(`updateAdicional:${id}`, () =>
       fetchAPI(`/api/adicionales/${id}`, { 
         method: 'PUT', 
         body: JSON.stringify(data) 
@@ -955,7 +879,7 @@ export const api = {
   
   // Crear - versión protegida
   createOtroAdicional: (data: any) => {
-    return preventDuplicateCall('createOtroAdicional', () => 
+    return preventDuplicateCall(`createOtroAdicional:${JSON.stringify(data)}`, () =>
       fetchAPI('/api/otros-adicionales', { 
         method: 'POST', 
         body: JSON.stringify(data) 
@@ -965,7 +889,7 @@ export const api = {
   
   // Actualizar - versión protegida
   updateOtroAdicional: (id: number, data: any) => {
-    return preventDuplicateCall('updateOtroAdicional', () => 
+    return preventDuplicateCall(`updateOtroAdicional:${id}`, () =>
       fetchAPI(`/api/otros-adicionales/${id}`, { 
         method: 'PUT', 
         body: JSON.stringify(data) 
@@ -998,7 +922,6 @@ export const api = {
         ingresosMes: "$0"
       };
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
       return {
         totalpacientes: 0,
         citasHoy: 0,
@@ -1016,8 +939,14 @@ export const api = {
   
   testConnection: async () => {
     try {
-      const response = await fetch(`${API_URL}/api/test-frontend`);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const response = await fetch(`${API_URL}/api/test-frontend`, {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         return {
           success: false,
           message: `Backend no responde: ${response.status}`,
@@ -1041,7 +970,6 @@ export const api = {
   // ===== SALA DE ESPERA =====
   getSalaEspera: async (mostrarTodos: boolean = true): Promise<any> => {
     try {
-      console.log(`📥 Obteniendo sala de espera, mostrarTodos: ${mostrarTodos}`);
       const response = await fetch(`${API_URL}/api/sala-espera?mostrarTodos=${mostrarTodos}`, {
         headers: {
           'Content-Type': 'application/json',
@@ -1050,10 +978,10 @@ export const api = {
       });
       
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         let errorMessage = `Error HTTP ${response.status}`;
         try {
           const errorData = await response.json();
-          console.error('❌ Error obteniendo sala de espera:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
           try {
@@ -1067,14 +995,8 @@ export const api = {
       }
       
       const data = await response.json();
-      console.log("✅ Respuesta sala de espera recibida:", {
-        success: data.success,
-        total: data.total,
-        pacientes: data.pacientes?.length || 0
-      });
       return data;
     } catch (error) {
-      console.error('❌ Error obteniendo sala de espera:', error);
       return {
         success: false,
         pacientes: [],
@@ -1086,10 +1008,6 @@ export const api = {
 
   bulkUpdateEstadosSalaEspera: async (cambios: Record<string, string>): Promise<any> => {
     try {
-      console.log("💾 Enviando cambios de estado a sala de espera:", {
-        totalCambios: Object.keys(cambios).length,
-        cambios: cambios
-      });
       
       const response = await fetch(`${API_URL}/api/sala-espera/bulk-estados`, {
         method: 'PUT',
@@ -1100,13 +1018,12 @@ export const api = {
         body: JSON.stringify({ cambios }),
       });
       
-      console.log("📥 Respuesta bulk update:", response.status, response.statusText);
       
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         let errorMessage = `Error HTTP ${response.status}`;
         try {
           const errorData = await response.json();
-          console.error('❌ Error en bulk update:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
           try {
@@ -1120,21 +1037,14 @@ export const api = {
       }
       
       const data = await response.json();
-      console.log("✅ Bulk update completado:", {
-        success: data.success,
-        actualizados: data.actualizados,
-        errores: data.errores?.length || 0
-      });
       return data;
     } catch (error) {
-      console.error('❌ Error actualizando estados:', error);
       throw error;
     }
   },
 
 getEstadisticasSalaEspera: async (): Promise<any> => {
   try {
-    console.log("📊 Obteniendo estadísticas de sala de espera...");
     const response = await fetch(`${API_URL}/api/sala-espera/estadisticas`, {
       headers: {
         'Content-Type': 'application/json',
@@ -1143,10 +1053,10 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
     });
     
     if (!response.ok) {
+      if (response.status === 401) handleUnauthorized();
       let errorMessage = `Error HTTP ${response.status}`;
       try {
         const errorData = await response.json();
-        console.error('❌ Error obteniendo estadísticas:', errorData);
         errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
       } catch {
         try {
@@ -1175,7 +1085,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
     }
     
     const data = await response.json();
-    console.log("✅ Estadísticas obtenidas:", data);
     
     // 🔧 Asegurar que tiempo_promedio_espera y tiempo_promedio_consulta sean números
     if (data && data.success && data.estadisticas) {
@@ -1191,7 +1100,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
     
     return data;
   } catch (error) {
-    console.error('❌ Error obteniendo estadísticas:', error);
     return {
       success: false,
       estadisticas: {
@@ -1213,7 +1121,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
 
   agregarpacienteSalaEspera: async (pacienteId: string, citaId?: string): Promise<any> => {
     try {
-      console.log("➕ Agregando paciente a sala de espera:", { pacienteId, citaId });
       
       const body: any = { paciente_id: parseInt(pacienteId) };
       if (citaId) {
@@ -1229,13 +1136,12 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         body: JSON.stringify(body),
       });
       
-      console.log("📥 Respuesta agregar paciente:", response.status, response.statusText);
       
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         let errorMessage = `Error HTTP ${response.status}`;
         try {
           const errorData = await response.json();
-          console.error('❌ Error agregando paciente:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
           try {
@@ -1249,17 +1155,14 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
       }
       
       const data = await response.json();
-      console.log("✅ paciente agregado a sala de espera:", data);
       return data;
     } catch (error) {
-      console.error('❌ Error agregando paciente:', error);
       throw error;
     }
   },
 
   updateEstadoSalaEspera: async (pacienteId: string, estado: string, citaId?: string): Promise<any> => {
     try {
-      console.log("🔄 Actualizando estado individual:", { pacienteId, estado, citaId });
       
       const body: any = { estado };
       if (citaId) {
@@ -1275,13 +1178,12 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         body: JSON.stringify(body),
       });
       
-      console.log("📥 Respuesta actualizar estado:", response.status, response.statusText);
       
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         let errorMessage = `Error HTTP ${response.status}`;
         try {
           const errorData = await response.json();
-          console.error('❌ Error actualizando estado individual:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
           try {
@@ -1295,17 +1197,14 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
       }
       
       const data = await response.json();
-      console.log("✅ Estado actualizado individualmente:", data);
       return data;
     } catch (error) {
-      console.error('❌ Error actualizando estado individual:', error);
       throw error;
     }
   },
 
   crearRegistroSalaEspera: async (pacienteId: number, citaId?: number): Promise<any> => {
     try {
-      console.log("📝 Creando registro sala de espera para paciente:", pacienteId);
       
       const body: any = { paciente_id: pacienteId };
       if (citaId) {
@@ -1321,13 +1220,12 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         body: JSON.stringify(body),
       });
       
-      console.log("📥 Respuesta crear registro:", response.status, response.statusText);
       
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         let errorMessage = `Error HTTP ${response.status}`;
         try {
           const errorData = await response.json();
-          console.error('❌ Error creando registro:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
           try {
@@ -1341,17 +1239,14 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
       }
       
       const data = await response.json();
-      console.log("✅ Registro creado exitosamente:", data);
       return data;
     } catch (error) {
-      console.error('❌ Error creando registro:', error);
       throw error;
     }
   },
 
   actualizarEstadoSalaEspera: async (pacienteId: string, datos: { estado: string, cita_id?: string }): Promise<any> => {
     try {
-      console.log("🔄 Actualizando estado sala espera:", { pacienteId, datos });
       
       const response = await fetch(`${API_URL}/api/sala-espera/${pacienteId}/estado`, {
         method: 'PUT',
@@ -1362,13 +1257,12 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         body: JSON.stringify(datos),
       });
       
-      console.log("📥 Respuesta actualizar estado:", response.status, response.statusText);
       
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         let errorMessage = `Error HTTP ${response.status}`;
         try {
           const errorData = await response.json();
-          console.error('❌ Error actualizando estado:', errorData);
           errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
         } catch {
           try {
@@ -1382,17 +1276,14 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
       }
       
       const data = await response.json();
-      console.log("✅ Estado actualizado correctamente:", data);
       return data;
     } catch (error) {
-      console.error('❌ Error actualizando estado:', error);
       throw error;
     }
   },
 
   getDiagnosticSalaEspera: async (): Promise<any> => {
     try {
-      console.log("🔍 Obteniendo diagnóstico de sala de espera...");
       const response = await fetch(`${API_URL}/api/debug/sala-espera`, {
         headers: {
           'Content-Type': 'application/json',
@@ -1401,7 +1292,7 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
       });
       
       if (!response.ok) {
-        console.warn('⚠️ No se pudo obtener diagnóstico de sala de espera');
+        if (response.status === 401) handleUnauthorized();
         return {
           success: false,
           message: 'No se pudo obtener diagnóstico'
@@ -1409,10 +1300,8 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
       }
       
       const data = await response.json();
-      console.log("✅ Diagnóstico obtenido:", data);
       return data;
     } catch (error) {
-      console.error('❌ Error obteniendo diagnóstico:', error);
       return {
         success: false,
         message: 'Error obteniendo diagnóstico: ' + (error instanceof Error ? error.message : 'Error desconocido')
@@ -1426,12 +1315,10 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
     
     return preventDuplicateCall(callKey, async () => {
       try {
-        console.log("📥 Obteniendo planes quirúrgicos...", { limit, offset });
         
         // Usar fetchAPI directamente sin preventDuplicateCall adicional
         const response = await fetchAPI(`/api/planes-quirurgicos?limit=${limit || 50}&offset=${offset || 0}`);
         
-        console.log("✅ Respuesta cruda de planes quirúrgicos:", response);
         
         // Si hay error, devolverlo directamente
         if (response && response.error === true) {
@@ -1459,7 +1346,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
           total = response.length;
         }
         
-        console.log(`✅ Transformados ${planesTransformados.length} planes quirúrgicos`);
         
         return {
           success: true,
@@ -1470,7 +1356,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         };
         
       } catch (error: any) {
-        console.error("❌ Error obteniendo planes quirúrgicos:", error);
         return {
           success: false,
           error: true,
@@ -1491,8 +1376,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     
     try {
-      console.log("📤 Subiendo archivo para plan:", planId);
-      console.log("📁 Archivo:", file.name, file.type, file.size);
       
       const response = await fetch(`${API_URL}/api/planes-quirurgicos/${planId}/archivo`, {
         method: 'POST',
@@ -1502,15 +1385,14 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         body: formData,
       });
       
-      console.log("📥 Response:", response.status, response.statusText);
       
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         const errorData = await response.json().catch(() => ({ detail: response.statusText }));
         throw new Error(errorData.detail || `Error ${response.status}`);
       }
-      
+
       const result = await response.json();
-      console.log("✅ Archivo subido:", result);
       
       // Si la URL es relativa (almacenamiento local), convertir a absoluta
       let finalUrl = result.url;
@@ -1526,21 +1408,18 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
       };
       
     } catch (error) {
-      console.error('❌ Error subiendo archivo:', error);
       throw error;
     }
   },
   
   downloadPlanFile: async (nombreArchivo: string, planId: string) => {
-    const callKey = `downloadPlanFile_${planId}_${nombreArchivo}_${Date.now()}`;
+    const callKey = `downloadPlanFile_${planId}_${nombreArchivo}`;
     
     return preventDuplicateCall(callKey, async () => {
       try {
-        console.log("📥 Descargando archivo:", { nombreArchivo, planId });
         
         // 🔴 CORRECCIÓN: Si es una URL de Cloudinary, no llamar al backend
         if (nombreArchivo.includes('cloudinary.com') || nombreArchivo.startsWith('http')) {
-          console.log("☁️ Archivo en Cloudinary, abriendo directamente:", nombreArchivo);
           
           // Para Cloudinary, simplemente abrir en nueva pestaña
           window.open(nombreArchivo, '_blank');
@@ -1567,7 +1446,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         // Crear la URL completa
         const url = `${API_URL}/api/planes-quirurgicos/${planIdClean}/descargar-archivo`;
         
-        console.log("📤 Enviando solicitud a:", url, "con nombre:", nombreArchivoParaBackend);
         
         const response = await fetch(url, {
           method: 'POST',
@@ -1578,15 +1456,11 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
           body: JSON.stringify({ nombreArchivo: nombreArchivoParaBackend }),
         });
         
-        console.log("📥 Respuesta de descarga:", {
-          status: response.status,
-          statusText: response.statusText
-        });
         
         if (!response.ok) {
+          if (response.status === 401) handleUnauthorized();
           // Si hay error, leer el mensaje
           const errorText = await response.text();
-          console.error("❌ Error en respuesta:", errorText);
           
           let errorMessage = `Error ${response.status}: ${response.statusText}`;
           try {
@@ -1608,7 +1482,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
           
           // Si es de Cloudinary con URL, abrirla
           if (responseData.url && responseData.url.includes('http')) {
-            console.log("☁️ Redirigiendo a Cloudinary:", responseData.url);
             window.open(responseData.url, '_blank');
             
             return {
@@ -1620,7 +1493,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
           
           // Si tiene mensaje de "Descargue desde la URL proporcionada"
           if (responseData.message && responseData.message.includes("Descargue desde la URL")) {
-            console.log("ℹ️ Backend indica que el archivo está en URL externa");
             
             // Intentar extraer URL del mensaje o abrir nombreArchivo si es URL
             if (nombreArchivo.includes('http')) {
@@ -1667,7 +1539,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
           document.body.removeChild(a);
         }, 100);
         
-        console.log("✅ Archivo descargado exitosamente:", downloadName);
         
         return { 
           success: true, 
@@ -1676,11 +1547,9 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         };
         
       } catch (error: any) {
-        console.error("❌ Error descargando archivo:", error);
         
         // Si el error es sobre URL de Cloudinary, intentar abrir directamente
         if (error.message.includes("Descargue desde la URL") && nombreArchivo.includes('http')) {
-          console.log("🔄 Intentando abrir URL directamente:", nombreArchivo);
           window.open(nombreArchivo, '_blank');
           
           return {
@@ -1702,13 +1571,11 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
   // También agrega un método para verificar si hay archivos
   checkPlanFiles: async (planId: string) => {
     try {
-      console.log("🔍 Verificando archivos para plan:", planId);
       
       const plan = await api.getPlanQuirurgico(planId);
       
       if (plan.success && plan.imagenes_adjuntas) {
         const archivos = plan.imagenes_adjuntas;
-        console.log("📁 Archivos encontrados:", archivos);
         return {
           success: true,
           archivos: Array.isArray(archivos) ? archivos : [],
@@ -1723,7 +1590,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         message: "No se encontraron archivos"
       };
     } catch (error) {
-      console.error("❌ Error verificando archivos:", error);
       return {
         success: false,
         archivos: [],
@@ -1734,11 +1600,10 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
   },
 
   getPlanQuirurgico: (id: string) => {
-    const callKey = `getPlanQuirurgico_${id}_${Date.now()}`;
+    const callKey = `getPlanQuirurgico_${id}`;
     
     return preventDuplicateCall(callKey, async () => {
       try {
-        console.log(`📥 [GET] Obteniendo plan quirúrgico ID: ${id}`);
         
         // 🔴 CORRECCIÓN: Extraer solo el ID numérico del plan
         let planIdClean = id;
@@ -1749,7 +1614,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         // Validar que el ID sea un número
         const planIdNum = parseInt(planIdClean);
         if (isNaN(planIdNum) || planIdNum <= 0) {
-          console.error(`❌ [GET] ID de plan inválido: ${id}`);
           return {
             success: false,
             error: true,
@@ -1761,11 +1625,9 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         // Obtener el plan específico
         const response = await fetchAPI(`/api/planes-quirurgicos/${planIdNum}`);
         
-        console.log(`📥 [GET] Respuesta para plan ID ${planIdNum}:`, response);
         
         // Si hay error, devolverlo directamente
         if (response && response.error === true) {
-          console.error(`❌ [GET] Error en respuesta para plan ${id}:`, response.message);
           return {
             success: false,
             error: true,
@@ -1787,13 +1649,7 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         
         if (planData && typeof planData === 'object' && Object.keys(planData).length > 0) {
           planTransformado = transformBackendToFrontend.planQuirurgico(planData);
-          console.log(`✅ [GET] Plan ${id} transformado exitosamente`, {
-            id: planTransformado.id,
-            paciente: planTransformado.datos_paciente?.nombre_completo,
-            totalArchivos: planTransformado.imagenes_adjuntas?.length || 0
-          });
         } else {
-          console.warn(`⚠️ [GET] Plan ${id} tiene datos vacíos o inválidos`);
           return {
             success: false,
             error: true,
@@ -1808,7 +1664,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         };
         
       } catch (error: any) {
-        console.error(`❌ [GET] Error obteniendo plan quirúrgico ${id}:`, error);
         return {
           success: false,
           error: true,
@@ -1822,19 +1677,18 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
 // En el objeto api, agregar o actualizar la función createPlanQuirurgico:
 
   createPlanQuirurgico: (data: any) => {
-    const callKey = `createPlanQuirurgico_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    // Antes usaba Date.now()/Math.random(), lo que hacía la clave única en cada
+    // llamada y anulaba por completo la protección contra doble-click/doble-envío.
+    const callKey = `createPlanQuirurgico_${JSON.stringify(data)}`;
     
     return preventDuplicateCall(callKey, async () => {
-      console.log("📤 Creando plan quirúrgico con datos:", data);
       
       // Transformar datos para el backend
       const backendData = transformBackendToFrontend.planQuirurgicoToBackend(data);
       
-      console.log("📤 Datos para enviar al backend:", backendData);
       
       //  CORRECCIÓN CRÍTICA: Asegurar que paciente_id sea un NÚMERO VÁLIDO
       if (!backendData.paciente_id || backendData.paciente_id <= 0) {
-        console.error("❌ Error: paciente_id inválido:", backendData.paciente_id);
         return {
           success: false,
           error: true,
@@ -1864,12 +1718,10 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         if (result.error === true) {
           //  CORRECCIÓN ESPECÍFICA PARA "paciente no encontrado"
           if (result.message && result.message.includes("paciente no encontrado")) {
-            console.error(" Error específico: paciente con ID", backendData.paciente_id, "no encontrado en la BD");
             
             // Verificar si el paciente existe realmente
             try {
               const pacienteCheck = await api.getpaciente(backendData.paciente_id);
-              console.log("🔍 Verificación de paciente:", pacienteCheck);
               
               if (pacienteCheck && pacienteCheck.id) {
                 return {
@@ -1887,7 +1739,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
                 };
               }
             } catch (pacienteError) {
-              console.error("❌ Error verificando paciente:", pacienteError);
               return result;
             }
           }
@@ -1901,7 +1752,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         };
         
       } catch (error: any) {
-        console.error("❌ Error creando plan quirúrgico:", error);
         return {
           success: false,
           error: true,
@@ -1912,10 +1762,9 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
   },
 
   updatePlanQuirurgico: (id: string, data: any) => {
-    const callKey = `updatePlanQuirurgico_${id}_${Date.now()}`;
+    const callKey = `updatePlanQuirurgico_${id}`;
     
     return preventDuplicateCall(callKey, async () => {
-      console.log("📤 Actualizando plan quirúrgico ID:", id, "datos:", data);
       
       //  IMPORTANTE: Extraer solo el ID numérico del plan
       let planIdNum = id;
@@ -1926,11 +1775,9 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
       // Transformar datos para el backend
       const backendData = transformBackendToFrontend.planQuirurgicoToBackend(data);
       
-      console.log("📤 Datos para enviar al backend:", backendData);
       
       //  CORRECCIÓN CRÍTICA: Asegurar que paciente_id sea un NÚMERO VÁLIDO
       if (!backendData.paciente_id || backendData.paciente_id <= 0) {
-        console.error("❌ Error: paciente_id inválido:", backendData.paciente_id);
         return {
           success: false,
           error: true,
@@ -1951,12 +1798,10 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         if (result && result.error === true) {
           // Manejar error de paciente no encontrado
           if (result.message && result.message.includes("paciente no encontrado")) {
-            console.error(" Error específico: paciente con ID", backendData.paciente_id, "no encontrado en la BD");
             
             // Verificar si el paciente existe realmente
             try {
               const pacienteCheck = await api.getpaciente(backendData.paciente_id);
-              console.log("🔍 Verificación de paciente:", pacienteCheck);
               
               if (pacienteCheck && pacienteCheck.id) {
                 return {
@@ -1967,7 +1812,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
                 };
               }
             } catch (pacienteError) {
-              console.error("❌ Error verificando paciente:", pacienteError);
             }
           }
           return result;
@@ -1978,7 +1822,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
           ...result
         };
       } catch (error: any) {
-        console.error("❌ Error actualizando plan quirúrgico:", error);
         return {
           success: false,
           error: true,
@@ -2017,7 +1860,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         };
       }
     } catch (error) {
-      console.error("❌ Error verificando paciente:", error);
       return {
         success: false,
         existe: false,
@@ -2027,10 +1869,9 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
   },
 
   deletePlanQuirurgico: (id: string) => {
-    const callKey = `deletePlanQuirurgico_${id}_${Date.now()}`;
+    const callKey = `deletePlanQuirurgico_${id}`;
     
     return preventDuplicateCall(callKey, async () => {
-      console.log("🗑️ Eliminando plan quirúrgico ID:", id);
       
       try {
         const numericId = id.replace(/\D/g, '');
@@ -2044,7 +1885,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         
         return result;
       } catch (error: any) {
-        console.error("❌ Error eliminando plan quirúrgico:", error);
         return {
           success: false,
           error: true,
@@ -2076,19 +1916,16 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         ultimacita: ultimacita
       };
     } catch (error) {
-      console.error("Error obteniendo datos del paciente:", error);
       return { paciente: null, ultimaHistoria: null, ultimacita: null };
     }
   },
 
   // ===== DEBUG DE LLAMADAS DUPLICADAS =====
   getActiveCalls: () => {
-    console.log("📊 Llamadas activas:", Array.from(callsInProgress));
     return Array.from(callsInProgress);
   },
   
   clearAllCalls: () => {
-    console.log("🧹 Limpiando todas las llamadas en progreso");
     callsInProgress.clear();
   },
   
@@ -2104,6 +1941,7 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
         },
       });
       if (!response.ok) {
+        if (response.status === 401) handleUnauthorized();
         const err = await response.json().catch(() => ({}));
         return { error: true, message: err.detail || `Error ${response.status}` };
       }
@@ -2116,7 +1954,6 @@ getEstadisticasSalaEspera: async (): Promise<any> => {
 
 // Helper para manejar errores
 export const handleApiError = (error: any): string => {
-  console.error('API Error:', error);
   
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
@@ -2244,7 +2081,6 @@ export const transformBackendToFrontend = {
   
   // Transformar cotización del backend al formato del frontend - MEJORADO
   cotizacion: (backendCotizacion: any) => {
-    console.log("🔄 Transformando cotización del backend:", backendCotizacion);
     
     // Mapear estado ID a nombre
     const estadoMap: Record<number, string> = {
@@ -2254,10 +2090,10 @@ export const transformBackendToFrontend = {
       4: 'facturada'
     };
     
-    // Procesar fecha de creación
+    // Procesar fecha de creación (el backend guarda este dato en fecha_emision, no fecha_creacion)
     let fechaCreacion = '';
-    if (backendCotizacion.fecha_creacion) {
-      const fechaStr = backendCotizacion.fecha_creacion.toString();
+    if (backendCotizacion.fecha_emision) {
+      const fechaStr = backendCotizacion.fecha_emision.toString();
       if (fechaStr.includes(' ')) {
         fechaCreacion = fechaStr.split(' ')[0];
       } else if (fechaStr.includes('T')) {
@@ -2266,7 +2102,7 @@ export const transformBackendToFrontend = {
         fechaCreacion = fechaStr;
       }
     }
-    
+
     // Procesar items
     const items = Array.isArray(backendCotizacion.items) ? backendCotizacion.items.map((item: any) => ({
       id: item.id?.toString() || crypto.randomUUID(),
@@ -2294,12 +2130,6 @@ export const transformBackendToFrontend = {
       serviciosIncluidos = cotizacionHelpers.serviciosIncluidosDefault();
     }
     
-    console.log("🔍 Servicios incluidos procesados:", {
-      tieneServiciosEnBackend: 'servicios_incluidos' in backendCotizacion,
-      esArray: Array.isArray(backendCotizacion.servicios_incluidos),
-      cantidad: serviciosIncluidos.length,
-      servicios: serviciosIncluidos
-    });
     
     // Obtener los subtotales
     const subtotalProcedimientos = parseFloat(backendCotizacion.subtotal_procedimientos) || 0;
@@ -2313,18 +2143,11 @@ export const transformBackendToFrontend = {
       totalCalculado = items.reduce((sum: number, item: any) => sum + (item.subtotal || 0), 0);
     }
     
-    console.log("📊 Transformación completa:", {
-      subtotalProcedimientos,
-      subtotalAdicionales,
-      subtotalOtrosAdicionales,
-      totalCalculado,
-      serviciosIncluidosLength: serviciosIncluidos.length
-    });
     
     return {
       id: backendCotizacion.id?.toString() || '',
       paciente_id: backendCotizacion.paciente_id?.toString() || '',
-      fecha_creacion: fechaCreacion || new Date().toISOString().split('T')[0],
+      fecha_creacion: fechaCreacion || toLocalDateString(new Date()),
       estado: estadoMap[backendCotizacion.estado_id] || backendCotizacion.estado_nombre || 'pendiente',
       items: items,
       servicios_incluidos: serviciosIncluidos, //  Esto debe estar aquí
@@ -2379,7 +2202,7 @@ export const transformBackendToFrontend = {
     return {
       id: backendHistoria.id?.toString() || '',
       id_paciente: backendHistoria.paciente_id?.toString() || '',
-      fecha_creacion: fechaCreacion || new Date().toISOString().split('T')[0],
+      fecha_creacion: fechaCreacion || toLocalDateString(new Date()),
       motivo_consulta: backendHistoria.motivo_consulta || '',
       antecedentes_medicos: backendHistoria.antecedentes_medicos || '',
       antecedentes_quirurgicos: backendHistoria.antecedentes_quirurgicos || '',
@@ -2443,17 +2266,14 @@ export const transformBackendToFrontend = {
   
   // Función completa para transformBackendToFrontend.planQuirurgico
   planQuirurgico: (backendPlan: any) => {
-    console.log("🔄 TRANSFORMANDO PLAN desde backend:", backendPlan);
     
     // Si el plan ya viene transformado del frontend, devolverlo tal cual
     if (backendPlan && backendPlan.id_paciente && backendPlan.historia_clinica) {
-      console.log("✅ Plan ya está transformado, devolviendo tal cual");
       return backendPlan;
     }
 
     // Si no hay datos, devolver vacío
     if (!backendPlan || typeof backendPlan !== 'object' || Object.keys(backendPlan).length === 0) {
-      console.warn("❌ backendPlan vacío o inválido");
       return transformBackendToFrontend.createEmptyPlan();
     }
 
@@ -2470,7 +2290,6 @@ export const transformBackendToFrontend = {
         }
         return JSON.parse(trimmed);
       } catch (e) {
-        console.warn(`⚠️ Error parseando JSON: ${field}`, e);
         return defaultValue;
       }
     };
@@ -2602,6 +2421,7 @@ export const transformBackendToFrontend = {
 
     // Combinar datos de texto plano con JSON
     const enfermedad_actual_combined = {
+      acido_peptica: false,
       hepatitis: false,
       discrasia_sanguinea: false,
       cardiopatias: false,
@@ -2719,14 +2539,6 @@ export const transformBackendToFrontend = {
       esquema_mejorado: esquema_mejorado_json
     };
 
-    console.log("✅ PLAN TRANSFORMADO COMPLETO:", {
-      id: planTransformado.id,
-      nombre: planTransformado.datos_paciente.nombre_completo,
-      identificacion: planTransformado.datos_paciente.identificacion,
-      tienePeso: !!peso,
-      tieneAltura: !!altura,
-      tieneIMC: !!imc
-    });
 
     return planTransformado;
   },
@@ -2763,6 +2575,7 @@ export const transformBackendToFrontend = {
       motivo_consulta: '',
       motivo_consulta_detalle: '',
       enfermedad_actual: {
+        acido_peptica: false,
         hepatitis: false,
         discrasia_sanguinea: false,
         cardiopatias: false,
@@ -2881,15 +2694,6 @@ export const transformBackendToFrontend = {
   
   // Transformación inversa - Cotización para enviar al backend
   cotizacionToBackend: (frontendCotizacion: any) => {
-    console.log("🚀 Transformando cotización para enviar al backend:", {
-      id: frontendCotizacion.id,
-      estado_frontend: frontendCotizacion.estado,
-      paciente_id: frontendCotizacion.paciente_id,
-      // Debug: mostrar todas las propiedades que contienen 'estado'
-      propiedades_estado: Object.keys(frontendCotizacion).filter(key => 
-        key.toLowerCase().includes('estado')
-      )
-    });
     
     const estadoMap: Record<string, number> = {
       'pendiente': 1,
@@ -2903,7 +2707,6 @@ export const transformBackendToFrontend = {
     
     // Debug de todas las propiedades del objeto
     if (!estado) {
-      console.log("🔍 Buscando estado en otras propiedades...");
       const posiblesEstados = [
         frontendCotizacion.estado_cotizacion,
         frontendCotizacion.estadoNombre,
@@ -2913,7 +2716,6 @@ export const transformBackendToFrontend = {
       
       if (posiblesEstados.length > 0) {
         estado = posiblesEstados[0];
-        console.log("✅ Estado encontrado en otra propiedad:", estado);
       }
     }
     
@@ -2924,13 +2726,11 @@ export const transformBackendToFrontend = {
       const estadoName = Object.keys(estadoMap).find(key => estadoMap[key] === estadoId);
       if (estadoName) {
         estado = estadoName;
-        console.log("✅ Estado derivado de _backendData.estado_id:", estadoId, "->", estado);
       }
     }
     
     // Si aún no hay estado, usar pendiente por defecto
     if (!estado) {
-      console.warn("⚠️ Estado no encontrado en frontendCotizacion, usando 'pendiente' por defecto");
       estado = 'pendiente';
     }
     
@@ -2941,17 +2741,10 @@ export const transformBackendToFrontend = {
     
     // Si el estado no se encuentra en el mapa, usar pendiente (1)
     if (estado_id === undefined) {
-      console.warn("⚠️ Estado no encontrado en mapa:", estado, 
-                  "usando 'pendiente' por defecto");
       estado_id = 1;
       estado = 'pendiente';
     }
     
-    console.log("📊 Estado transformado:", {
-      estado_original: estado,
-      estado_id_backend: estado_id,
-      es_valido: estado_id !== undefined
-    });
     
     // Procesar items
     const items = Array.isArray(frontendCotizacion.items) ? frontendCotizacion.items.map((item: any) => ({
@@ -3004,30 +2797,31 @@ export const transformBackendToFrontend = {
       .filter((item: any) => item.tipo === 'otroAdicional')
       .reduce((sum: number, item: any) => sum + (item.subtotal || 0), 0);
     
-    console.log("💰 Subtotal calculados:", {
-      subtotalProcedimientos,
-      subtotalAdicionales,
-      subtotalOtrosAdicionales
-    });
     
     // Calcular fecha de vencimiento
     let fecha_vencimiento = frontendCotizacion.fecha_vencimiento;
     if (!fecha_vencimiento && frontendCotizacion.validez_dias) {
       const fecha = new Date();
       fecha.setDate(fecha.getDate() + parseInt(frontendCotizacion.validez_dias));
-      fecha_vencimiento = fecha.toISOString().split('T')[0];
+      fecha_vencimiento = toLocalDateString(fecha);
     } else if (!fecha_vencimiento) {
       // Valor por defecto: 7 días desde hoy
       const fecha = new Date();
       fecha.setDate(fecha.getDate() + 7);
-      fecha_vencimiento = fecha.toISOString().split('T')[0];
+      fecha_vencimiento = toLocalDateString(fecha);
     }
     
+    // usuario_id debe venir siempre del usuario autenticado que crea/edita la cotización -
+    // un fallback silencioso a "1" atribuiría cotizaciones ajenas al primer usuario del sistema
+    if (!frontendCotizacion.usuario_id) {
+      throw new Error('cotizacionToBackend: falta usuario_id (no hay sesión identificada)');
+    }
+
     // **CONSTRUIR DATOS PARA ENVIAR**
     const data: any = {
       // Campos básicos siempre requeridos
       paciente_id: parseInt(frontendCotizacion.paciente_id || frontendCotizacion.id_paciente || 0),
-      usuario_id: parseInt(frontendCotizacion.usuario_id) || 1,
+      usuario_id: parseInt(frontendCotizacion.usuario_id),
       estado_id: estado_id,  // **USAR EL ESTADO_ID CALCULADO**
       
       // Campos opcionales - solo incluirlos si tienen valor
@@ -3051,14 +2845,6 @@ export const transformBackendToFrontend = {
       data.plan_id = parseInt(frontendCotizacion.plan_id);
     }
     
-    console.log("📤 Datos finales para enviar al backend:", {
-      ...data,
-      estado_id_enviado: data.estado_id,
-      estado_nombre: Object.keys(estadoMap).find(key => estadoMap[key] === data.estado_id),
-      numero_items: items.length,
-      numero_servicios: servicios_incluidos.length
-    });
-    console.log("🚫 Campos EXPLÍcitaMENTE excluidos: 'total', 'id' (en body)");
     
     return data;
   },
@@ -3423,7 +3209,6 @@ export const cotizacionHelpers = {
     subtotalOtrosAdicionales: number;
     total: number;
   } => {
-    console.log("🔢 Calculando totales para items:", items);
     
     let subtotalProcedimientos = 0;
     let subtotalAdicionales = 0;
@@ -3435,13 +3220,6 @@ export const cotizacionHelpers = {
       const precioUnitario = Number(item.precio_unitario) || 0;
       const subtotal = Number(item.subtotal) || (cantidad * precioUnitario);
       
-      console.log(`Item ${index} (${item.tipo}):`, {
-        nombre: item.nombre,
-        cantidad,
-        precioUnitario,
-        subtotal,
-        tipo: item.tipo
-      });
       
       // Clasificar por tipo
       switch (item.tipo) {
@@ -3466,12 +3244,6 @@ export const cotizacionHelpers = {
     
     const total = subtotalProcedimientos + subtotalAdicionales + subtotalOtrosAdicionales;
     
-    console.log("🧮 Resultados del cálculo:", {
-      subtotalProcedimientos,
-      subtotalAdicionales,
-      subtotalOtrosAdicionales,
-      total
-    });
     
     return {
       subtotalProcedimientos,
@@ -3506,7 +3278,7 @@ export const cotizacionHelpers = {
   calcularFechaVencimiento: (diasValidez: number = 7): string => {
     const fecha = new Date();
     fecha.setDate(fecha.getDate() + diasValidez);
-    return fecha.toISOString().split('T')[0];
+    return toLocalDateString(fecha);
   },
 
   

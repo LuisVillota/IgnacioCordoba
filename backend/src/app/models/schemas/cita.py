@@ -8,7 +8,7 @@ class CitaBase(BaseModel):
     fecha_hora: str
     tipo: str = "control"
     duracion_minutos: int = 30
-    estado_id: int = 4
+    estado_id: int = 1  # 1 = pendiente (ver estado_cita en BD: 1=pendiente, 2=confirmada, 3=completada, 4=cancelada)
     notas: Optional[str] = None
     
     @validator('fecha_hora')

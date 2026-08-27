@@ -14,20 +14,17 @@ let buildDir = null;
 for (const dir of possibleDirs) {
   if (fs.existsSync(dir)) {
     buildDir = dir;
-    console.log(`✅ Carpeta de build encontrada: ${dir}`);
     break;
   }
 }
 
 if (!buildDir) {
-  console.error('❌ No se encontró ninguna carpeta de build');
   
   // Crear carpeta out manualmente desde .next
   const nextDir = path.join(__dirname, '.next');
   const outDir = path.join(__dirname, 'out');
   
   if (fs.existsSync(nextDir)) {
-    console.log('Intentando copiar desde .next a out/...');
     fs.mkdirSync(outDir, { recursive: true });
     
     // Copiar archivos necesarios
@@ -38,12 +35,10 @@ if (!buildDir) {
       const destStatic = path.join(outDir, '_next', 'static');
       fs.mkdirSync(destStatic, { recursive: true });
       fs.cpSync(staticDir, destStatic, { recursive: true });
-      console.log('✅ Archivos estáticos copiados');
     }
     
     if (fs.existsSync(serverDir)) {
       fs.cpSync(serverDir, outDir, { recursive: true });
-      console.log('✅ Páginas copiadas');
     }
     
     buildDir = outDir;
@@ -53,4 +48,3 @@ if (!buildDir) {
 }
 
 // Tu lógica adicional de postbuild aquí...
-console.log('✅ Post-build completado');

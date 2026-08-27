@@ -1,11 +1,14 @@
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timedelta
-import traceback
+import logging
+import pymysql
 
 from app.core.database import get_connection
 from app.models.schemas.cotizacion import (
     CotizacionCreate, CotizacionUpdate, CotizacionInDB
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -118,11 +121,24 @@ def get_cotizaciones(
                     "offset": offset
                 }
     except Exception as e:
-        error_msg = str(e)
-        if "cotizacion" in error_msg.lower():
+        if isinstance(e, pymysql.MySQLError) and e.args and e.args[0] == 1146:
             return {"cotizaciones": [], "total": 0}
-        raise HTTPException(status_code=500, detail=error_msg)
-        
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ¡IMPORTANTE: /plantilla-servicios debe ir ANTES de la ruta con parámetro {cotizacion_id}!
+@router.get("/plantilla-servicios", response_model=dict)
+def get_plantilla_servicios():
+    servicios_base = [
+        {"servicio_nombre": "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", "requiere": False},
+        {"servicio_nombre": "ANESTESIOLOGO", "requiere": False},
+        {"servicio_nombre": "CONTROLES CON MEDICO Y ENFERMERA", "requiere": False},
+        {"servicio_nombre": "VALORACION CON ANESTESIOLOGO", "requiere": False},
+        {"servicio_nombre": "HEMOGRAMA DE CONTROL", "requiere": False},
+        {"servicio_nombre": "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", "requiere": False},
+        {"servicio_nombre": "IMPLANTES", "requiere": False},
+    ]
+    return {"servicios": servicios_base}
+
 @router.get("/{cotizacion_id}", response_model=dict)
 def get_cotizacion(cotizacion_id: int):
     try:
@@ -219,7 +235,7 @@ def get_cotizacion(cotizacion_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Error obteniendo cotización")
         raise HTTPException(status_code=500, detail={
             "error": "Error obteniendo cotización",
             "message": str(e)
@@ -323,8 +339,7 @@ def create_cotizacion(cotizacion: CotizacionCreate):
     except HTTPException:
         raise
     except Exception as e:
-        error_details = traceback.format_exc()
-        print(f"ERROR DETALLADO: {error_details}")
+        logger.exception("Error creando cotización")
         raise HTTPException(status_code=500, detail={
             "error": "Error creando cotización",
             "message": str(e),
@@ -340,7 +355,6 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
                 # Verificar que la cotización existe
                 cursor.execute("SELECT id FROM cotizacion WHERE id = %s", (cotizacion_id,))
                 if not cursor.fetchone():
-                    print(f"❌ Cotización {cotizacion_id} no encontrada")
                     raise HTTPException(status_code=404, detail="Cotización no encontrada")
                 
                 # Preparar campos a actualizar
@@ -395,18 +409,18 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
                 if update_fields:
                     values.append(cotizacion_id)
                     query = f"UPDATE cotizacion SET {', '.join(update_fields)} WHERE id = %s"
-                    print(f"📝 Query SQL: {query}")
-                    print(f"📝 Valores: {values}")
-                    
+                    logger.debug(f"Query SQL: {query}")
+                    logger.debug(f"Valores: {values}")
+
                     cursor.execute(query, values)
                     conn.commit()
-                    
-                    print(f"✅ Cotización {cotizacion_id} actualizada")
-                
+
+                    logger.info(f"Cotización {cotizacion_id} actualizada")
+
                 # Actualizar items si se proporcionan
                 if cotizacion.items is not None:
-                    print(f"📦 Actualizando {len(cotizacion.items)} items...")
-                    
+                    logger.info(f"Actualizando {len(cotizacion.items)} items...")
+
                     cursor.execute("DELETE FROM cotizacion_item WHERE cotizacion_id = %s", (cotizacion_id,))
                     
                     for item in cotizacion.items:
@@ -426,12 +440,12 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
                         ))
                     
                     conn.commit()
-                    print(f"✅ Items actualizados para cotización {cotizacion_id}")
-                
+                    logger.info(f"Items actualizados para cotización {cotizacion_id}")
+
                 # Actualizar servicios incluidos si se proporcionan
                 if cotizacion.servicios_incluidos is not None:
-                    print(f"🔧 Actualizando {len(cotizacion.servicios_incluidos)} servicios incluidos...")
-                    
+                    logger.info(f"Actualizando {len(cotizacion.servicios_incluidos)} servicios incluidos...")
+
                     try:
                         cursor.execute("DELETE FROM cotizacion_servicio_incluido WHERE cotizacion_id = %s", (cotizacion_id,))
                         
@@ -447,10 +461,10 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
                             ))
                         
                         conn.commit()
-                        print(f"✅ Servicios incluidos actualizados para cotización {cotizacion_id}")
-                        
+                        logger.info(f"Servicios incluidos actualizados para cotización {cotizacion_id}")
+
                     except Exception as table_error:
-                        print(f"⚠️ Tabla de servicios no disponible: {table_error}")
+                        logger.warning(f"Tabla de servicios no disponible: {table_error}")
                 
                 return {
                     "success": True,
@@ -461,8 +475,7 @@ def update_cotizacion(cotizacion_id: int, cotizacion: CotizacionUpdate):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error actualizando cotización: {str(e)}")
-        traceback.print_exc()
+        logger.exception("Error actualizando cotización")
         raise HTTPException(status_code=500, detail={
             "error": "Error actualizando cotización",
             "message": str(e)
@@ -480,10 +493,11 @@ def delete_cotizacion(cotizacion_id: int):
                     raise HTTPException(status_code=404, detail="Cotización no encontrada")
                 
                 cursor.execute("DELETE FROM cotizacion_item WHERE cotizacion_id = %s", (cotizacion_id,))
+                cursor.execute("DELETE FROM cotizacion_servicio_incluido WHERE cotizacion_id = %s", (cotizacion_id,))
                 cursor.execute("DELETE FROM cotizacion WHERE id = %s", (cotizacion_id,))
-                
+
                 conn.commit()
-                
+
                 return {
                     "success": True,
                     "message": "Cotización eliminada exitosamente",
@@ -493,22 +507,9 @@ def delete_cotizacion(cotizacion_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Error eliminando cotización")
         raise HTTPException(status_code=500, detail={
             "error": "Error eliminando cotización",
             "message": str(e),
             "type": type(e).__name__
         })
-
-@router.get("/plantilla-servicios", response_model=dict)
-def get_plantilla_servicios():
-    servicios_base = [
-        {"servicio_nombre": "CIRUJANO PLASTICO, AYUDANTE Y PERSONAL CLINICO", "requiere": False},
-        {"servicio_nombre": "ANESTESIOLOGO", "requiere": False},
-        {"servicio_nombre": "CONTROLES CON MEDICO Y ENFERMERA", "requiere": False},
-        {"servicio_nombre": "VALORACION CON ANESTESIOLOGO", "requiere": False},
-        {"servicio_nombre": "HEMOGRAMA DE CONTROL", "requiere": False},
-        {"servicio_nombre": "UNA NOCHE DE HOSPITALIZACION CON UN ACOMPAÑANTES", "requiere": False},
-        {"servicio_nombre": "IMPLANTES", "requiere": False},
-    ]
-    return {"servicios": servicios_base}

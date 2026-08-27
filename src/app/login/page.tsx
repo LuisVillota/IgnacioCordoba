@@ -24,7 +24,6 @@ export default function LoginPage() {
       
       const success = await login(username, password)
       if (success) {
-        console.log('✅ [LOGIN] Login exitoso, redirigiendo...')
         // Usar router.push en vez de window.location.href
         router.push('/dashboard')
       } else {

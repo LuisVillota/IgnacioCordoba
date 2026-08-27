@@ -10,11 +10,11 @@ class OtroAdicionalBase(BaseModel):
 
 class OtroAdicionalCreate(BaseModel):
     nombre: str
-    precio: int
+    precio: float
 
 class OtroAdicionalUpdate(BaseModel):
     nombre: Optional[str] = None
-    precio: Optional[int] = None
+    precio: Optional[float] = None
 
 class OtroAdicionalInDB(OtroAdicionalBase):
     id: int

@@ -44,6 +44,94 @@ def get_pacientes(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/todos", response_model=dict)
+def get_todos_pacientes():
+    """
+    Obtiene todos los pacientes para selección en formularios
+    """
+    try:
+        conn = get_connection()
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT
+                        id,
+                        nombre,
+                        apellido,
+                        CONCAT(nombre, ' ', apellido) as nombre_completo,
+                        numero_documento,
+                        tipo_documento,
+                        fecha_nacimiento,
+                        genero,
+                        telefono,
+                        email,
+                        direccion,
+                        ciudad,
+                        TIMESTAMPDIFF(YEAR, fecha_nacimiento, CURDATE()) as edad,
+                        fecha_registro
+                    FROM paciente
+                    ORDER BY apellido, nombre
+                """)
+                pacientes = cursor.fetchall()
+
+                return {
+                    "success": True,
+                    "total": len(pacientes),
+                    "pacientes": pacientes
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={
+            "error": "Error obteniendo pacientes",
+            "message": str(e)
+        })
+
+@router.get("/buscar", response_model=dict)
+def buscar_pacientes(
+    q: str = Query("", description="Texto para buscar por nombre, apellido o documento"),
+    limit: int = Query(10, description="Límite de resultados")
+):
+    """
+    Busca pacientes para autocompletar en formularios
+    """
+    try:
+        conn = get_connection()
+        with conn:
+            with conn.cursor() as cursor:
+                query = """
+                    SELECT
+                        id,
+                        CONCAT(nombre, ' ', apellido) as nombre_completo,
+                        numero_documento as documento,
+                        telefono,
+                        email,
+                        fecha_nacimiento,
+                        TIMESTAMPDIFF(YEAR, fecha_nacimiento, CURDATE()) as edad
+                    FROM paciente
+                    WHERE
+                        nombre LIKE %s OR
+                        apellido LIKE %s OR
+                        numero_documento LIKE %s
+                    ORDER BY nombre, apellido
+                    LIMIT %s
+                """
+                search_term = f"%{q}%"
+
+                cursor.execute(query, (search_term, search_term, search_term, limit))
+                pacientes = cursor.fetchall()
+
+                return {
+                    "pacientes": pacientes,
+                    "total": len(pacientes)
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={
+            "error": "Error buscando pacientes",
+            "message": str(e)
+        })
+
+# ¡IMPORTANTE: /todos y /buscar deben ir ANTES de la ruta con parámetro {paciente_id}!
 @router.get("/{paciente_id}", response_model=dict)
 def get_paciente(paciente_id: int):
     """
@@ -211,42 +299,62 @@ def delete_paciente(paciente_id: int):
             with conn.cursor() as cursor:
                 # Obtener información del paciente
                 cursor.execute("""
-                    SELECT id, nombre, apellido 
+                    SELECT id, nombre, apellido, numero_documento
                     FROM paciente WHERE id = %s
                 """, (paciente_id,))
-                
+
                 paciente = cursor.fetchone()
                 if not paciente:
                     raise HTTPException(status_code=404, detail="Paciente no encontrado")
-                
+
                 # Contar registros relacionados
                 cursor.execute("""
-                    SELECT COUNT(*) as count FROM cita 
+                    SELECT COUNT(*) as count FROM cita
                     WHERE paciente_id = %s
                 """, (paciente_id,))
                 citas_count = cursor.fetchone()['count']
-                
+
                 cursor.execute("""
-                    SELECT COUNT(*) as count FROM historial_clinico 
+                    SELECT COUNT(*) as count FROM historial_clinico
                     WHERE paciente_id = %s
                 """, (paciente_id,))
                 historias_count = cursor.fetchone()['count']
-                
+
+                # Eliminar registros relacionados primero (evita errores de FK al borrar
+                # un paciente con plan quirúrgico, cita programada, cotización o
+                # entrada en sala de espera)
+                cursor.execute("SELECT id FROM cotizacion WHERE paciente_id = %s", (paciente_id,))
+                cotizacion_ids = [row['id'] for row in cursor.fetchall()]
+                for cid in cotizacion_ids:
+                    cursor.execute("DELETE FROM cotizacion_item WHERE cotizacion_id = %s", (cid,))
+                    cursor.execute("DELETE FROM cotizacion_servicio_incluido WHERE cotizacion_id = %s", (cid,))
+                if cotizacion_ids:
+                    cursor.execute("DELETE FROM cotizacion WHERE paciente_id = %s", (paciente_id,))
+
+                cursor.execute("DELETE FROM plan_quirurgico WHERE paciente_id = %s", (paciente_id,))
+                cursor.execute("DELETE FROM sala_espera WHERE paciente_id = %s", (paciente_id,))
+                # agenda_procedimientos no tiene paciente_id, relaciona por numero_documento
+                if paciente['numero_documento']:
+                    cursor.execute(
+                        "DELETE FROM agenda_procedimientos WHERE numero_documento = %s",
+                        (paciente['numero_documento'],)
+                    )
+
                 # Eliminar registros relacionados primero (si existen)
                 if historias_count > 0:
                     try:
                         cursor.execute("""
-                            DELETE FROM historial_clinico 
+                            DELETE FROM historial_clinico
                             WHERE paciente_id = %s
                         """, (paciente_id,))
                     except:
                         pass  # Si la tabla no existe, continuar
-                
+
                 if citas_count > 0:
                     cursor.execute("""
                         DELETE FROM cita WHERE paciente_id = %s
                     """, (paciente_id,))
-                
+
                 # Eliminar el paciente
                 cursor.execute("DELETE FROM paciente WHERE id = %s", (paciente_id,))
                 conn.commit()
@@ -264,90 +372,3 @@ def delete_paciente(paciente_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/todos", response_model=dict)
-def get_todos_pacientes():
-    """
-    Obtiene todos los pacientes para selección en formularios
-    """
-    try:
-        conn = get_connection()
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT 
-                        id,
-                        nombre,
-                        apellido,
-                        CONCAT(nombre, ' ', apellido) as nombre_completo,
-                        numero_documento,
-                        tipo_documento,
-                        fecha_nacimiento,
-                        genero,
-                        telefono,
-                        email,
-                        direccion,
-                        ciudad,
-                        TIMESTAMPDIFF(YEAR, fecha_nacimiento, CURDATE()) as edad,
-                        fecha_registro
-                    FROM paciente
-                    ORDER BY apellido, nombre
-                """)
-                pacientes = cursor.fetchall()
-                
-                return {
-                    "success": True,
-                    "total": len(pacientes),
-                    "pacientes": pacientes
-                }
-                
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={
-            "error": "Error obteniendo pacientes",
-            "message": str(e)
-        })
-
-@router.get("/buscar", response_model=dict)
-def buscar_pacientes(
-    q: str = Query("", description="Texto para buscar por nombre, apellido o documento"),
-    limit: int = Query(10, description="Límite de resultados")
-):
-    """
-    Busca pacientes para autocompletar en formularios
-    """
-    try:
-        conn = get_connection()
-        with conn:
-            with conn.cursor() as cursor:
-                query = """
-                    SELECT 
-                        id,
-                        CONCAT(nombre, ' ', apellido) as nombre_completo,
-                        numero_documento as documento,
-                        telefono,
-                        email,
-                        fecha_nacimiento,
-                        TIMESTAMPDIFF(YEAR, fecha_nacimiento, CURDATE()) as edad
-                    FROM paciente
-                    WHERE 
-                        nombre LIKE %s OR 
-                        apellido LIKE %s OR 
-                        numero_documento LIKE %s
-                    ORDER BY nombre, apellido
-                    LIMIT %s
-                """
-                search_term = f"%{q}%"
-                
-                cursor.execute(query, (search_term, search_term, search_term, limit))
-                pacientes = cursor.fetchall()
-                
-                return {
-                    "pacientes": pacientes,
-                    "total": len(pacientes)
-                }
-                
-    except Exception as e:
-        raise HTTPException(status_code=500, detail={
-            "error": "Error buscando pacientes",
-            "message": str(e)
-        })

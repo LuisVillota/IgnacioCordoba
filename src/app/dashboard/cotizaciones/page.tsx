@@ -68,7 +68,6 @@ export default function CotizacionesPage() {
         setpacientes(pacientesTransformados)
       }
     } catch (err: any) {
-      console.error("Error cargando pacientes:", err)
     }
   }
 
@@ -98,12 +97,6 @@ export default function CotizacionesPage() {
 
       let backendData = { ...formData._backendData };
       
-      console.log("🔍 Datos completos recibidos:", {
-        formData_estado: formData.estado,
-        formData_estado_id: formData.estado_id,
-        backendData_estado_id: backendData.estado_id,
-        formData_completo: formData
-      });
       
       // Si backendData no tiene estado_id pero formData tiene estado
       if (!backendData.estado_id && formData.estado) {
@@ -117,30 +110,20 @@ export default function CotizacionesPage() {
         const nuevoEstadoId = estadoMap[formData.estado];
         if (nuevoEstadoId) {
           backendData.estado_id = nuevoEstadoId;
-          console.log("🔄 Estado_id asignado desde formData:", nuevoEstadoId);
         }
       }
       
-      console.log("💾 Guardando cotización con:", {
-        estado_id: backendData.estado_id,
-        estado_nombre: formData.estado,
-        esEdicion: formData._isEditing
-      });
       
       let response;
       
       if (formData._isEditing && formData._cotizacionId) {
         const cotizacionId = parseInt(formData._cotizacionId);
         
-        console.log("🔄 Actualizando cotización ID:", cotizacionId);
-        console.log("📤 Datos de actualización:", backendData);
         
         response = await api.updateCotizacion(cotizacionId, backendData);
         alert("✅ Cotización actualizada exitosamente");
       } else {
         delete backendData.id;
-        console.log("🆕 Creando nueva cotización");
-        console.log("📤 Datos de creación:", backendData);
         
         response = await api.createCotizacion(backendData);
         alert("✅ Cotización creada exitosamente");
@@ -150,7 +133,6 @@ export default function CotizacionesPage() {
       handleCloseAllModals();
       
     } catch (err: any) {
-      console.error("❌ Error guardando cotización:", err);
       alert(`Error: ${err.message || 'Error desconocido'}`);
     }
   };
@@ -167,7 +149,6 @@ export default function CotizacionesPage() {
       alert("✅ Cotización eliminada exitosamente");
       await refreshData();
     } catch (err: any) {
-      console.error("❌ Error eliminando cotización:", err);
       alert(`Error: ${err.message || 'Error desconocido'}`);
     } finally {
       setDeletingId(null);

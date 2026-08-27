@@ -26,7 +26,6 @@ interface Procedimiento {
 }
 
 const formatHora = (hora: string): string => {
-  console.log("🕐 Formateando hora:", hora);
   
   if (!hora) return "00:00 AM";
   
@@ -61,7 +60,6 @@ const formatHora = (hora: string): string => {
     
     return hora;
   } catch (error) {
-    console.error("❌ Error formateando hora:", error, "hora original:", hora);
     return hora;
   }
 };
@@ -69,7 +67,6 @@ const formatHora = (hora: string): string => {
 const formatConflictTime = (hora: any): string => {
   if (!hora) return "00:00";
   
-  console.log("🕐 Formateando hora de conflicto:", hora, "tipo:", typeof hora);
   
   try {
     if (typeof hora === 'string') {
@@ -111,12 +108,14 @@ const formatConflictTime = (hora: any): string => {
     
     return String(hora);
   } catch (error) {
-    console.error("❌ Error formateando hora de conflicto:", error);
     return "00:00";
   }
 };
 
 export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: ProgramacionFormProps) {
+  // programacion puede venir como un objeto "predefinido" sin id real (al crear desde
+  // un horario específico del día) - solo se está editando de verdad si tiene id existente.
+  const isEditing = !!(programacion as any)?.id
   const [formData, setFormData] = useState({
     numero_documento: programacion?.numero_documento || "",
     fecha: programacion?.fecha || "",
@@ -162,13 +161,10 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       setError(null)
       
       try {
-        console.log("📥 Cargando datos para formulario...");
         
         setPacientesLoading(true)
-        console.log("📥 Cargando pacientes...");
         const pacientesData = await api.getpacientes(1000, 0)
         
-        console.log("📥 Respuesta de pacientes:", pacientesData);
         
         if (pacientesData && pacientesData.pacientes && Array.isArray(pacientesData.pacientes)) {
           const pacientesFormateados = pacientesData.pacientes.map((pac: any) => ({
@@ -177,18 +173,14 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
             apellido: pac.apellido || "",
             numero_documento: pac.numero_documento || ""
           }))
-          console.log(`✅ ${pacientesFormateados.length} pacientes cargados`);
           setPacientes(pacientesFormateados)
         } else {
-          console.warn("⚠️ No se pudieron cargar pacientes, respuesta inesperada");
           setPacientes([])
         }
 
         setProcedimientosLoading(true)
-        console.log("📥 Cargando procedimientos...");
         const procedimientosData = await api.getProcedimientos()
         
-        console.log("📥 Respuesta de procedimientos:", procedimientosData);
         
         if (procedimientosData && procedimientosData.procedimientos && Array.isArray(procedimientosData.procedimientos)) {
           const procedimientosFormateados = procedimientosData.procedimientos.map((proc: any) => {
@@ -197,42 +189,34 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
               nombre: proc.nombre || "",
               precio: proc.precio || 0
             };
-            console.log(`📋 Procedimiento cargado: ${procedimiento.nombre} (ID: ${procedimiento.id})`);
             return procedimiento;
           })
-          console.log(`✅ ${procedimientosFormateados.length} procedimientos cargados`);
           setProcedimientos(procedimientosFormateados)
           
           if (programacion?.procedimiento_id) {
             const procedimientoId = Number(programacion.procedimiento_id);
             const proc = procedimientosFormateados.find((p: Procedimiento) => p.id === procedimientoId);
             if (proc) {
-              console.log(`🔍 Procedimiento encontrado para edición: ${proc.nombre} (ID: ${proc.id})`);
               setProcedimientoSeleccionado(proc);
             }
           }
         } else if (Array.isArray(procedimientosData)) {
-          console.log("⚠️ Formato alternativo de procedimientos (array directo)");
           const procedimientosFormateados = procedimientosData.map((proc: any) => ({
             id: Number(proc.id),
             nombre: proc.nombre || "",
             precio: proc.precio || 0
           }))
-          console.log(`✅ ${procedimientosFormateados.length} procedimientos cargados`);
           setProcedimientos(procedimientosFormateados)
         } else {
-          console.warn("⚠️ No se pudieron cargar procedimientos, respuesta inesperada");
           setProcedimientos([])
         }
 
       } catch (err: any) {
-        console.error("❌ Error cargando datos:", err);
         setError(handleApiError(err))
       } finally {
         setPacientesLoading(false)
         setProcedimientosLoading(false)
         setLoadingData(false)
-        console.log("✅ Carga de datos completada");
       }
     }
 
@@ -278,7 +262,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
     const procedimientoIdNum = Number(formData.procedimiento_id) || 0;
     
     if (!Number.isInteger(procedimientoIdNum) || procedimientoIdNum <= 0) {
-      console.error("❌ procedimiento_id inválido:", formData.procedimiento_id);
       setError("Debes seleccionar un procedimiento válido");
       setValidating(false);
       return;
@@ -290,28 +273,18 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       );
 
       if (!procedimientoExiste) {
-        console.error("❌ Procedimiento no encontrado en la lista:", procedimientoIdNum);
-        console.log("📋 Procedimientos disponibles:", procedimientos.map(p => ({id: p.id, nombre: p.nombre})));
         setError("El procedimiento seleccionado no es válido. Por favor selecciona uno de la lista.")
         setValidating(false)
         return
       }
 
-      console.log("✅ Procedimiento validado en la lista");
 
-      console.log("🕐 Hora del formulario:", {
-        hora_original: formData.hora,
-        formato: formData.hora.includes(":") ? formData.hora.split(":").length + " partes" : "formato desconocido",
-        ejemplo_correcto: "09:00:00"
-      });
 
       let horaFormateada = formData.hora
       if (horaFormateada.includes(":") && horaFormateada.split(":").length === 2) {
         horaFormateada += ":00"
-        console.log("🕐 Hora formateada (con segundos):", horaFormateada);
       }
 
-      console.log("📤 Preparando datos para enviar al padre...");
       
       if (!programacion || 
           formData.fecha !== programacion.fecha || 
@@ -325,14 +298,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
         }
         
         try {
-          console.log("🔍 Verificando disponibilidad...");
-          console.log("📋 Parámetros para disponibilidad:", {
-            fecha: formData.fecha,
-            hora: horaFormateada,
-            duracion: formData.duracion,
-            excludeId,
-            procedimiento_id: procedimientoIdNum
-          });
           
           setIsCheckingAvailability(true);
 
@@ -344,10 +309,8 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
             procedimientoIdNum
           )
 
-          console.log("📊 Resultado disponibilidad COMPLETO:", disponibilidad);
           
           if (disponibilidad && disponibilidad.error === true) {
-            console.error("❌ Error en verificación de disponibilidad:", disponibilidad.message);
             setError(`Error verificando disponibilidad: ${disponibilidad.message}`);
             setIsCheckingAvailability(false);
             setValidating(false);
@@ -355,7 +318,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
           }
           
           if (!disponibilidad.disponible) {
-            console.warn("⚠️ Horario no disponible:", disponibilidad);
             
             let mensajeConflicto = "Conflicto de horario: ";
             
@@ -379,28 +341,20 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
             } else {
               mensajeConflicto += disponibilidad.mensaje || "El horario no está disponible.";
               setError(mensajeConflicto);
-              
-              if (disponibilidad.debug_info) {
-                console.log("🔍 Debug info del backend:", disponibilidad.debug_info);
-              }
             }
             
             setIsCheckingAvailability(false);
             setValidating(false);
             return;
           }
-          console.log("✅ Horario disponible confirmado por backend");
         } catch (dispoError: any) {
-          console.error("❌ Error en catch de disponibilidad:", dispoError);
           setConflictValidationError("No se pudo verificar la disponibilidad del horario. Por favor, asegúrate de que no haya conflictos.");
         } finally {
           setIsCheckingAvailability(false);
         }
       } else {
-        console.log("✅ No se requiere verificación de disponibilidad (sin cambios en fecha/hora)");
       }
 
-      console.log("✅ Todos los datos validados, enviando al padre...");
       
       // Buscar el paciente seleccionado para obtener su ID
       const pacienteSeleccionado = pacientes.find(p => p.numero_documento === formData.numero_documento);
@@ -417,15 +371,10 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
         observaciones: formData.observaciones
       }
 
-      console.log("📤 Datos para el padre:", datosParaParent);
       onSave(datosParaParent)
 
     } catch (err: any) {
       const errorMessage = err.message || "Error desconocido"
-      console.error("❌ Error en handleSubmit:", {
-        message: errorMessage,
-        error: err
-      });
       
       if (errorMessage.includes("procedimiento_id") || 
           errorMessage.includes("integer") || 
@@ -479,10 +428,6 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
   }
 
   const handleChange = (field: string, value: string | number) => {
-    console.log(`🔄 Cambiando campo ${field}:`, {
-      valor: value,
-      tipo: typeof value
-    });
     
     setFormData(prev => ({
       ...prev,
@@ -494,13 +439,14 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
     if (field === "procedimiento_id") {
       const proc = procedimientos.find(p => p.id === Number(value));
       setProcedimientoSeleccionado(proc || null);
-      console.log(`🔍 Procedimiento seleccionado actualizado:`, proc);
     }
   }
 
   const getFechaMinima = () => {
     const hoy = new Date();
-    return hoy.toISOString().split('T')[0];
+    // Fecha local (no UTC): toISOString().split('T')[0] adelanta un día entre las
+    // 7pm y medianoche en Colombia (UTC-5)
+    return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
   }
 
   const formatCurrency = (amount: number | undefined): string => {
@@ -519,7 +465,7 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
       <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
           <h2 className="text-xl font-bold text-gray-800">
-            {programacion ? "Editar Programación" : "Nueva Programación"}
+            {isEditing ? "Editar Programación" : "Nueva Programación"}
           </h2>
           <button 
             onClick={onClose} 
@@ -856,12 +802,12 @@ export function ProgramacionForm({ programacion, onSave, onClose, isLoading }: P
               {(isLoading || validating || isCheckingAvailability) ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isCheckingAvailability ? "Verificando disponibilidad..." : 
-                   validating ? "Verificando..." : 
-                   (programacion ? "Actualizando..." : "Creando...")}
+                  {isCheckingAvailability ? "Verificando disponibilidad..." :
+                   validating ? "Verificando..." :
+                   (isEditing ? "Actualizando..." : "Creando...")}
                 </>
               ) : (
-                programacion ? "Actualizar" : "Crear"
+                isEditing ? "Actualizar" : "Crear"
               )}
             </button>
             <button

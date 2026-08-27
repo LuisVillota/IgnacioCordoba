@@ -9,7 +9,6 @@ interface CitaModalProps {
   paciente?: paciente
   onClose: () => void
   onEdit: () => void
-  onDelete: () => void
   onPlanQuirurgico?: (pacienteId: string) => void
 }
 
@@ -18,9 +17,13 @@ const tiposDeVisita: Record<string, string> = {
   control: "Control",
   valoracion: "Valoración",
   programacion_quirurgica: "Programación Quirúrgica",
+  visitador_medico: "Visitador Médico",
+  valoracion_virtual: "Valoración Virtual",
+  control_virtual: "Control Virtual",
+  control_postquirurgico: "Control Post-Quirúrgico",
 }
 
-export function CitaModal({ cita, paciente, onClose, onEdit, onDelete, onPlanQuirurgico }: CitaModalProps) {
+export function CitaModal({ cita, paciente, onClose, onEdit, onPlanQuirurgico }: CitaModalProps) {
   const estadoColors: Record<string, string> = {
     pendiente: "bg-[#669933]/20 text-[#1a6b32]",
     confirmada: "bg-[#99d6e8]/20 text-[#1a6b32]",

@@ -11,16 +11,16 @@ class ProcedimientoBase(BaseModel):
 
 class ProcedimientoCreate(BaseModel):
     nombre: str
-    precio: int
+    precio: float
 
 class ProcedimientoUpdate(BaseModel):
     nombre: Optional[str] = None
-    precio: Optional[int] = None
+    precio: Optional[float] = None
 
 class ProcedimientoSimple(BaseModel):
     id: int
     nombre: str
-    precio: int
+    precio: float
     created_at: Optional[str] = None
 
 class ProcedimientoInDB(ProcedimientoBase):

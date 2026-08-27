@@ -55,7 +55,6 @@ const loadImageAsBase64 = async (url: string): Promise<string> => {
       reader.readAsDataURL(blob)
     })
   } catch (error) {
-    console.error('Error cargando imagen:', error)
     return ''
   }
 }
@@ -82,7 +81,6 @@ const agregarEncabezado = (doc: jsPDF, data: CotizacionData, pageWidth: number, 
       doc.setTextColor(102, 153, 51) // #669933
       doc.text('CIRUGÍA PLÁSTICA', logoX - 35, headerY + 13)
     } catch (error) {
-      console.error('Error cargando logo en encabezado:', error)
     }
   } else {
     // Si no hay logo, mostrar solo el texto a la derecha
@@ -194,11 +192,7 @@ export async function generarPDFCotizacion(data: CotizacionData) {
     yPosition += 5
 
     // Procedimientos
-    const procedimientos = data.items.filter(item => 
-      ['ABDOMINOPLASTIA', 'CORRECCION', 'GLUTEOPLASTIA', 'LIPOESCULTURA'].some(term => 
-        item.nombre.toUpperCase().includes(term)
-      )
-    )
+    const procedimientos = data.items.filter(item => item.tipo === 'procedimiento')
 
     if (procedimientos.length > 0) {
       addText('PROCEDIMIENTOS', 12, true, margin, 10, '#1a6b32')
@@ -222,11 +216,7 @@ export async function generarPDFCotizacion(data: CotizacionData) {
     }
 
     // Adicionales
-    const adicionales = data.items.filter(item => 
-      !['ABDOMINOPLASTIA', 'CORRECCION', 'GLUTEOPLASTIA', 'LIPOESCULTURA'].some(term => 
-        item.nombre.toUpperCase().includes(term)
-      ) && item.precio_unitario > 0
-    )
+    const adicionales = data.items.filter(item => item.tipo !== 'procedimiento' && item.precio_unitario > 0)
 
     if (adicionales.length > 0) {
       addText('ADICIONALES', 12, true, margin, 10, '#1a6b32')
@@ -393,19 +383,23 @@ export async function generarPDFCotizacion(data: CotizacionData) {
     doc.save(`cotizacion-${data.paciente.documento}-CZ${data.cotizacion.id}.pdf`)
     
   } catch (error) {
-    console.error('Error generando PDF:', error)
     throw new Error('No se pudo generar el PDF de la cotización')
   }
 }
 
 // Función para convertir números a letras (español)
 function convertirNumeroALetras(numero: number): string {
+  if (numero === 0) return 'CERO PESOS COLOMBIANOS'
+  return convertirEnteroALetras(numero).trim() + ' PESOS COLOMBIANOS'
+}
+
+// Conversión recursiva del entero, sin el sufijo "PESOS COLOMBIANOS"
+// (el sufijo solo debe aparecer una vez, en el resultado final)
+function convertirEnteroALetras(numero: number): string {
   const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE']
   const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA']
   const especiales = ['DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE']
   const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS']
-
-  if (numero === 0) return 'CERO PESOS'
 
   let resultado = ''
   const millones = Math.floor(numero / 1000000)
@@ -415,7 +409,7 @@ function convertirNumeroALetras(numero: number): string {
     if (millones === 1) {
       resultado += 'UN MILLÓN '
     } else {
-      resultado += convertirNumeroALetras(millones) + ' MILLONES '
+      resultado += convertirEnteroALetras(millones) + ' MILLONES '
     }
   }
 
@@ -426,7 +420,7 @@ function convertirNumeroALetras(numero: number): string {
     if (miles === 1) {
       resultado += 'MIL '
     } else {
-      resultado += convertirNumeroALetras(miles) + ' MIL '
+      resultado += convertirEnteroALetras(miles) + ' MIL '
     }
   }
 
@@ -458,5 +452,5 @@ function convertirNumeroALetras(numero: number): string {
     }
   }
 
-  return resultado.trim() + ' PESOS COLOMBIANOS'
+  return resultado
 }

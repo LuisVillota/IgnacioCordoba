@@ -23,7 +23,6 @@ export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
     try {
       await generarPDFpaciente(currentpaciente)
     } catch (error) {
-      console.error("Error descargando PDF:", error)
       alert("Error al descargar el PDF. Por favor, intente nuevamente.")
     } finally {
       setDescargando(false)

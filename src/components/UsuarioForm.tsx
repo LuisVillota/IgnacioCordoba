@@ -16,6 +16,12 @@ interface UsuarioFormProps {
   onClose: () => void
 }
 
+const ROL_A_ID: Record<string, number> = {
+  administrador: 1,
+  doctor: 2,
+  secretaria: 3,
+  programacion: 4,
+}
 
 export function UsuarioForm({ usuario, onSave, onClose }: UsuarioFormProps) {
   const isEdit = !!usuario
@@ -25,7 +31,7 @@ export function UsuarioForm({ usuario, onSave, onClose }: UsuarioFormProps) {
     password: "",
     nombre: usuario?.nombre || "",
     email: usuario?.email || "",
-    rol_id: usuario ? Number(usuario.rol) : 1,
+    rol_id: usuario ? (ROL_A_ID[usuario.rol.toLowerCase()] || 1) : 1,
     activo: usuario ? usuario.estado === "activo" : true
   })
 
@@ -70,7 +76,6 @@ const handleSubmit = (e: React.FormEvent) => {
     return
   }
 
-  console.log("📤 PAYLOAD USUARIO:", payload)
   onSave(payload)
 }
 

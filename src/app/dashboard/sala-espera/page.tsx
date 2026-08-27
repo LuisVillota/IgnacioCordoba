@@ -126,12 +126,9 @@ export default function SalaEsperaPage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      console.log("📥 Cargando datos de sala de espera desde backend...")
-      console.log(`📊 Mostrar todos: ${mostrarTodos}`)
       
       // Usar el endpoint del backend
       const response = await api.getSalaEspera(mostrarTodos)
-      console.log("📊 Respuesta del backend:", response)
       
       if (response && response.success && response.pacientes) {
         // Mapear la respuesta del backend al formato esperado
@@ -151,21 +148,17 @@ export default function SalaEsperaPage() {
           sala_espera_id: paciente.sala_espera_id?.toString()
         }))
         
-        console.log(`🏥 pacientes cargados: ${pacientesSala.length}`)
         setpacientes(pacientesSala)
-        
+
         // Cargar estadísticas desde el backend
-        await loadEstadisticas()
+        await loadEstadisticas(pacientesSala)
         
         toast.success(`✅ Cargados ${pacientesSala.length} pacientes`)
       } else {
-        console.warn("⚠️ No se recibieron datos de pacientes o success=false")
-        console.log("Respuesta completa:", response)
         await loadDataFallback()
       }
       
     } catch (error: any) {
-      console.error("❌ Error cargando datos de sala de espera:", error)
       toast.error("Error cargando datos: " + handleApiError(error))
       
       // Fallback: cargar datos como antes si el endpoint nuevo falla
@@ -177,7 +170,6 @@ export default function SalaEsperaPage() {
 
   const loadDataFallback = async () => {
     try {
-      console.log("🔄 Usando método de carga fallback...")
       
       // Obtener citas de hoy
       const hoy = new Date().toISOString().split("T")[0]
@@ -209,7 +201,6 @@ export default function SalaEsperaPage() {
           return fechacita === hoy
         })
       } catch (error) {
-        console.error("Error obteniendo citas:", error)
       }
       
       // Obtener pacientes
@@ -225,7 +216,6 @@ export default function SalaEsperaPage() {
           pacientesArray = pacientesResponse.data
         }
       } catch (error) {
-        console.error("Error obteniendo pacientes:", error)
         toast.error("Error cargando pacientes: " + handleApiError(error))
         return
       }
@@ -253,9 +243,10 @@ export default function SalaEsperaPage() {
             }
           }
           
+          // estado_id real de la cita: 1=pendiente, 2=confirmada, 3=completada, 4=cancelada
+          // (1 y 4 quedan en "pendiente" por defecto, no hay un estado de sala equivalente a "cancelada")
           if (citaHoy.estado_id === 2) estadoSala = "confirmada"
           else if (citaHoy.estado_id === 3) estadoSala = "completada"
-          else if (citaHoy.estado_id === 4) estadoSala = "pendiente"
         }
         
         return {
@@ -278,17 +269,14 @@ export default function SalaEsperaPage() {
       calcularEstadisticas(pacientesSala)
       
     } catch (error: any) {
-      console.error("❌ Error en carga fallback:", error)
       toast.error("Error cargando datos: " + handleApiError(error))
     }
   }
 
-  const loadEstadisticas = async () => {
+  const loadEstadisticas = async (pacientesActuales: pacienteSalaEspera[] = pacientes) => {
     try {
-      console.log("📈 Cargando estadísticas...")
       const response = await api.getEstadisticasSalaEspera()
-      console.log("📈 Estadísticas del backend:", response)
-      
+
       if (response && response.success && response.estadisticas) {
         setEstadisticas({
           total: response.estadisticas.total || 0,
@@ -304,14 +292,12 @@ export default function SalaEsperaPage() {
           tiempo_promedio_consulta: response.estadisticas.tiempo_promedio_consulta || 25
         })
       } else {
-        console.warn("⚠️ No se pudieron cargar estadísticas del backend")
-        // Si falla, calcular localmente
-        calcularEstadisticas(pacientes)
+        // Si falla, calcular localmente a partir de la lista recién cargada
+        calcularEstadisticas(pacientesActuales)
       }
     } catch (error) {
-      console.error("Error cargando estadísticas:", error)
-      // Si falla, calcular localmente
-      calcularEstadisticas(pacientes)
+      // Si falla, calcular localmente a partir de la lista recién cargada
+      calcularEstadisticas(pacientesActuales)
     }
   }
 
@@ -334,16 +320,13 @@ export default function SalaEsperaPage() {
   }
 
   const handleChangeEstado = (pacienteId: string, nuevoEstado: pacienteSalaEspera["estado_sala"]) => {
-    console.log(`🔄 Cambiando estado del paciente ${pacienteId} a: ${nuevoEstado}`)
     
     // Encontrar paciente para obtener cita_id
     const paciente = pacientes.find(p => p.id === pacienteId)
     if (!paciente) {
-      console.error(`❌ paciente ${pacienteId} no encontrado`)
       return
     }
     
-    console.log(`📋 Datos del paciente:`, paciente)
     
     // Actualizar estado local
     const pacientesActualizados = pacientes.map(p => 
@@ -375,8 +358,6 @@ export default function SalaEsperaPage() {
 
     try {
       setGuardando(true)
-      console.log("💾 Guardando cambios de estado en backend...")
-      console.log("📋 Cambios pendientes:", cambiosPendientes)
 
       // Preparar datos para enviar al backend
       const cambiosParaEnviar: Record<string, string> = {}
@@ -384,12 +365,10 @@ export default function SalaEsperaPage() {
         cambiosParaEnviar[pacienteId] = datos.estado
       })
       
-      console.log("📤 Datos a enviar al backend:", cambiosParaEnviar)
       
       // Llamar al endpoint del backend para guardar múltiples cambios
       const response = await api.bulkUpdateEstadosSalaEspera(cambiosParaEnviar)
       
-      console.log("✅ Respuesta del backend:", response)
       
       if (response && response.success) {
         // Limpiar cambios pendientes
@@ -405,7 +384,6 @@ export default function SalaEsperaPage() {
         toast.success(mensaje)
         
         if (response.errores && response.errores.length > 0) {
-          console.warn("⚠️ Algunos errores:", response.errores)
           toast.warning(`Hubo ${response.errores.length} errores al guardar algunos cambios`)
         }
       } else {
@@ -413,7 +391,6 @@ export default function SalaEsperaPage() {
       }
       
     } catch (error: any) {
-      console.error("❌ Error guardando estados:", error)
       toast.error("Error guardando cambios: " + handleApiError(error))
     } finally {
       setGuardando(false)

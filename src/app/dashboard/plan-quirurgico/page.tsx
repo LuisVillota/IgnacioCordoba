@@ -55,7 +55,6 @@ export default function PlanQuirurgicoPage() {
   const cargarPlanes = async () => {
     // Evitar llamadas duplicadas
     if (isFetching.current) {
-      console.log("⏸️ Ya hay una carga en proceso, ignorando llamada duplicada")
       return
     }
     
@@ -63,16 +62,9 @@ export default function PlanQuirurgicoPage() {
       isFetching.current = true
       setLoading(true)
       setError(null)
-      console.log("📥 Iniciando carga de historias clinicas...")
       
       const response = await api.getPlanesQuirurgicos(100, 0)
       
-      console.log("📥 Respuesta de API:", {
-        success: response.success,
-        error: response.error,
-        total: response.total,
-        planesCount: response.planes?.length || 0
-      })
       
       // Verificar si el componente sigue montado
       if (!isMounted.current) return
@@ -80,35 +72,20 @@ export default function PlanQuirurgicoPage() {
       if (response.error) {
         // Si es error de llamada duplicada, ignorarlo
         if (response.message?.includes("Ya hay una llamada") || response.isDuplicateError) {
-          console.log("⚠️ Ignorando error de llamada duplicada")
           return
         }
         throw new Error(response.message || "Error cargando planes")
       }
       
       if (response.planes && Array.isArray(response.planes)) {
-        console.log(`✅ Cargados ${response.planes.length} historias clinicas`)
         setPlanesQuirurgicos(response.planes)
-        
-        // Debug: mostrar primeros 2 planes
-        if (response.planes.length > 0) {
-            console.log("📋 Primeros planes:", response.planes.slice(0, 2).map((p: PlanQuirurgico) => ({
-            id: p.id,
-            nombre: p.datos_paciente?.nombre_completo,
-            identificacion: p.datos_paciente?.identificacion,
-            peso: p.datos_paciente?.peso,
-            altura: p.datos_paciente?.altura
-          })))
-        }
       } else {
-        console.warn("⚠️ No se recibieron planes en la respuesta")
         setPlanesQuirurgicos([])
       }
     } catch (error: any) {
       // Verificar si el componente sigue montado
       if (!isMounted.current) return
       
-      console.error("❌ Error cargando planes quirúrgicos:", error)
       setError(error.message || "Error al cargar los planes quirúrgicos")
       setPlanesQuirurgicos([])
     } finally {
@@ -122,7 +99,6 @@ export default function PlanQuirurgicoPage() {
 
   const handleRefresh = () => {
     if (isFetching.current) {
-      console.log("⏸️ Ya hay una actualización en proceso")
       return
     }
     setRefreshing(true)
@@ -142,7 +118,6 @@ export default function PlanQuirurgicoPage() {
       alert("Historia Clinica eliminada exitosamente")
       await cargarPlanes()
     } catch (err: any) {
-      console.error("Error eliminando la Historia Clinica:", err)
       alert(`Error: ${err.message || 'Error desconocido'}`)
     } finally {
       setDeletingPlanId(null)
@@ -167,24 +142,13 @@ export default function PlanQuirurgicoPage() {
     })
 
   const handleEditar = async (plan: PlanQuirurgico) => {
-    console.log("🔄 Editando plan:", {
-      id: plan.id,
-      nombre: plan.datos_paciente?.nombre_completo || 'Sin nombre'
-    })
     
     try {
       // Obtener datos frescos de la base de datos
       const result = await api.getPlanQuirurgico(plan.id)
       
-      console.log("📥 Resultado de getPlanQuirurgico:", {
-        success: result.success,
-        error: result.error,
-        hasData: !!result.datos_paciente,
-        nombre: result.datos_paciente?.nombre_completo
-      })
       
       if (result.error) {
-        console.error("❌ Error obteniendo plan para editar:", result.message)
         // Usar los datos que ya tenemos como fallback
         alert(`Error al cargar plan completo. Se cargarán datos parciales.`)
         setPlanSeleccionado(plan)
@@ -197,12 +161,10 @@ export default function PlanQuirurgicoPage() {
         setVistaActual("formulario")
       } else {
         // Si el plan ya viene con datos, usarlo directamente
-        console.log("⚠️ Usando datos existentes como fallback")
         setPlanSeleccionado(plan)
         setVistaActual("formulario")
       }
     } catch (error: any) {
-      console.error("❌ Error inesperado al editar:", error)
       // Fallback: usar los datos que ya tenemos
       alert("Error al cargar datos completos. Se usarán datos parciales.")
       setPlanSeleccionado(plan)
@@ -241,7 +203,6 @@ export default function PlanQuirurgicoPage() {
           }
         }
       } catch (err) {
-        console.warn("No se pudo obtener esquema de HC:", err)
       }
     }
   }
@@ -259,7 +220,6 @@ export default function PlanQuirurgicoPage() {
     }
 
     try {
-      console.log("🗑️ Eliminando archivo:", { nombreArchivo, planId });
       
       // Mostrar indicador de carga
       const deleteButtons = document.querySelectorAll(`button[data-delete-filename="${nombreArchivo}"]`);
@@ -272,13 +232,11 @@ export default function PlanQuirurgicoPage() {
       // Llamar a la API para eliminar
       const result = await api.deletePlanFile(nombreArchivo, planId);
       
-      console.log("📥 Resultado de eliminación:", result);
       
       if (result.error) {
         throw new Error(result.message || "Error desconocido al eliminar");
       }
       
-      console.log("✅ Archivo eliminado exitosamente", result);
       
       // Si estamos viendo detalles de un plan, actualizar la lista de archivos
       if (planParaVer && planParaVer.id === planId) {
@@ -304,7 +262,6 @@ export default function PlanQuirurgicoPage() {
       alert(`Archivo "${nombreArchivo}" eliminado exitosamente`);
       
     } catch (error: any) {
-      console.error("❌ Error al eliminar archivo:", error);
       alert(`Error al eliminar el archivo: ${error.message}`);
     } finally {
       // Restaurar botones
@@ -322,12 +279,10 @@ export default function PlanQuirurgicoPage() {
     try {
       // Validar que tenemos los datos necesarios
       if (!nombreArchivo || !planId) {
-        console.error("❌ Faltan datos para la descarga:", { nombreArchivo, planId })
         alert("No se puede descargar el archivo. Faltan datos.");
         return;
       }
       
-      console.log("🔄 Iniciando descarga...", { nombreArchivo, planId });
       
       // Mostrar indicador de carga
       const downloadButtons = document.querySelectorAll(`button[data-filename="${nombreArchivo}"]`);
@@ -343,7 +298,6 @@ export default function PlanQuirurgicoPage() {
       // Llamar a la API para descargar
       const result = await api.downloadPlanFile(nombreArchivo, planId);
       
-      console.log("📥 Resultado de descarga:", result);
       
       if (result.error) {
         throw new Error(result.message || "Error desconocido al descargar");
@@ -351,7 +305,6 @@ export default function PlanQuirurgicoPage() {
       
       // Si la API devuelve una URL directa al archivo
       if (result.url) {
-        console.log("✅ URL de descarga obtenida:", result.url);
         
         // Crear un enlace temporal y hacer click para descargar
         const link = document.createElement('a');
@@ -369,7 +322,6 @@ export default function PlanQuirurgicoPage() {
       } 
       // Si la API devuelve datos binarios (Blob)
       else if (result.blob) {
-        console.log("✅ Blob recibido, creando URL de objeto");
         const url = window.URL.createObjectURL(result.blob);
         const link = document.createElement('a');
         link.href = url;
@@ -381,12 +333,10 @@ export default function PlanQuirurgicoPage() {
       }
       // Si no hay URL ni blob, intentar construir la URL
       else {
-        console.log("⚠️ No se recibió URL ni blob, intentando construir URL");
         
         // Construir URL basada en el nombre del archivo y planId
         // Esto dependerá de cómo esté configurada tu API
         const fileUrl = `/api/planes/${planId}/archivos/${encodeURIComponent(nombreArchivo)}`;
-        console.log("🔗 URL construida:", fileUrl);
         
         // Intentar descargar con la URL construida
         const link = document.createElement('a');
@@ -398,7 +348,6 @@ export default function PlanQuirurgicoPage() {
         document.body.removeChild(link);
       }
       
-      console.log("✅ Descarga completada exitosamente", result);
       
       // Mostrar mensaje de éxito
       setTimeout(() => {
@@ -406,21 +355,17 @@ export default function PlanQuirurgicoPage() {
       }, 500);
       
     } catch (error: any) {
-      console.error("❌ Error al descargar archivo:", error);
       
       // Intentar método alternativo si el primero falla
       try {
-        console.log("🔄 Intentando método alternativo de descarga...");
         
         // Construir URL directa asumiendo una estructura común
         const fileUrl = `/api/files/${planId}/${encodeURIComponent(nombreArchivo)}`;
-        console.log("🔗 URL alternativa:", fileUrl);
         
         window.open(fileUrl, '_blank');
         
         alert(`Archivo "${nombreArchivo}" se está abriendo en nueva ventana`);
       } catch (fallbackError) {
-        console.error("❌ Método alternativo también falló:", fallbackError);
         alert(`Error al descargar el archivo: ${error.message}. Intente abrirlo manualmente desde el servidor.`);
       }
     } finally {
@@ -442,7 +387,6 @@ export default function PlanQuirurgicoPage() {
     }
 
     try {
-      console.log("👁️ Visualizando archivo PDF:", { nombreArchivo, planId });
       
       // Construir URL para visualizar el PDF
       // Ajusta esta URL según tu configuración de API
@@ -504,7 +448,6 @@ export default function PlanQuirurgicoPage() {
       `);
       
     } catch (error: any) {
-      console.error("❌ Error al visualizar archivo:", error);
       alert(`Error al visualizar el PDF: ${error.message}. Intente descargarlo primero.`);
     }
   };
@@ -513,11 +456,9 @@ export default function PlanQuirurgicoPage() {
   const formatearHoraParaMySQL = (hora: string): string => {
     if (!hora) return '';
     
-    console.log("🕒 Formateando hora para MySQL:", hora);
     
     // Si la hora ya es 'Invalid' o similar, devolver cadena vacía
     if (hora.toLowerCase().includes('inval')) {
-      console.log("⚠️ Hora inválida detectada, devolviendo cadena vacía");
       return '';
     }
     
@@ -573,10 +514,8 @@ export default function PlanQuirurgicoPage() {
         }
       }
       
-      console.log("⚠️ No se pudo formatear la hora, devolviendo cadena vacía");
       return '';
     } catch (error) {
-      console.error("❌ Error formateando hora para MySQL:", error);
       return '';
     }
   };
@@ -591,10 +530,6 @@ export default function PlanQuirurgicoPage() {
       if (planSanitizado.datos_paciente.hora_consulta) {
         const horaFormateada = formatearHoraParaMySQL(planSanitizado.datos_paciente.hora_consulta);
         planSanitizado.datos_paciente.hora_consulta = horaFormateada;
-        console.log("🕒 Hora formateada para guardar:", {
-          original: plan.datos_paciente.hora_consulta,
-          formateada: horaFormateada
-        });
       }
       
       // Validar otros campos importantes
@@ -637,11 +572,6 @@ export default function PlanQuirurgicoPage() {
       }
     }
     
-    console.log("🧹 Plan sanitizado para guardar:", {
-      id: planSanitizado.id,
-      nombre: planSanitizado.datos_paciente.nombre_completo,
-      hora_consulta: planSanitizado.datos_paciente.hora_consulta
-    });
     
     return planSanitizado;
   };
@@ -669,7 +599,6 @@ export default function PlanQuirurgicoPage() {
     // Buscar imagen de esquema en HC del paciente
     let esquemaUrl = '';
     const pacienteId = plan.id_paciente || plan.datos_paciente?.id;
-    console.log("🖼️ Buscando esquema para paciente:", pacienteId);
     if (pacienteId) {
       try {
         const historias = await api.getHistoriasBypaciente(parseInt(pacienteId));
@@ -682,20 +611,15 @@ export default function PlanQuirurgicoPage() {
           const hcReciente = historiasArray[historiasArray.length - 1];
           const fotosStr = hcReciente.fotos ? String(hcReciente.fotos) : '';
           const fotos = fotosStr.split(',').filter((f: string) => f.trim());
-          console.log("🖼️ Fotos en HC:", fotos);
 
           // Buscar fotos con "esquema_" en la URL
           const esquemas = fotos.filter((f: string) => f.includes('esquema_'));
           if (esquemas.length > 0) {
             esquemaUrl = esquemas[esquemas.length - 1];
-            console.log("🖼️ Esquema URL encontrada:", esquemaUrl);
           } else {
-            console.warn("⚠️ No se encontraron fotos con 'esquema_' en la URL. Fotos disponibles:", fotos);
-            console.warn("⚠️ Guarda el esquema desde el editor para que aparezca en el PDF.");
           }
         }
       } catch (err) {
-        console.warn("No se pudo obtener esquema de HC:", err);
       }
     }
 
@@ -1496,7 +1420,6 @@ export default function PlanQuirurgicoPage() {
   const guardarHistoriaClinicaDesdePlan = async (plan: PlanQuirurgico) => {
     const pacienteId = plan.id_paciente || plan.datos_paciente?.id
     if (!pacienteId) {
-      console.warn("⚠️ Sin ID de paciente, omitiendo guardado de HC")
       return
     }
 
@@ -1518,25 +1441,19 @@ export default function PlanQuirurgicoPage() {
       if (historiasArray.length > 0) {
         // Actualizar la más reciente, preservando fotos existentes
         const latestHC = historiasArray[historiasArray.length - 1]
-        console.log(`📝 Actualizando HC existente ID: ${latestHC.id}`)
         await api.updateHistoriaClinica(parseInt(latestHC.id), {
           ...hcData,
           fotos: latestHC.fotos || '',
         })
       } else {
         // Crear nueva
-        console.log("🆕 Creando nueva HC para paciente:", pacienteId)
         await api.createHistoriaClinica(hcData)
       }
-      console.log("✅ Historia Clínica sincronizada exitosamente")
     } catch (error) {
       // Si falla la consulta, intentar crear nueva
-      console.warn("⚠️ Error verificando HC existente, intentando crear nueva:", error)
       try {
         await api.createHistoriaClinica(hcData)
-        console.log("✅ Historia Clínica creada exitosamente")
       } catch (createError) {
-        console.error("❌ No se pudo sincronizar la Historia Clínica:", createError)
       }
     }
   }
@@ -1545,7 +1462,6 @@ export default function PlanQuirurgicoPage() {
   const subirEsquemaAHistoriaClinica = async (plan: PlanQuirurgico, esquemaFile: File) => {
     const pacienteId = plan.id_paciente || plan.datos_paciente?.id
     if (!pacienteId) {
-      console.warn("⚠️ Sin ID de paciente, no se puede subir esquema")
       return
     }
 
@@ -1562,18 +1478,15 @@ export default function PlanQuirurgicoPage() {
         historiaId = parseInt(historiasArray[historiasArray.length - 1].id)
       }
     } catch {
-      console.warn("⚠️ No se encontró HC para subir esquema")
       return
     }
 
     if (!historiaId) {
-      console.warn("⚠️ No hay HC disponible para adjuntar el esquema")
       return
     }
 
     // Subir la foto
     const uploadResult = await api.uploadHistoriaFoto(historiaId, esquemaFile)
-    console.log("✅ Esquema subido a HC:", uploadResult)
 
     // Actualizar el campo 'fotos' de la HC con la nueva URL
     if (uploadResult.url) {
@@ -1593,25 +1506,17 @@ export default function PlanQuirurgicoPage() {
         paciente_id: parseInt(pacienteId),
         fotos: fotosString
       })
-      console.log("✅ Campo fotos actualizado en HC:", fotosString)
     }
   }
 
   const handleGuardar = async (plan: PlanQuirurgico, esquemaFile?: File | null) => {
     try {
-      console.log("💾 Guardando plan:", {
-        id: plan.id,
-        nombre: plan.datos_paciente.nombre_completo,
-        esEdicion: !!planSeleccionado,
-        tieneEsquema: !!esquemaFile
-      })
 
       // Sanitizar y validar los datos antes de enviar
       let planSanitizado: PlanQuirurgico;
       try {
         planSanitizado = sanitizarPlanParaGuardar(plan);
       } catch (validationError: any) {
-        console.error("❌ Error de validación:", validationError);
         alert(`Error de validación: ${validationError.message}`);
         return;
       }
@@ -1620,33 +1525,27 @@ export default function PlanQuirurgicoPage() {
 
       if (planSeleccionado) {
         // Actualizar plan existente
-        console.log("📝 Actualizando plan existente...")
         result = await api.updatePlanQuirurgico(planSanitizado.id, planSanitizado)
       } else {
         // Crear nuevo plan
-        console.log("🆕 Creando nuevo plan...")
         result = await api.createPlanQuirurgico(planSanitizado)
       }
 
-      console.log("✅ Resultado del guardado:", result)
 
       // fetchAPI ya devuelve un objeto, NO lanza excepciones
       if (result.error) {
         // Si hay error, mostrar mensaje y salir
-        console.error("❌ Error guardando plan:", result.message)
         alert(`Error al guardar: ${result.message}`)
         return // Salir de la función
       }
 
       // Si es éxito, sincronizar HC y recargar la lista
       if (result.success) {
-        console.log("✅ Plan guardado exitosamente, sincronizando HC...")
 
         // Guardar Historia Clínica (no bloquea si falla)
         try {
           await guardarHistoriaClinicaDesdePlan(planSanitizado)
         } catch (hcError) {
-          console.warn("⚠️ Plan guardado pero no se pudo sincronizar la Historia Clínica:", hcError)
         }
 
         // Subir esquema a la HC (al final, cuando la HC ya existe)
@@ -1654,7 +1553,6 @@ export default function PlanQuirurgicoPage() {
           try {
             await subirEsquemaAHistoriaClinica(planSanitizado, esquemaFile)
           } catch (esquemaError) {
-            console.warn("⚠️ Plan y HC guardados pero no se pudo subir el esquema:", esquemaError)
           }
         }
 
@@ -1663,12 +1561,10 @@ export default function PlanQuirurgicoPage() {
         alert(planSeleccionado ? "Plan actualizado exitosamente" : "Plan creado exitosamente")
       } else {
         // Si no hay error pero tampoco éxito, mostrar mensaje genérico
-        console.error("❌ Error inesperado al guardar:", result)
         alert("Error inesperado al guardar el plan")
       }
     } catch (error: any) {
       // Este catch solo debería ejecutarse para errores inesperados (network, etc.)
-      console.error("❌ Error inesperado guardando plan:", error)
       alert(`Error inesperado: ${error.message}`)
     }
   }
@@ -1677,7 +1573,11 @@ export default function PlanQuirurgicoPage() {
   const formatFecha = (fecha: string) => {
     if (!fecha) return ''
     try {
-      const date = new Date(fecha)
+      // "YYYY-MM-DD" sin hora se interpreta como medianoche UTC en JS, lo que la
+      // adelanta/atrasa un día al convertir a la hora local de Colombia (UTC-5).
+      // Forzar hora local explícita para las fechas que no traen componente de hora.
+      const esSoloFecha = /^\d{4}-\d{2}-\d{2}$/.test(fecha)
+      const date = new Date(esSoloFecha ? `${fecha}T00:00:00` : fecha)
       return date.toLocaleDateString('es-ES')
     } catch {
       return fecha
@@ -1724,7 +1624,6 @@ export default function PlanQuirurgicoPage() {
       
       return hora
     } catch (error) {
-      console.error('Error formateando hora:', error)
       return ''
     }
   }

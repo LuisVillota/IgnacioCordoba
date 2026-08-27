@@ -33,8 +33,6 @@ const SERVICIOS_PREDEFINIDOS = [
 export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: CotizacionModalProps) {
   const [imprimiendo, setImprimiendo] = useState(false)
 
-  console.log("Cotización recibida:", cotizacion)
-  console.log("Items de cotización:", cotizacion.items)
   
   // Asegurarnos de que items existe y es un array
   const itemsArray = Array.isArray(cotizacion.items) ? cotizacion.items : []
@@ -45,7 +43,6 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
     otrosAdicionales: itemsArray.filter(item => item.tipo === 'otroAdicional'),
   }
 
-  console.log("Items por tipo:", itemsPorTipo)
 
   // Obtener los servicios incluidos de la cotización o usar los predefinidos
   const serviciosIncluidos = cotizacion.servicios_incluidos || SERVICIOS_PREDEFINIDOS.map(servicio => ({
@@ -60,37 +57,30 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
   const calcularSubtotalProcedimientos = () => {
     const subtotal = itemsPorTipo.procedimientos.reduce((sum, item) => {
       const valor = item.subtotal || item.valor_total || 0
-      console.log("Item procedimiento:", item.nombre, "subtotal:", valor)
       return sum + Number(valor)
     }, 0)
-    console.log("Subtotal procedimientos calculado:", subtotal)
     return subtotal
   }
 
   const calcularSubtotalAdicionales = () => {
     const subtotal = itemsPorTipo.adicionales.reduce((sum, item) => {
       const valor = item.subtotal || item.valor_total || 0
-      console.log("Item adicional:", item.nombre, "subtotal:", valor)
       return sum + Number(valor)
     }, 0)
-    console.log("Subtotal adicionales calculado:", subtotal)
     return subtotal
   }
 
   const calcularSubtotalOtrosAdicionales = () => {
     const subtotal = itemsPorTipo.otrosAdicionales.reduce((sum, item) => {
       const valor = item.subtotal || item.valor_total || 0
-      console.log("Item otro adicional:", item.nombre, "subtotal:", valor)
       return sum + Number(valor)
     }, 0)
-    console.log("Subtotal otros adicionales calculado:", subtotal)
     return subtotal
   }
 
   // Calcular total general
   const calcularTotalGeneral = () => {
     const total = calcularSubtotalProcedimientos() + calcularSubtotalAdicionales() + calcularSubtotalOtrosAdicionales()
-    console.log("Total general calculado:", total)
     return total
   }
 
@@ -121,12 +111,6 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
       const subtotalOtrosAdicionales = calcularSubtotalOtrosAdicionales()
       const totalGeneral = calcularTotalGeneral()
 
-      console.log("Valores para PDF:", {
-        subtotalProcedimientos,
-        subtotalAdicionales,
-        subtotalOtrosAdicionales,
-        totalGeneral
-      })
 
       printWindow.document.write(`
         <!DOCTYPE html>
@@ -684,7 +668,6 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
 
       printWindow.document.close()
     } catch (error) {
-      console.error("Error imprimiendo:", error)
       alert("Error al imprimir. Por favor, intente nuevamente.")
     } finally {
       setImprimiendo(false)
@@ -697,12 +680,6 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
   const subtotalOtrosAdicionales = calcularSubtotalOtrosAdicionales()
   const totalCalculado = calcularTotalGeneral()
 
-  console.log("Valores finales:", {
-    subtotalProcedimientos,
-    subtotalAdicionales,
-    subtotalOtrosAdicionales,
-    totalCalculado
-  })
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -820,9 +797,9 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-600">
-                          {cantidad} × $${Number(precioUnitario).toLocaleString("es-CO")}
+                          {cantidad} × ${Number(precioUnitario).toLocaleString("es-CO")}
                         </p>
-                        <p className="font-semibold text-gray-800">$${Number(subtotalItem).toLocaleString("es-CO")}</p>
+                        <p className="font-semibold text-gray-800">${Number(subtotalItem).toLocaleString("es-CO")}</p>
                       </div>
                     </div>
                   )
@@ -830,7 +807,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 <div className="flex justify-between items-center pt-3 border-t border-gray-300">
                   <span className="font-semibold text-gray-700">Subtotal Procedimientos:</span>
                   <span className="font-bold text-[#1a6b32]">
-                    $${Number(subtotalProcedimientos).toLocaleString("es-CO")}
+                    ${Number(subtotalProcedimientos).toLocaleString("es-CO")}
                   </span>
                 </div>
               </div>
@@ -856,9 +833,9 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-600">
-                          {cantidad} × $${Number(precioUnitario).toLocaleString("es-CO")}
+                          {cantidad} × ${Number(precioUnitario).toLocaleString("es-CO")}
                         </p>
-                        <p className="font-semibold text-gray-800">$${Number(subtotalItem).toLocaleString("es-CO")}</p>
+                        <p className="font-semibold text-gray-800">${Number(subtotalItem).toLocaleString("es-CO")}</p>
                       </div>
                     </div>
                   )
@@ -866,7 +843,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 <div className="flex justify-between items-center pt-3 border-t border-gray-300">
                   <span className="font-semibold text-gray-700">Subtotal Adicionales:</span>
                   <span className="font-bold text-[#1a6b32]">
-                    $${Number(subtotalAdicionales).toLocaleString("es-CO")}
+                    ${Number(subtotalAdicionales).toLocaleString("es-CO")}
                   </span>
                 </div>
               </div>
@@ -892,9 +869,9 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-gray-600">
-                          {cantidad} × $${Number(precioUnitario).toLocaleString("es-CO")}
+                          {cantidad} × ${Number(precioUnitario).toLocaleString("es-CO")}
                         </p>
-                        <p className="font-semibold text-gray-800">$${Number(subtotalItem).toLocaleString("es-CO")}</p>
+                        <p className="font-semibold text-gray-800">${Number(subtotalItem).toLocaleString("es-CO")}</p>
                       </div>
                     </div>
                   )
@@ -902,7 +879,7 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
                 <div className="flex justify-between items-center pt-3 border-t border-gray-300">
                   <span className="font-semibold text-gray-700">Subtotal Otros Adicionales:</span>
                   <span className="font-bold text-[#1a6b32]">
-                    $${Number(subtotalOtrosAdicionales).toLocaleString("es-CO")}
+                    ${Number(subtotalOtrosAdicionales).toLocaleString("es-CO")}
                   </span>
                 </div>
               </div>
@@ -913,14 +890,14 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
             <div className="flex items-center justify-between">
               <span className="text-gray-700">Subtotal Procedimientos:</span>
               <span className="font-semibold text-gray-800">
-                $${Number(subtotalProcedimientos).toLocaleString("es-CO")}
+                ${Number(subtotalProcedimientos).toLocaleString("es-CO")}
               </span>
             </div>
             {itemsPorTipo.adicionales.length > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-700">Subtotal Adicionales:</span>
                 <span className="font-semibold text-gray-800">
-                  $${Number(subtotalAdicionales).toLocaleString("es-CO")}
+                  ${Number(subtotalAdicionales).toLocaleString("es-CO")}
                 </span>
               </div>
             )}
@@ -928,14 +905,14 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               <div className="flex items-center justify-between">
                 <span className="text-gray-700">Subtotal Otros Adicionales:</span>
                 <span className="font-semibold text-gray-800">
-                  $${Number(subtotalOtrosAdicionales).toLocaleString("es-CO")}
+                  ${Number(subtotalOtrosAdicionales).toLocaleString("es-CO")}
                 </span>
               </div>
             )}
             <div className="flex items-center justify-between border-t border-gray-300 pt-3 mt-2">
               <span className="text-lg font-bold text-[#1a6b32]">Total a Pagar:</span>
               <span className="text-lg font-bold text-[#1a6b32]">
-                $${Number(totalCalculado).toLocaleString("es-CO")}
+                ${Number(totalCalculado).toLocaleString("es-CO")}
               </span>
             </div>
           </div>

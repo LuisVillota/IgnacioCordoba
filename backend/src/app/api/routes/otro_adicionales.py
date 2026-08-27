@@ -30,10 +30,9 @@ def get_otros_adicionales():
                 otros_adicionales = cursor.fetchall()
                 return {"otros_adicionales": otros_adicionales}
     except Exception as e:
-        error_msg = str(e)
-        if "otro_adicional" in error_msg.lower():
+        if isinstance(e, pymysql.MySQLError) and e.args and e.args[0] == 1146:
             return {"otros_adicionales": []}
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{otro_adicional_id}", response_model=dict)
 def get_otro_adicional(otro_adicional_id: int):

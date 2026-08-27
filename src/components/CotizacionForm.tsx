@@ -4,6 +4,7 @@ import type React from "react"
 import { useState, useEffect, useMemo, useRef } from "react"
 import { X, Plus, Trash2, Search, ChevronDown, User } from "lucide-react"
 import { cotizacionHelpers } from "../lib/api"
+import { useAuth } from "../hooks/useAuth"
 import type {
   Cotizacion,
   CotizacionItemBase,
@@ -47,9 +48,10 @@ const serviciosIncluidosFijos = [
 ]
 
 export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: CotizacionFormProps) {
+  const { user } = useAuth()
   const [formData, setFormData] = useState({
     paciente_id: cotizacion?.paciente_id?.toString() || "",
-    usuario_id: "1",
+    usuario_id: cotizacion?.usuario_id?.toString() || user?.id || "",
     estado: cotizacion?.estado || "pendiente",
     items: cotizacion?.items || [],
     servicios_incluidos: cotizacion?.servicios_incluidos ?? serviciosIncluidosFijos,
@@ -157,7 +159,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
       const pacRes = await api.getpacientes(1000)
       setpacientes(pacRes.pacientes || [])
     } catch (error) {
-      console.error("Error cargando datos:", error)
       alert("Error cargando datos del servidor")
     } finally {
       setLoading(false)
@@ -260,6 +261,10 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
 
     if (isSubmitting || isSubmittingRef.current) return;
     if (!validateForm()) { alert("Por favor, corrige los errores antes de enviar"); return; }
+    if (!formData.usuario_id) {
+      alert("No se pudo identificar al usuario de la sesión. Por favor, vuelve a iniciar sesión e intenta de nuevo.");
+      return;
+    }
 
     setIsSubmitting(true);
     isSubmittingRef.current = true;
@@ -289,7 +294,7 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
 
       const backendData = {
         paciente_id: parseInt(formData.paciente_id || "0"),
-        usuario_id: parseInt(formData.usuario_id) || 1,
+        usuario_id: parseInt(formData.usuario_id),
         estado_id,
         items,
         servicios_incluidos,
@@ -307,7 +312,10 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
         ...formData,
         ...totals,
         id: cotizacion?.id || '',
-        fecha_creacion: cotizacion?.fecha_creacion || new Date().toISOString().split('T')[0],
+        fecha_creacion: cotizacion?.fecha_creacion || (() => {
+          const hoy = new Date();
+          return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+        })(),
         fecha_vencimiento,
         validez_dias: 7,
         paciente_nombre: pacienteInfo ? `${pacienteInfo.nombre} ${pacienteInfo.apellido}` : '',
@@ -324,7 +332,6 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
       onClose();
 
     } catch (error: any) {
-      console.error('Error preparando datos:', error);
       alert(error.message || 'Error al preparar los datos de la cotización');
     } finally {
       setIsSubmitting(false);
@@ -500,10 +507,9 @@ export function CotizacionForm({ cotizacion, onSave, onClose, onSuccess }: Cotiz
 
           {/* DOCTOR */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Doctor Responsable</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Creado por</label>
             <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
-              <p className="text-gray-800">Dr Hernan Ignacio Cordoba</p>
-              <input type="hidden" value="1" name="usuario_id" />
+              <p className="text-gray-800">{user?.nombre_completo || "Sesión no identificada"}</p>
             </div>
           </div>
 

@@ -29,10 +29,12 @@ def get_adicionales():
                 adicionales = cursor.fetchall()
                 return {"adicionales": adicionales}
     except Exception as e:
-        error_msg = str(e)
-        if "adicional" in error_msg.lower():
+        # Código de error MySQL 1146 = tabla no existe. Comparar por substring del
+        # mensaje ("adicional" in error_msg) también silenciaba errores SQL reales
+        # no relacionados como si la tabla no existiera.
+        if isinstance(e, pymysql.MySQLError) and e.args and e.args[0] == 1146:
             return {"adicionales": []}
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{adicional_id}", response_model=dict)
 def get_adicional(adicional_id: int):

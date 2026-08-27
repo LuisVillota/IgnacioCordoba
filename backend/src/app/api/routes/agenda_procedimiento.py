@@ -1,13 +1,16 @@
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timedelta, date
 from typing import Optional, Union
-import traceback
+import logging
+import pymysql
 
 from app.core.database import get_connection
 from app.models.schemas.agenda_procedimientos import (
     AgendaProcedimientoCreate, AgendaProcedimientoUpdate,
     AgendaProcedimientoResponse, EstadoProcedimiento
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -98,7 +101,7 @@ def verificar_disponibilidad(
     except HTTPException:
         raise
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         return {
             "success": False,
             "error": True,
@@ -189,10 +192,9 @@ def get_agenda_procedimientos(
                 }
                 
     except Exception as e:
-        error_msg = str(e)
-        if "agenda_procedimientos" in error_msg.lower():
+        if isinstance(e, pymysql.MySQLError) and e.args and e.args[0] == 1146:
             return {"procedimientos": [], "total": 0}
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{procedimiento_id}", response_model=dict)
 def get_agenda_procedimiento(procedimiento_id: int):
@@ -261,7 +263,9 @@ def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
                 # Verificar disponibilidad
                 duracion = procedimiento.duracion or 60
                 hora_inicio = procedimiento.hora
-                hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') + 
+                if hora_inicio.count(":") == 1:
+                    hora_inicio += ":00"
+                hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') +
                            timedelta(minutes=duracion)).strftime('%H:%M:%S')
 
                 cursor.execute("""
@@ -319,7 +323,7 @@ def create_agenda_procedimiento(procedimiento: AgendaProcedimientoCreate):
     except HTTPException:
         raise
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail={
             "error": "Error creando procedimiento agendado",
             "message": str(e)
@@ -341,13 +345,17 @@ def update_agenda_procedimiento(procedimiento_id: int, procedimiento: AgendaProc
                     raise HTTPException(status_code=404, detail="Procedimiento agendado no encontrado")
                 
                 fecha = procedimiento.fecha if procedimiento.fecha else procedimiento_existente['fecha']
-                hora = procedimiento.hora if procedimiento.hora else procedimiento_existente['hora']
+                # procedimiento_existente['hora'] viene de una columna TIME: pymysql lo
+                # devuelve como datetime.timedelta, no como str - hay que convertirlo
+                hora = procedimiento.hora if procedimiento.hora else str(procedimiento_existente['hora'])
                 duracion = procedimiento.duracion if procedimiento.duracion is not None else (procedimiento_existente['duracion'] or 60)
-                
+
                 # Verificar disponibilidad si se cambia fecha/hora/duración
                 if procedimiento.fecha or procedimiento.hora or procedimiento.duracion is not None:
                     hora_inicio = hora
-                    hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') + 
+                    if hora_inicio.count(":") == 1:
+                        hora_inicio += ":00"
+                    hora_fin = (datetime.strptime(hora_inicio, '%H:%M:%S') +
                                timedelta(minutes=duracion)).strftime('%H:%M:%S')
                     
                     cursor.execute("""
@@ -429,7 +437,7 @@ def update_agenda_procedimiento(procedimiento_id: int, procedimiento: AgendaProc
     except HTTPException:
         raise
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail={
             "error": "Error actualizando procedimiento agendado",
             "message": str(e)
@@ -458,7 +466,7 @@ def delete_agenda_procedimiento(procedimiento_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail={
             "error": "Error eliminando procedimiento agendado",
             "message": str(e)
@@ -517,7 +525,7 @@ def get_calendario_procedimientos(year: int, month: int):
                     
                     calendario[fecha_str].append({
                         "id": proc['id'],
-                        "hora": proc['hora'][:5],
+                        "hora": str(proc['hora'])[:5],
                         "estado": proc['estado'],
                         "duracion": proc['duracion'],
                         "paciente": f"{proc['paciente_nombre']} {proc['paciente_apellido']}",

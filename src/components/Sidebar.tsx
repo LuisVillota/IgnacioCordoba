@@ -17,10 +17,13 @@ import { useRouter } from "next/navigation" // ← Agregar
 
 interface SidebarProps {
   user: User
+  // pathname real de la ruta actual (ej. "/dashboard/sala-espera")
   currentPage: string
   // onNavigate es opcional ahora
   onNavigate?: (page: string) => void
 }
+
+const sinBarraFinal = (path: string) => path.length > 1 ? path.replace(/\/$/, '') : path
 
 const menuItemsByRole: Record<string, Array<{ icon: any; label: string; href: string; path: string }>> = {
   admin: [
@@ -65,6 +68,7 @@ const menuItemsByRole: Record<string, Array<{ icon: any; label: string; href: st
 export function Sidebar({ user, currentPage, onNavigate }: SidebarProps) {
   const router = useRouter()
   const menuItems = menuItemsByRole[user.rol] || []
+  const currentPath = sinBarraFinal(currentPage)
 
   const handleNavigation = (path: string) => {
     if (onNavigate) {
@@ -101,8 +105,8 @@ export function Sidebar({ user, currentPage, onNavigate }: SidebarProps) {
               <button
                 onClick={() => handleNavigation(item.path)}
                 className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition duration-200 text-left ${
-                  currentPage === item.href 
-                    ? 'bg-[#155529] font-semibold' 
+                  currentPath === sinBarraFinal(item.path)
+                    ? 'bg-[#155529] font-semibold'
                     : 'hover:bg-[#155529]'
                 }`}
               >

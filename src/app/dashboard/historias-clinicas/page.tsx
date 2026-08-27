@@ -157,7 +157,6 @@ export default function HistoriaClinicaPage() {
         await loadHistorias(parseInt(selectedpacienteId))
       }
     } catch (err: any) {
-      console.error("Error eliminando HC:", err)
       alert(`Error: ${err.message || 'Error desconocido'}`)
     } finally {
       setDeletingHcId(null)

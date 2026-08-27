@@ -1,5 +1,8 @@
 from fastapi import APIRouter, HTTPException
+import logging
 from app.core.database import get_connection
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -55,8 +58,7 @@ def get_estados_cotizaciones():
                 estados = cursor.fetchall()
                 return {"estados": estados}
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail={
             "error": "Error obteniendo estados de cotización",
             "message": str(e)

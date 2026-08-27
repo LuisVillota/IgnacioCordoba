@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 import pymysql
 import os
+import logging
 from datetime import datetime
 import cloudinary
 import cloudinary.uploader
@@ -9,12 +10,15 @@ import json
 import tempfile
 
 from app.core.database import get_connection
+from app.core.security import sign_file_path
 from app.models.schemas.plan_quirurgico import (
-    PlanQuirurgicoCreate, 
-    PlanQuirurgicoUpdate, 
+    PlanQuirurgicoCreate,
+    PlanQuirurgicoUpdate,
     PlanQuirurgicoInDB,
     DescargarArchivoRequest
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -117,7 +121,7 @@ def get_planes_quirurgicos(limit: int = 100, offset: int = 0):
                     "planes": planes
                 }
     except Exception as e:
-        print(f"❌ Error obteniendo planes: {e}")
+        logger.exception("Error obteniendo planes")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{plan_id}", response_model=dict)
@@ -166,7 +170,7 @@ def get_plan_quirurgico(plan_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error obteniendo plan {plan_id}: {e}")
+        logger.exception(f"Error obteniendo plan {plan_id}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/", response_model=dict)
@@ -249,7 +253,7 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
                     plan.plan_conducta             # 58
                 )
                 
-                print(f"🔍 DEBUG: Total de valores a insertar: {len(valores)}")
+                logger.debug(f"Total de valores a insertar: {len(valores)}")
                 
                 # Query INSERT con 58 columnas
                 query = """
@@ -281,8 +285,8 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
                 
                 # Contar placeholders
                 num_placeholders = query.count('%s')
-                print(f"🔍 DEBUG: Placeholders en query: {num_placeholders}")
-                print(f"🔍 DEBUG: Valores proporcionados: {len(valores)}")
+                logger.debug(f"Placeholders en query: {num_placeholders}")
+                logger.debug(f"Valores proporcionados: {len(valores)}")
                 
                 if num_placeholders != len(valores):
                     raise Exception(f"Desajuste: {num_placeholders} placeholders vs {len(valores)} valores")
@@ -301,175 +305,7 @@ def create_plan_quirurgico(plan: PlanQuirurgicoCreate):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error creando plan: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-    """Crear un nuevo plan quirúrgico"""
-    try:
-        conn = get_connection()
-        with conn:
-            with conn.cursor() as cursor:
-                # Verificar que el paciente existe
-                cursor.execute("SELECT id FROM paciente WHERE id = %s", (plan.paciente_id,))
-                if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
-                
-                # Convertir campos JSON a string
-                enfermedad_actual_str = json_to_str(plan.enfermedad_actual)
-                antecedentes_str = json_to_str(plan.antecedentes)
-                notas_corporales_str = json_to_str(plan.notas_corporales)
-                esquema_mejorado_str = json_to_str(plan.esquema_mejorado)
-                
-                # Insertar plan quirúrgico - CORREGIDO: 55 campos = 55 valores
-                cursor.execute("""
-                    INSERT INTO plan_quirurgico (
-                        paciente_id, usuario_id, procedimiento_desc, anestesiologo,
-                        materiales_requeridos, notas_preoperatorias, riesgos, hora,
-                        fecha_programada, nombre_completo, peso, altura, fecha_nacimiento,
-                        imc, imagen_procedimiento, fecha_ultimo_procedimiento,
-                        descripcion_procedimiento, detalles, notas_doctor,
-                        tiempo_cirugia_minutos, entidad, edad, telefono, celular,
-                        direccion, email, motivo_consulta, farmacologicos, traumaticos,
-                        quirurgicos, alergicos, toxicos, habitos, cabeza, mamas,
-                        tcs, abdomen, gluteos, extremidades, pies_faneras,
-                        identificacion, fecha_consulta, hora_consulta, categoriaIMC,
-                        edad_calculada, ocupacion, enfermedad_actual, antecedentes,
-                        notas_corporales, duracion_estimada, tipo_anestesia,
-                        requiere_hospitalizacion, tiempo_hospitalizacion,
-                        reseccion_estimada, firma_cirujano, firma_paciente,
-                        plan_conducta, esquema_mejorado
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s
-                    )
-                """, (
-                    # 1-10
-                    plan.paciente_id, plan.usuario_id, plan.procedimiento_desc,
-                    plan.anestesiologo, plan.materiales_requeridos,
-                    plan.notas_preoperatorias, plan.riesgos, plan.hora,
-                    plan.fecha_programada, plan.nombre_completo,
-                    # 11-20
-                    plan.peso, plan.altura, plan.fecha_nacimiento, plan.imc,
-                    plan.imagen_procedimiento, plan.fecha_ultimo_procedimiento,
-                    plan.descripcion_procedimiento, plan.detalles, plan.notas_doctor,
-                    plan.tiempo_cirugia_minutos,
-                    # 21-30
-                    plan.entidad, plan.edad, plan.telefono, plan.celular, 
-                    plan.direccion, plan.email, plan.motivo_consulta, 
-                    plan.farmacologicos, plan.traumaticos, plan.quirurgicos,
-                    # 31-40
-                    plan.alergicos, plan.toxicos, plan.habitos, plan.cabeza, 
-                    plan.mamas, plan.tcs, plan.abdomen, plan.gluteos,
-                    plan.extremidades, plan.pies_faneras,
-                    # 41-50
-                    plan.identificacion, plan.fecha_consulta, plan.hora_consulta, 
-                    plan.categoriaIMC, plan.edad_calculada, plan.ocupacion, 
-                    enfermedad_actual_str, antecedentes_str, notas_corporales_str,
-                    plan.duracion_estimada,
-                    # 51-55
-                    plan.tipo_anestesia, plan.requiere_hospitalizacion,
-                    plan.tiempo_hospitalizacion, plan.reseccion_estimada,
-                    plan.firma_cirujano, plan.firma_paciente, plan.plan_conducta,
-                    esquema_mejorado_str
-                ))
-                
-                plan_id = cursor.lastrowid
-                conn.commit()
-                
-                return {
-                    "success": True,
-                    "message": "Plan quirúrgico creado exitosamente",
-                    "plan_id": plan_id,
-                    "id": plan_id
-                }
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error creando plan: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-    """Crear un nuevo plan quirúrgico"""
-    try:
-        conn = get_connection()
-        with conn:
-            with conn.cursor() as cursor:
-                # Verificar que el paciente existe
-                cursor.execute("SELECT id FROM paciente WHERE id = %s", (plan.paciente_id,))
-                if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Paciente no encontrado")
-                
-                # Convertir campos JSON a string
-                enfermedad_actual_str = json_to_str(plan.enfermedad_actual)
-                antecedentes_str = json_to_str(plan.antecedentes)
-                notas_corporales_str = json_to_str(plan.notas_corporales)
-                esquema_mejorado_str = json_to_str(plan.esquema_mejorado)
-                
-                # Insertar plan quirúrgico - CORREGIDO
-                cursor.execute("""
-                    INSERT INTO plan_quirurgico (
-                        paciente_id, usuario_id, procedimiento_desc, anestesiologo,
-                        materiales_requeridos, notas_preoperatorias, riesgos, hora,
-                        fecha_programada, nombre_completo, peso, altura, fecha_nacimiento,
-                        imc, imagen_procedimiento, fecha_ultimo_procedimiento,
-                        descripcion_procedimiento, detalles, notas_doctor,
-                        tiempo_cirugia_minutos, entidad, edad, telefono, celular,
-                        direccion, email, motivo_consulta, farmacologicos, traumaticos,
-                        quirurgicos, alergicos, toxicos, habitos, cabeza, mamas,
-                        tcs, abdomen, gluteos, extremidades, pies_faneras,
-                        identificacion, fecha_consulta, hora_consulta, categoriaIMC,
-                        edad_calculada, ocupacion, enfermedad_actual, antecedentes,
-                        notas_corporales, duracion_estimada, tipo_anestesia,
-                        requiere_hospitalizacion, tiempo_hospitalizacion,
-                        reseccion_estimada, firma_cirujano, firma_paciente,
-                        plan_conducta, esquema_mejorado
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s
-                    )
-                """, (
-                    plan.paciente_id, plan.usuario_id, plan.procedimiento_desc,
-                    plan.anestesiologo, plan.materiales_requeridos,
-                    plan.notas_preoperatorias, plan.riesgos, plan.hora,
-                    plan.fecha_programada, plan.nombre_completo, plan.peso,
-                    plan.altura, plan.fecha_nacimiento, plan.imc,
-                    plan.imagen_procedimiento, plan.fecha_ultimo_procedimiento,
-                    plan.descripcion_procedimiento, plan.detalles, plan.notas_doctor,
-                    plan.tiempo_cirugia_minutos, plan.entidad, plan.edad,
-                    plan.telefono, plan.celular, plan.direccion, plan.email,
-                    plan.motivo_consulta, plan.farmacologicos, plan.traumaticos,
-                    plan.quirurgicos, plan.alergicos, plan.toxicos, plan.habitos,
-                    plan.cabeza, plan.mamas, plan.tcs, plan.abdomen, plan.gluteos,
-                    plan.extremidades, plan.pies_faneras, plan.identificacion,
-                    plan.fecha_consulta, plan.hora_consulta, plan.categoriaIMC,
-                    plan.edad_calculada, plan.ocupacion, enfermedad_actual_str,
-                    antecedentes_str, notas_corporales_str, plan.duracion_estimada,
-                    plan.tipo_anestesia, plan.requiere_hospitalizacion,
-                    plan.tiempo_hospitalizacion, plan.reseccion_estimada,
-                    plan.firma_cirujano, plan.firma_paciente, plan.plan_conducta,
-                    esquema_mejorado_str
-                ))
-                
-                plan_id = cursor.lastrowid
-                conn.commit()
-                
-                return {
-                    "success": True,
-                    "message": "Plan quirúrgico creado exitosamente",
-                    "plan_id": plan_id,
-                    "id": plan_id
-                }
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error creando plan: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error creando plan")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{plan_id}", response_model=dict)
@@ -496,7 +332,12 @@ def update_plan_quirurgico(plan_id: int, plan: PlanQuirurgicoUpdate):
                         procedimiento_desc = %s, anestesiologo = %s,
                         materiales_requeridos = %s, notas_preoperatorias = %s,
                         riesgos = %s, hora = %s, fecha_programada = %s,
-                        peso = %s, altura = %s, imc = %s,
+                        nombre_completo = %s, peso = %s, altura = %s,
+                        fecha_nacimiento = %s, imc = %s, identificacion = %s,
+                        fecha_consulta = %s, hora_consulta = %s, categoriaIMC = %s,
+                        edad_calculada = %s, edad = %s, ocupacion = %s,
+                        telefono = %s, celular = %s, direccion = %s, email = %s,
+                        motivo_consulta = %s, entidad = %s, fecha_ultimo_procedimiento = %s,
                         farmacologicos = %s, traumaticos = %s, quirurgicos = %s,
                         alergicos = %s, toxicos = %s, habitos = %s,
                         cabeza = %s, mamas = %s, tcs = %s, abdomen = %s,
@@ -514,7 +355,12 @@ def update_plan_quirurgico(plan_id: int, plan: PlanQuirurgicoUpdate):
                     plan.procedimiento_desc, plan.anestesiologo,
                     plan.materiales_requeridos, plan.notas_preoperatorias,
                     plan.riesgos, plan.hora, plan.fecha_programada,
-                    plan.peso, plan.altura, plan.imc,
+                    plan.nombre_completo, plan.peso, plan.altura,
+                    plan.fecha_nacimiento, plan.imc, plan.identificacion,
+                    plan.fecha_consulta, plan.hora_consulta, plan.categoriaIMC,
+                    plan.edad_calculada, plan.edad, plan.ocupacion,
+                    plan.telefono, plan.celular, plan.direccion, plan.email,
+                    plan.motivo_consulta, plan.entidad, plan.fecha_ultimo_procedimiento,
                     plan.farmacologicos, plan.traumaticos, plan.quirurgicos,
                     plan.alergicos, plan.toxicos, plan.habitos,
                     plan.cabeza, plan.mamas, plan.tcs, plan.abdomen,
@@ -529,8 +375,20 @@ def update_plan_quirurgico(plan_id: int, plan: PlanQuirurgicoUpdate):
                     plan.notas_doctor, plan.tiempo_cirugia_minutos,
                     plan_id  # Este va al final para el WHERE
                 ))
+
+                # estado_id se actualiza aparte y solo si se envía explícitamente:
+                # el resto de campos de este endpoint no hace actualización parcial
+                # (siempre sobrescribe con lo recibido), pero aplicar ese mismo
+                # comportamiento a estado_id pondría la columna en NULL en cada
+                # guardado normal del formulario, que nunca envía este campo.
+                if plan.estado_id is not None:
+                    cursor.execute(
+                        "UPDATE plan_quirurgico SET estado_id = %s WHERE id = %s",
+                        (plan.estado_id, plan_id)
+                    )
+
                 conn.commit()
-                
+
                 return {
                     "success": True,
                     "message": "Plan quirúrgico actualizado exitosamente",
@@ -539,78 +397,7 @@ def update_plan_quirurgico(plan_id: int, plan: PlanQuirurgicoUpdate):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error actualizando plan: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-    """Actualizar un plan quirúrgico existente"""
-    try:
-        conn = get_connection()
-        with conn:
-            with conn.cursor() as cursor:
-                # Verificar que el plan existe
-                cursor.execute("SELECT id FROM plan_quirurgico WHERE id = %s", (plan_id,))
-                if not cursor.fetchone():
-                    raise HTTPException(status_code=404, detail="Plan quirúrgico no encontrado")
-                
-                # Convertir campos JSON a string
-                enfermedad_actual_str = json_to_str(plan.enfermedad_actual)
-                antecedentes_str = json_to_str(plan.antecedentes)
-                notas_corporales_str = json_to_str(plan.notas_corporales)
-                esquema_mejorado_str = json_to_str(plan.esquema_mejorado)
-                
-                # Actualizar plan - CORREGIDO
-                cursor.execute("""
-                    UPDATE plan_quirurgico SET
-                        procedimiento_desc = %s, anestesiologo = %s,
-                        materiales_requeridos = %s, notas_preoperatorias = %s,
-                        riesgos = %s, hora = %s, fecha_programada = %s,
-                        peso = %s, altura = %s, imc = %s,
-                        farmacologicos = %s, traumaticos = %s, quirurgicos = %s,
-                        alergicos = %s, toxicos = %s, habitos = %s,
-                        cabeza = %s, mamas = %s, tcs = %s, abdomen = %s,
-                        gluteos = %s, extremidades = %s, pies_faneras = %s,
-                        duracion_estimada = %s, tipo_anestesia = %s,
-                        requiere_hospitalizacion = %s, tiempo_hospitalizacion = %s,
-                        reseccion_estimada = %s, firma_cirujano = %s,
-                        firma_paciente = %s, enfermedad_actual = %s,
-                        antecedentes = %s, notas_corporales = %s,
-                        esquema_mejorado = %s, plan_conducta = %s,
-                        descripcion_procedimiento = %s, detalles = %s,
-                        notas_doctor = %s, tiempo_cirugia_minutos = %s
-                    WHERE id = %s
-                """, (
-                    plan.procedimiento_desc, plan.anestesiologo,
-                    plan.materiales_requeridos, plan.notas_preoperatorias,
-                    plan.riesgos, plan.hora, plan.fecha_programada,
-                    plan.peso, plan.altura, plan.imc,
-                    plan.farmacologicos, plan.traumaticos, plan.quirurgicos,
-                    plan.alergicos, plan.toxicos, plan.habitos,
-                    plan.cabeza, plan.mamas, plan.tcs, plan.abdomen,
-                    plan.gluteos, plan.extremidades, plan.pies_faneras,
-                    plan.duracion_estimada, plan.tipo_anestesia,
-                    plan.requiere_hospitalizacion, plan.tiempo_hospitalizacion,
-                    plan.reseccion_estimada, plan.firma_cirujano,
-                    plan.firma_paciente, enfermedad_actual_str,
-                    antecedentes_str, notas_corporales_str,
-                    esquema_mejorado_str, plan.plan_conducta,
-                    plan.descripcion_procedimiento, plan.detalles,
-                    plan.notas_doctor, plan.tiempo_cirugia_minutos,
-                    plan_id
-                ))
-                conn.commit()
-                
-                return {
-                    "success": True,
-                    "message": "Plan quirúrgico actualizado exitosamente",
-                    "plan_id": plan_id
-                }
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error actualizando plan: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error actualizando plan")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{plan_id}", response_model=dict)
@@ -646,19 +433,22 @@ def delete_plan_quirurgico(plan_id: int):
                                         filename = parts[idx + 1].split('.')[0]
                                         public_id = f"planes/{filename}"
                                         cloudinary.uploader.destroy(public_id)
-                                        print(f"🗑️ Eliminado de Cloudinary: {public_id}")
+                                        logger.info(f"Eliminado de Cloudinary: {public_id}")
                             except Exception as e:
-                                print(f"⚠️ Error eliminando de Cloudinary: {e}")
-                        
+                                logger.error(f"Error eliminando de Cloudinary: {e}")
+
                         elif archivo_url.startswith('/uploads/'):
-                            # Eliminar archivo local
-                            file_path = archivo_url[1:]  # Remover '/' inicial
-                            if os.path.exists(file_path):
+                            # Eliminar archivo local, restringido a PLANES_DIR
+                            # (la URL guardada puede traer ?t=<token firmado> al final)
+                            safe_name = os.path.basename(archivo_url.split('?')[0])
+                            file_path = os.path.join(PLANES_DIR, safe_name)
+                            resolved = os.path.realpath(file_path)
+                            if resolved.startswith(os.path.realpath(PLANES_DIR)) and os.path.exists(resolved):
                                 try:
-                                    os.remove(file_path)
-                                    print(f"🗑️ Eliminado archivo local: {file_path}")
+                                    os.remove(resolved)
+                                    logger.info(f"Eliminado archivo local: {resolved}")
                                 except Exception as e:
-                                    print(f"⚠️ Error eliminando archivo local: {e}")
+                                    logger.error(f"Error eliminando archivo local: {e}")
                 
                 # Eliminar registro de la base de datos
                 cursor.execute("DELETE FROM plan_quirurgico WHERE id = %s", (plan_id,))
@@ -673,7 +463,7 @@ def delete_plan_quirurgico(plan_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error eliminando plan: {e}")
+        logger.exception("Error eliminando plan")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{plan_id}/archivo", response_model=dict)
@@ -685,6 +475,7 @@ async def upload_plan_archivo(
     Subir un archivo (imagen o PDF) a un plan quirúrgico.
     Usa Cloudinary si está configurado, sino almacenamiento local.
     """
+    conn = None
     try:
         # Verificar que el plan existe
         conn = get_connection()
@@ -693,7 +484,7 @@ async def upload_plan_archivo(
             plan = cursor.fetchone()
             if not plan:
                 raise HTTPException(status_code=404, detail="Plan quirúrgico no encontrado")
-        
+
         # Validar tipo de archivo
         allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.pdf'}
         file_ext = os.path.splitext(file.filename or "unknown.jpg")[1].lower()
@@ -718,13 +509,13 @@ async def upload_plan_archivo(
         
         if USE_CLOUDINARY:
             # ========== CLOUDINARY ==========
-            print(f"☁️ Subiendo a Cloudinary: {filename}")
-            
+            logger.info(f"Subiendo a Cloudinary: {filename}")
+
             # Crear archivo temporal
             with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
                 tmp_file.write(content)
                 tmp_path = tmp_file.name
-            
+
             try:
                 # Subir a Cloudinary
                 upload_result = cloudinary.uploader.upload(
@@ -733,32 +524,33 @@ async def upload_plan_archivo(
                     public_id=filename,
                     resource_type="auto"  # Permite PDFs e imágenes
                 )
-                
+
                 file_url = upload_result['secure_url']
-                print(f"✅ Subido a Cloudinary: {file_url}")
-                
+                logger.info(f"Subido a Cloudinary: {file_url}")
+
             finally:
                 # Limpiar archivo temporal
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
-        
+
         else:
             # ========== ALMACENAMIENTO LOCAL ==========
-            print(f"💾 Guardando localmente: {filename}{file_ext}")
+            logger.info(f"Guardando localmente: {filename}{file_ext}")
             file_path = os.path.join(PLANES_DIR, f"{filename}{file_ext}")
-            
+
             with open(file_path, "wb") as buffer:
                 buffer.write(content)
-            
+
             if not os.path.exists(file_path):
                 raise HTTPException(
-                    status_code=500, 
+                    status_code=500,
                     detail="Error al guardar el archivo en el servidor"
                 )
-            
-            file_url = f"/uploads/planes/{filename}{file_ext}"
-            print(f"✅ Guardado localmente: {file_path}")
-        
+
+            relative_path = f"planes/{filename}{file_ext}"
+            file_url = f"/uploads/{relative_path}?t={sign_file_path(relative_path)}"
+            logger.info(f"Guardado localmente: {file_path}")
+
         # Actualizar base de datos
         with conn.cursor() as cursor:
             # Obtener archivos actuales
@@ -768,33 +560,34 @@ async def upload_plan_archivo(
                     archivos_actuales = json.loads(plan['imagen_procedimiento'])
                 except:
                     archivos_actuales = [img.strip() for img in plan['imagen_procedimiento'].split(',') if img.strip()]
-            
+
             # Agregar nuevo archivo
             archivos_actuales.append(file_url)
             archivos_json = json.dumps(archivos_actuales)
-            
+
             cursor.execute(
                 "UPDATE plan_quirurgico SET imagen_procedimiento = %s WHERE id = %s",
                 (archivos_json, plan_id)
             )
             conn.commit()
-        
-        conn.close()
-        print(f"🔗 URL final: {file_url}")
-        
+
+        logger.info(f"URL final: {file_url}")
+
         return {
             "success": True,
             "message": "Archivo subido exitosamente",
             "url": file_url,
             "filename": f"{filename}{file_ext}"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error subiendo archivo")
         raise HTTPException(status_code=500, detail=f"Error subiendo archivo: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
 
 @router.post("/{plan_id}/descargar-archivo")
 async def descargar_archivo(plan_id: int, request: DescargarArchivoRequest):
@@ -802,9 +595,10 @@ async def descargar_archivo(plan_id: int, request: DescargarArchivoRequest):
     Descargar un archivo específico de un plan quirúrgico.
     Funciona tanto para Cloudinary como almacenamiento local.
     """
+    conn = None
     try:
         nombreArchivo = request.nombreArchivo
-        
+
         # Verificar que el plan existe
         conn = get_connection()
         with conn.cursor() as cursor:
@@ -812,8 +606,7 @@ async def descargar_archivo(plan_id: int, request: DescargarArchivoRequest):
             plan = cursor.fetchone()
             if not plan:
                 raise HTTPException(status_code=404, detail="Plan quirúrgico no encontrado")
-        conn.close()
-        
+
         # Obtener lista de archivos
         archivos = []
         if plan['imagen_procedimiento']:
@@ -822,10 +615,11 @@ async def descargar_archivo(plan_id: int, request: DescargarArchivoRequest):
             except:
                 archivos = [img.strip() for img in plan['imagen_procedimiento'].split(',') if img.strip()]
         
-        # Buscar el archivo
+        # Buscar el archivo (comparar sin el ?t=<token> que puede traer la URL guardada)
         archivo_url = None
+        nombre_sin_token = nombreArchivo.split('?')[0]
         for url in archivos:
-            if nombreArchivo in url:
+            if nombre_sin_token in url.split('?')[0]:
                 archivo_url = url
                 break
         
@@ -841,12 +635,15 @@ async def descargar_archivo(plan_id: int, request: DescargarArchivoRequest):
                 "message": "Descargue desde la URL proporcionada"
             }
         
-        # Si es almacenamiento local, servir el archivo
-        file_path = archivo_url[1:] if archivo_url.startswith('/') else archivo_url
-        
-        if not os.path.exists(file_path):
+        # Si es almacenamiento local, servir el archivo, restringido a PLANES_DIR
+        safe_name = os.path.basename(archivo_url.split('?')[0])
+        file_path = os.path.join(PLANES_DIR, safe_name)
+        resolved = os.path.realpath(file_path)
+
+        if not resolved.startswith(os.path.realpath(PLANES_DIR)) or not os.path.exists(resolved):
             raise HTTPException(status_code=404, detail="Archivo no encontrado en el servidor")
-        
+        file_path = resolved
+
         # Determinar tipo de contenido
         extension = os.path.splitext(file_path)[1].lower()
         media_type = "application/octet-stream"
@@ -868,5 +665,8 @@ async def descargar_archivo(plan_id: int, request: DescargarArchivoRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error descargando archivo: {e}")
+        logger.exception("Error descargando archivo")
         raise HTTPException(status_code=500, detail=f"Error descargando archivo: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

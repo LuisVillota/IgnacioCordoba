@@ -28,19 +28,23 @@ const loadImageAsBase64 = async (url: string): Promise<string> => {
       reader.readAsDataURL(blob)
     })
   } catch (error) {
-    console.error('Error cargando imagen:', error)
     return ''
   }
 }
 
 // Función auxiliar para formatear el género de forma segura
+// El backend guarda el género como código de una letra (M/F/O/P), no como palabra completa
 const formatearGenero = (genero?: string): string => {
   if (!genero) return 'No especificado'
-  switch (genero.toLowerCase()) {
-    case 'masculino': return 'Masculino'
-    case 'femenino': return 'Femenino'
-    case 'otro': return 'Otro'
-    case 'prefiero no decir': return 'Prefiero no decir'
+  switch (genero.toUpperCase()) {
+    case 'M':
+    case 'MASCULINO': return 'Masculino'
+    case 'F':
+    case 'FEMENINO': return 'Femenino'
+    case 'O':
+    case 'OTRO': return 'Otro'
+    case 'P':
+    case 'PREFIERO NO DECIR': return 'Prefiero no decir'
     default: return genero.charAt(0).toUpperCase() + genero.slice(1)
   }
 }
@@ -208,7 +212,6 @@ export async function generarPDFpaciente(paciente: paciente) {
         doc.addImage(logoBase64, 'JPEG', logoX, logoY, logoWidth, logoHeight)
       }
     } catch (error) {
-      console.warn('No se pudo cargar el logo:', error)
     }
 
     // Títulos
@@ -407,10 +410,8 @@ export async function generarPDFpaciente(paciente: paciente) {
     const fileName = `ficha-paciente-${paciente.documento}.pdf`
     doc.save(fileName)
     
-    console.log(`PDF generado exitosamente para: ${paciente.nombres} ${paciente.apellidos}`)
     
   } catch (error) {
-    console.error('Error generando PDF:', error)
     throw new Error(`No se pudo generar el PDF: ${error instanceof Error ? error.message : 'Error desconocido'}`)
   }
 }

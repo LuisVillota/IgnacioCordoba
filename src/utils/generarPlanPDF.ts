@@ -269,7 +269,7 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
     diabetes:            "Diabetes",
     hepatitis:           "Hepatitis",
     hipertension:        "Hipertensión",
-    neurologicas:        "Nefrológicos",
+    neurologicas:        "Neurológicas",
     discrasia_sanguinea: "Discrasia Sanguínea",
     reumatologicas:      "Reumatológicos",
     enfermedad_mental:   "Enf. Mental",
@@ -408,7 +408,6 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
       doc.addImage(data.esquemaImageDataUrl, 'PNG', MARGIN, y, imgW, imgH)
       y += imgH + 3
     } catch (imgError) {
-      console.warn("No se pudo agregar la imagen del esquema al PDF:", imgError)
       sf(doc, GRIS_FND); sd(doc, GRIS_LIN)
       doc.rect(MARGIN, y, INNER_W, 25, "FD")
       st(doc, GRIS_TXT); doc.setFont("helvetica", "italic"); doc.setFontSize(9)
@@ -472,7 +471,7 @@ export async function generarPlanPDF(data: PlanPDFData): Promise<void> {
   doc.setFont("helvetica", "bold"); doc.setFontSize(7); st(doc, GRIS_TXT)
   doc.text("Tipo de Anestesia:", MARGIN + 2, y + 6)
 
-  const anestesias = ["General", "Sedación", "Local", "Local + Sedación", "Epidural"]
+  const anestesias = ["General", "Sedación", "Local", "Local+Sedación", "Epidural"]
   let ax = MARGIN + 38
   anestesias.forEach(a => {
     const checked = (cq.tipo_anestesia || "").toLowerCase().includes(a.toLowerCase())

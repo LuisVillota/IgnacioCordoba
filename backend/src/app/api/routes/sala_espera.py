@@ -1,13 +1,16 @@
 from fastapi import APIRouter, HTTPException, Query
 import pymysql
+import logging
 from datetime import datetime
 from typing import Optional
 
 from app.core.database import get_connection
 from app.models.schemas.sala_espera import (
-    SalaEsperaCreate, SalaEsperaUpdate, 
+    SalaEsperaCreate, SalaEsperaUpdate,
     BulkUpdateEstadosRequest, SalaEsperaInDB
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -132,17 +135,27 @@ def get_sala_espera(mostrarTodos: bool = Query(True, description="Mostrar todos 
                                 except:
                                     hora_cita_programada = None
                             
-                            cursor.execute("""
-                                INSERT INTO sala_espera 
-                                (paciente_id, estado_id, fecha_hora_ingreso, tiene_cita_hoy, hora_cita_programada) 
-                                VALUES (%s, %s, NOW(), %s, %s)
-                            """, (
-                                paciente['id'],
-                                estado['id'],
-                                paciente['tiene_cita_hoy'],
-                                hora_cita_programada
-                            ))
-                            pacientes_actualizados += 1
+                            try:
+                                cursor.execute("""
+                                    INSERT INTO sala_espera
+                                    (paciente_id, estado_id, fecha_hora_ingreso, tiene_cita_hoy, hora_cita_programada)
+                                    VALUES (%s, %s, NOW(), %s, %s)
+                                """, (
+                                    paciente['id'],
+                                    estado['id'],
+                                    paciente['tiene_cita_hoy'],
+                                    hora_cita_programada
+                                ))
+                                pacientes_actualizados += 1
+                            except pymysql.err.IntegrityError as e:
+                                # Código 1062 = entrada duplicada: otra petición concurrente
+                                # ya creó el registro de sala de espera de este paciente/día
+                                # (restricción única uq_paciente_fecha_ingreso). No es un error,
+                                # el re-fetch de más abajo ya va a traer esa fila.
+                                if e.args and e.args[0] == 1062:
+                                    logger.info(f"sala_espera ya existía para paciente {paciente['id']} (carrera con otra petición)")
+                                else:
+                                    raise
                 
                 if pacientes_actualizados > 0:
                     conn.commit()
@@ -203,8 +216,7 @@ def get_sala_espera(mostrarTodos: bool = Query(True, description="Mostrar todos 
                 }
                 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail=f"Error obteniendo sala de espera: {str(e)}")
 
 @router.post("/", response_model=dict)
@@ -287,8 +299,7 @@ def crear_registro_sala_espera(registro: SalaEsperaCreate):
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail=f"Error creando registro: {str(e)}")
 
 @router.put("/{paciente_id}/estado", response_model=dict)
@@ -406,8 +417,7 @@ def actualizar_estado_sala_espera(paciente_id: int, datos: SalaEsperaUpdate):
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail=f"Error actualizando estado: {str(e)}")
 
 @router.put("/bulk-estados", response_model=dict)
@@ -529,7 +539,11 @@ def bulk_update_estados_sala_espera(request: BulkUpdateEstadosRequest):
                         actualizados += 1
                         
                     except Exception as e:
-                        error_msg = f"Error con paciente {paciente_id}: {str(e)}"
+                        # Usar paciente_id_str (siempre asignado, viene del for) en vez de
+                        # paciente_id: si int(paciente_id_str) falla, paciente_id nunca se
+                        # asigna y referenciarlo acá lanzaría un NameError que abortaría
+                        # todo el lote en vez de registrar solo este error puntual.
+                        error_msg = f"Error con paciente {paciente_id_str}: {str(e)}"
                         errores.append(error_msg)
                         continue
                 
@@ -544,8 +558,7 @@ def bulk_update_estados_sala_espera(request: BulkUpdateEstadosRequest):
                 }
                 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail=f"Error actualizando estados: {str(e)}")
 
 @router.get("/estadisticas", response_model=dict)
@@ -556,14 +569,20 @@ def get_estadisticas_sala_espera():
             with conn.cursor() as cursor:
                 hoy = datetime.now().strftime('%Y-%m-%d')
                 
+                # "total" debe ser los pacientes de sala de espera de HOY, no todo el
+                # historial de pacientes de la clínica - por eso la base es sala_espera,
+                # no paciente. COUNT(DISTINCT ... p.id) evita duplicar pacientes con más
+                # de una cita el mismo día.
                 cursor.execute("""
-                    SELECT 
+                    SELECT
                         COUNT(DISTINCT p.id) as total_pacientes,
-                        SUM(CASE WHEN c.id IS NOT NULL AND DATE(c.fecha_hora) = %s THEN 1 ELSE 0 END) as con_cita_hoy,
-                        SUM(CASE WHEN c.id IS NULL OR DATE(c.fecha_hora) != %s THEN 1 ELSE 0 END) as sin_cita_hoy
-                    FROM paciente p
+                        COUNT(DISTINCT CASE WHEN c.id IS NOT NULL AND DATE(c.fecha_hora) = %s THEN p.id END) as con_cita_hoy,
+                        COUNT(DISTINCT CASE WHEN c.id IS NULL OR DATE(c.fecha_hora) != %s THEN p.id END) as sin_cita_hoy
+                    FROM sala_espera se
+                    INNER JOIN paciente p ON p.id = se.paciente_id
                     LEFT JOIN cita c ON p.id = c.paciente_id AND DATE(c.fecha_hora) = %s
-                """, (hoy, hoy, hoy))
+                    WHERE DATE(se.fecha_hora_ingreso) = %s
+                """, (hoy, hoy, hoy, hoy))
                 
                 general_stats = cursor.fetchone()
                 
@@ -634,6 +653,5 @@ def get_estadisticas_sala_espera():
                 }
                 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail=f"Error obteniendo estadísticas: {str(e)}")

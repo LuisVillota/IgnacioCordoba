@@ -105,7 +105,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
       if (event.data?.type !== 'ESQUEMA_SVG_DATA') return
       const { dataUrl, fileName } = event.data
       esquemaPendienteRef.current = { dataUrl, fileName }
-      console.log("📸 Esquema guardado pendiente para subir a HC:", fileName)
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
@@ -302,7 +301,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
         setCatalogoAdicionales(extractArray(adics))
         setCatalogoOtrosAdicionales(extractArray(otrosAdics))
       } catch (err) {
-        console.warn("Error cargando catálogos:", err)
       } finally {
         setLoadingCatalogos(false)
       }
@@ -325,7 +323,9 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
         await cargarpacientes();
         
         const now = new Date();
-        const fecha = now.toISOString().split('T')[0];
+        // Fecha local (no UTC): toISOString().split('T')[0] adelanta un día entre las
+        // 7pm y medianoche en Colombia (UTC-5)
+        const fecha = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const hora = now.toTimeString().slice(0, 5);
         
         setDatospaciente(prev => ({
@@ -365,7 +365,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
         setImagenesAdjuntas([]);
       }
     } catch (error) {
-      console.error("❌ Error cargando archivos del plan:", error);
       setArchivosCargados([]);
       setImagenesAdjuntas([]);
     } finally {
@@ -465,7 +464,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
         throw new Error(result.message || "Error subiendo archivo");
       }
     } catch (error: any) {
-      console.error("❌ Error subiendo archivo:", error);
       alert(`Error subiendo archivo: ${error.message || "Error desconocido"}`);
       
       setUploadingFiles(prev => {
@@ -506,7 +504,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
       const result = await api.downloadPlanFile(nombreArchivo, planId);
       
       if (result.success) {
-        console.log("✅ Archivo descargado exitosamente");
       } else {
         if (url.includes('http')) {
           window.open(url, '_blank');
@@ -515,7 +512,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
         }
       }
     } catch (error: any) {
-      console.error("❌ Error descargando archivo:", error);
       
       if (url.includes('http')) {
         window.open(url, '_blank');
@@ -543,7 +539,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
     setArchivosCargados(prev => prev.filter((_, i) => i !== index));
     setImagenesAdjuntas(prev => prev.filter((_, i) => i !== index));
     
-    console.log("🗑️ Archivo eliminado de la lista:", url);
   };
 
   const getFileIcon = (fileName: string) => {
@@ -613,7 +608,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
               edad--;
             }
           } catch (error) {
-            console.warn("Error calculando edad:", error);
           }
         }
         
@@ -665,7 +659,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
       }
       
     } catch (error) {
-      console.error("Error cargando pacientes:", error);
       
       let errorMessage = "Error al cargar los pacientes";
       if (error instanceof Error) {
@@ -750,7 +743,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
       setShowSelectorpacientes(false);
       
     } catch (error) {
-      console.error("Error seleccionando paciente:", error);
       alert("Error al seleccionar el paciente");
     }
   };
@@ -1380,7 +1372,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
                 ? esquemas[esquemas.length - 1]
                 : null
               if (esquemaUrlRemoto) {
-                console.log("🖼️ Esquema encontrado en HC:", esquemaUrlRemoto)
                 // Convertir URL a base64 dataURL para que jsPDF pueda usarla
                 try {
                   const resp = await fetch(esquemaUrlRemoto)
@@ -1391,13 +1382,11 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
                     reader.readAsDataURL(imgBlob)
                   })
                 } catch (fetchErr) {
-                  console.warn("⚠️ No se pudo descargar el esquema desde HC:", fetchErr)
                 }
               }
             }
           }
         } catch (err) {
-          console.warn("No se pudo buscar esquema en HC:", err)
         }
       }
 
@@ -1416,7 +1405,6 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
         procedimientos: nombresProc,
       });
     } catch (error) {
-      console.error("Error generando PDF:", error);
       alert("Error al generar el PDF. Intente nuevamente.");
     } finally {
       setGenerandoPDF(false);
@@ -1574,10 +1562,8 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
             }
 
             await api.createCotizacion(cotizacionData)
-            console.log("✅ Cotización creada automáticamente desde historia clinica")
           }
         } catch (cotError) {
-          console.warn("⚠️ No se pudo crear la cotización automática:", cotError)
         }
       }
 
@@ -1590,9 +1576,7 @@ export const PlanQuirurgicoForm: React.FC<Props> = ({ plan, onGuardar, onCancel,
           const blob = await res.blob()
           esquemaParaGuardar = new File([blob], fileName, { type: 'image/png' })
           esquemaPendienteRef.current = null
-          console.log("📸 Esquema pendiente convertido a File para subir a HC")
         } catch (err) {
-          console.warn("Error convirtiendo esquema pendiente:", err)
         }
       }
       onGuardar(nuevoPlan, esquemaParaGuardar)

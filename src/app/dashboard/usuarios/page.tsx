@@ -51,7 +51,6 @@ export default function UsuariosPage() {
 
       const response = await api.getUsuarios()
       
-      console.log("RESPUESTA COMPLETA DEL BACKEND:", response)
       
       let usuariosBackend = []
       
@@ -61,19 +60,15 @@ export default function UsuariosPage() {
         usuariosBackend = response
       }
       
-      console.log("Primer usuario del backend:", usuariosBackend[0])
       
       const transformed = usuariosBackend.map(
         (user: any) => transformBackendToFrontend.usuario(user)
       )
 
-      console.log("Primer usuario transformado:", transformed[0])
-      console.log("Total usuarios transformados:", transformed.length)
       
       setUsuarios(transformed)
     } catch (err: any) {
       setError(handleApiError(err))
-      console.error("Error cargando usuarios:", err)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -88,7 +83,6 @@ export default function UsuariosPage() {
 
   const handleSaveUsuario = async (payload: any) => {
     try {
-      console.log("📤 Datos recibidos del formulario:", payload)
       
       const isEdit = !!editingId
       
@@ -108,7 +102,6 @@ export default function UsuariosPage() {
           updateData.password = payload.password
         }
         
-        console.log("📤 Actualizando usuario ID:", editingId, "con datos:", updateData)
         
         const response = await api.updateUsuario(parseInt(editingId), updateData)
         
@@ -147,7 +140,6 @@ export default function UsuariosPage() {
           activo: Boolean(payload.activo),
         }
         
-        console.log("📤 Creando usuario con datos:", createData)
         
         const response = await api.createUsuario(createData)
         
@@ -163,7 +155,6 @@ export default function UsuariosPage() {
         }
       }
     } catch (err: any) {
-      console.error("❌ Error guardando usuario:", err)
       
       if (err.message) {
         if (err.message.includes("username") || err.message.includes("nombre de usuario")) {

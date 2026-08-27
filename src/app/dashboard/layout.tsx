@@ -46,7 +46,6 @@ export default function DashboardLayout({
   // 🔥 CORRECCIÓN: Redirigir solo DESPUÉS de que termine de cargar
   useEffect(() => {
     if (!auth?.loading && !auth?.user) {
-      console.log('🚫 [LAYOUT] Usuario no autenticado, redirigiendo a login')
       router.push('/login')
     }
   }, [auth?.loading, auth?.user, router])
@@ -96,9 +95,11 @@ export default function DashboardLayout({
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         ${!isMobile ? 'translate-x-0' : ''}
       `}>
-        <Sidebar 
-          user={auth.user} 
-          currentPage={getPageTitle().toLowerCase().replace(/ /g, '-')}
+        {/* currentPage = pathname real de la ruta (no el título en español, que no
+            coincidía de forma confiable con los href de menuItemsByRole) */}
+        <Sidebar
+          user={auth.user}
+          currentPage={pathname}
         />
       </div>
 

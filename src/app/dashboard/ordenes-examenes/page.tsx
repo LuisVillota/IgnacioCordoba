@@ -135,7 +135,7 @@ export default function OrdenExamenesPage() {
               </div>
             </div>
             <div className="p-4">
-              <OrdenExamenesForm paciente={selectedpaciente} />
+              <OrdenExamenesForm key={selectedpaciente.id} paciente={selectedpaciente} />
             </div>
           </div>
         ) : (
@@ -341,7 +341,10 @@ export default function OrdenExamenesPage() {
 
                 <div className="p-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Nueva Orden de Exámenes</h3>
+                  {/* key fuerza remount al cambiar de paciente sin pasar por "Volver a la
+                      lista" - evita que queden marcados los exámenes del paciente anterior */}
                   <OrdenExamenesForm
+                    key={selectedpaciente.id}
                     paciente={selectedpaciente}
                   />
                 </div>

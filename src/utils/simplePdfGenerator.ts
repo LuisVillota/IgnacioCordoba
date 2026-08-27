@@ -25,7 +25,6 @@ const loadImageAsBase64 = async (url: string): Promise<string> => {
       reader.readAsDataURL(blob)
     })
   } catch (error) {
-    console.error('Error cargando imagen:', error)
     return ''
   }
 }
@@ -93,7 +92,6 @@ export async function generarPDFOrdenExamenes(data: OrdenExamenesData) {
         const logoY = margin
         doc.addImage(logoBase64, 'JPEG', logoX, logoY, logoWidth, logoHeight)
       } catch (error) {
-        console.error('Error cargando logo:', error)
       }
     }
 
@@ -254,7 +252,6 @@ export async function generarPDFOrdenExamenes(data: OrdenExamenesData) {
     }
     
   } catch (error) {
-    console.error('Error generando PDF:', error)
     throw new Error('No se pudo generar el PDF')
   }
 }
@@ -297,7 +294,6 @@ export async function generarVistaPreviaPDF(data: OrdenExamenesData): Promise<st
     // Convertir a Data URL para vista previa
     return doc.output('datauristring')
   } catch (error) {
-    console.error('Error generando vista previa:', error)
     return ''
   }
 }

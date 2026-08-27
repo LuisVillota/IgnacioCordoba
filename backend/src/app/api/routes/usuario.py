@@ -1,21 +1,31 @@
-from fastapi import APIRouter, HTTPException, Query
-import hashlib
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import pymysql
 
 from app.core.database import get_connection
+from app.core.security import create_access_token, hash_password, verify_password, verify_legacy_sha256
+from app.api.deps import get_current_user, require_roles
 from app.models.schemas.usuario import UsuarioCreate, UsuarioUpdate
+
+ROL_ADMIN = 1
 
 router = APIRouter()
 
-@router.post("/", response_model=dict)
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@router.post("/", response_model=dict, dependencies=[Depends(require_roles(ROL_ADMIN))])
 def create_usuario(usuario: UsuarioCreate):
     """
     Crear un nuevo usuario
     """
     try:
-        password_hash = hashlib.sha256(usuario.password.encode()).hexdigest()
+        password_hash = hash_password(usuario.password)
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
@@ -58,7 +68,7 @@ def create_usuario(usuario: UsuarioCreate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/", response_model=dict)
+@router.get("/", response_model=dict, dependencies=[Depends(require_roles(ROL_ADMIN))])
 def get_usuarios():
     """
     Obtener todos los usuarios
@@ -69,7 +79,7 @@ def get_usuarios():
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
-                    FROM usuario u 
+                    FROM usuario u
                     JOIN rol r ON u.rol_id = r.id
                     ORDER BY u.id
                 """)
@@ -79,41 +89,58 @@ def get_usuarios():
         raise HTTPException(status_code=500, detail=str(e))
 
 # ¡IMPORTANTE: Esta ruta debe ir ANTES de la ruta con parámetro {usuario_id}!
-@router.get("/login", response_model=dict)
-def login(username: str = Query(..., description="Nombre de usuario"), 
-          password: str = Query(..., description="Contraseña")):
+@router.post("/login", response_model=dict)
+def login(credentials: LoginRequest):
     """
     Login de usuario
     """
     try:
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        
         conn = get_connection()
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
-                    FROM usuario u 
+                    SELECT u.id, u.username, u.nombre, u.email, u.password, u.rol_id, r.tipo_rol as rol, u.activo
+                    FROM usuario u
                     JOIN rol r ON u.rol_id = r.id
-                    WHERE u.username = %s AND u.password = %s AND u.activo = 1
-                """, (username, password_hash))
-                
+                    WHERE u.username = %s AND u.activo = 1
+                """, (credentials.username,))
+
                 usuario = cursor.fetchone()
                 if not usuario:
                     raise HTTPException(status_code=401, detail="Credenciales incorrectas o usuario inactivo")
-                
+
+                stored_hash = usuario["password"]
+                authenticated = verify_password(credentials.password, stored_hash)
+                if not authenticated and verify_legacy_sha256(credentials.password, stored_hash):
+                    authenticated = True
+                    nuevo_hash = hash_password(credentials.password)
+                    cursor.execute("UPDATE usuario SET password = %s WHERE id = %s", (nuevo_hash, usuario["id"]))
+                    conn.commit()
+
+                if not authenticated:
+                    raise HTTPException(status_code=401, detail="Credenciales incorrectas o usuario inactivo")
+
+                token = create_access_token({
+                    "sub": str(usuario["id"]),
+                    "username": usuario["username"],
+                    "rol": usuario["rol"],
+                    "rol_id": usuario["rol_id"],
+                })
+
+                usuario.pop("password", None)
+
                 return {
-                    "success": True, 
+                    "success": True,
                     "message": "Login exitoso",
                     "usuario": usuario,
-                    "token": "simulado_para_desarrollo"
+                    "token": token
                 }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{usuario_id}", response_model=dict)
+@router.get("/{usuario_id}", response_model=dict, dependencies=[Depends(require_roles(ROL_ADMIN))])
 def get_usuario(usuario_id: int):
     """
     Obtener un usuario por ID
@@ -137,7 +164,7 @@ def get_usuario(usuario_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/{usuario_id}", response_model=dict)
+@router.put("/{usuario_id}", response_model=dict, dependencies=[Depends(require_roles(ROL_ADMIN))])
 def update_usuario(usuario_id: int, usuario: UsuarioUpdate):
     """
     Actualizar un usuario existente
@@ -162,7 +189,7 @@ def update_usuario(usuario_id: int, usuario: UsuarioUpdate):
                     values.append(usuario.username)
                 
                 if usuario.password is not None:
-                    password_hash = hashlib.sha256(usuario.password.encode()).hexdigest()
+                    password_hash = hash_password(usuario.password)
                     update_fields.append("password = %s")
                     values.append(password_hash)
                 
@@ -206,7 +233,7 @@ def update_usuario(usuario_id: int, usuario: UsuarioUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/{usuario_id}", response_model=dict)
+@router.delete("/{usuario_id}", response_model=dict, dependencies=[Depends(require_roles(ROL_ADMIN))])
 def delete_usuario(usuario_id: int):
     """
     Eliminar un usuario
@@ -244,41 +271,6 @@ def delete_usuario(usuario_id: int):
                     "usuario_id": usuario_id,
                     "usuario_nombre": usuario['nombre'],
                     "usuario_username": usuario['username']
-                }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Endpoint temporal alternativo (si aún tienes problemas)
-@router.get("/auth/login", response_model=dict)
-def login_alternativo(username: str = Query(..., description="Nombre de usuario"), 
-                     password: str = Query(..., description="Contraseña")):
-    """
-    Endpoint alternativo de login (temporal)
-    """
-    try:
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        
-        conn = get_connection()
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT u.id, u.username, u.nombre, u.email, r.tipo_rol as rol, u.activo
-                    FROM usuario u 
-                    JOIN rol r ON u.rol_id = r.id
-                    WHERE u.username = %s AND u.password = %s AND u.activo = 1
-                """, (username, password_hash))
-                
-                usuario = cursor.fetchone()
-                if not usuario:
-                    raise HTTPException(status_code=401, detail="Credenciales incorrectas o usuario inactivo")
-                
-                return {
-                    "success": True, 
-                    "message": "Login exitoso",
-                    "usuario": usuario,
-                    "token": "simulado_para_desarrollo"
                 }
     except HTTPException:
         raise

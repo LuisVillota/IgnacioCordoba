@@ -1,11 +1,14 @@
 from fastapi import APIRouter, HTTPException, Query
 import pymysql
+import logging
 from datetime import datetime
 from typing import Optional
 
 from app.core.database import get_connection
 from app.models.schemas.cita import CitaCreate, CitaUpdate, CitaInDB
 from app.models.schemas.paciente import MessageResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -167,8 +170,7 @@ def create_cita(cita: CitaCreate):
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=f"Formato de fecha inválido: {str(ve)}")
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 @router.put("/{cita_id}", response_model=dict)

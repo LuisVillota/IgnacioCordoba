@@ -22,6 +22,55 @@ export default function DashboardHome() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
+  // OPTIMIZACIÓN: useCallback para evitar recrear función
+  const fetchQuickStats = useCallback(async () => {
+    try {
+      setStatsLoading(true)
+      setError(null)
+      
+      const startTime = Date.now()
+      
+      // UNA SOLA llamada API optimizada
+      const response = await api.getQuickCounts()
+      
+      const endTime = Date.now()
+      
+      if (response?.success) {
+        setStats({
+          totalpacientes: response.pacientes_total || 0,
+          citasHoy: response.citas_hoy || 0
+        })
+      } else {
+        setStats({ totalpacientes: 0, citasHoy: 0 })
+      }
+      
+    } catch (err: any) {
+      setError('Error al cargar estadísticas')
+      setStats({ totalpacientes: 0, citasHoy: 0 })
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [])
+
+  // Cargar datos una vez que la sesión ya se resolvió y hay un usuario autenticado
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      fetchQuickStats()
+    }
+  }, [loading, isAuthenticated, fetchQuickStats])
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true)
+    fetchQuickStats().finally(() => {
+      setRefreshing(false)
+    })
+  }, [fetchQuickStats])
+
+  const getNombreUsuario = () => {
+    if (!user?.nombre_completo) return 'Usuario'
+    return user.nombre_completo.split(' ')[0]
+  }
+
   // Si loading (auth loading), mostrar loading
   if (loading) {
     return (
@@ -44,55 +93,6 @@ export default function DashboardHome() {
         </div>
       </div>
     )
-  }
-
-  // OPTIMIZACIÓN: useCallback para evitar recrear función
-  const fetchQuickStats = useCallback(async () => {
-    try {
-      setStatsLoading(true)
-      setError(null)
-      
-      const startTime = Date.now()
-      
-      // UNA SOLA llamada API optimizada
-      const response = await api.getQuickCounts()
-      
-      const endTime = Date.now()
-      console.log(`✅ Stats cargados en ${endTime - startTime}ms`)
-      
-      if (response?.success) {
-        setStats({
-          totalpacientes: response.pacientes_total || 0,
-          citasHoy: response.citas_hoy || 0
-        })
-      } else {
-        setStats({ totalpacientes: 0, citasHoy: 0 })
-      }
-      
-    } catch (err: any) {
-      console.error("❌ Error cargando stats:", err)
-      setError('Error al cargar estadísticas')
-      setStats({ totalpacientes: 0, citasHoy: 0 })
-    } finally {
-      setStatsLoading(false)
-    }
-  }, [])
-
-  // Cargar datos UNA SOLA VEZ al montar
-  useEffect(() => {
-    fetchQuickStats()
-  }, [fetchQuickStats])
-
-  const handleRefresh = useCallback(() => {
-    setRefreshing(true)
-    fetchQuickStats().finally(() => {
-      setRefreshing(false)
-    })
-  }, [fetchQuickStats])
-
-  const getNombreUsuario = () => {
-    if (!user?.nombre_completo) return 'Usuario'
-    return user.nombre_completo.split(' ')[0]
   }
 
   const statCards = [

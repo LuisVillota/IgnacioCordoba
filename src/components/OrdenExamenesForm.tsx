@@ -69,7 +69,6 @@ export function OrdenExamenesForm({ paciente }: OrdenExamenesFormProps) {
         observaciones
       })
     } catch (error) {
-      console.error("Error generando PDF:", error)
       alert("Error al generar el PDF. Por favor, intente nuevamente.")
     } finally {
       setGenerandoPDF(false)

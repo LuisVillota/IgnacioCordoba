@@ -1,17 +1,27 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
 import pymysql
 import os
+import logging
 from datetime import datetime
 import cloudinary
 import cloudinary.uploader
 
 from app.core.database import get_connection
+from app.core.security import sign_file_path
 from app.models.schemas.historial_clinico import (
-    HistorialClinicoCreate, HistorialClinicoUpdate, 
+    HistorialClinicoCreate, HistorialClinicoUpdate,
     HistorialClinicoInDB, FileUploadResponse
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+MYSQL_ERROR_TABLE_NO_EXISTE = 1146
+
+
+def _tabla_no_existe(e: Exception) -> bool:
+    return isinstance(e, pymysql.MySQLError) and bool(e.args) and e.args[0] == MYSQL_ERROR_TABLE_NO_EXISTE
 
 # Configurar Cloudinary
 cloudinary.config(
@@ -49,7 +59,7 @@ def get_historias_clinicas(limit: int = 100, offset: int = 0):
                 historias = cursor.fetchall()
                 return {"historias": historias}
     except Exception as e:
-        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if _tabla_no_existe(e):
             return {"historias": []}
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -74,7 +84,7 @@ def get_historias_by_paciente(paciente_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if _tabla_no_existe(e):
             return []
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -93,7 +103,7 @@ def get_historia_clinica(historia_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if _tabla_no_existe(e):
             raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -143,7 +153,7 @@ def create_historia_clinica(historia: HistorialClinicoCreate):
     except HTTPException:
         raise
     except Exception as e:
-        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if _tabla_no_existe(e):
             raise HTTPException(status_code=500, detail="Tabla de historias clínicas no existe.")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -203,7 +213,7 @@ def update_historia_clinica(historia_id: int, historia: HistorialClinicoUpdate):
     except HTTPException:
         raise
     except Exception as e:
-        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if _tabla_no_existe(e):
             raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -237,19 +247,22 @@ def delete_historia_clinica(historia_id: int):
                                         filename = parts[idx + 1].split('.')[0]
                                         public_id = f"historias/{filename}"
                                         cloudinary.uploader.destroy(public_id)
-                                        print(f"🗑️ Eliminado de Cloudinary: {public_id}")
+                                        logger.info(f"Eliminado de Cloudinary: {public_id}")
                             except Exception as e:
-                                print(f"⚠️ Error eliminando de Cloudinary: {e}")
-                        
+                                logger.error(f"Error eliminando de Cloudinary: {e}")
+
                         elif foto_url.startswith('/uploads/'):
-                            # Eliminar archivo local
-                            file_path = foto_url[1:]  # Remover '/' inicial
-                            if os.path.exists(file_path):
+                            # Eliminar archivo local, restringido a HISTORIAS_DIR
+                            # (la URL guardada puede traer ?t=<token firmado> al final)
+                            safe_name = os.path.basename(foto_url.split('?')[0])
+                            file_path = os.path.join(HISTORIAS_DIR, safe_name)
+                            resolved = os.path.realpath(file_path)
+                            if resolved.startswith(os.path.realpath(HISTORIAS_DIR)) and os.path.exists(resolved):
                                 try:
-                                    os.remove(file_path)
-                                    print(f"🗑️ Eliminado archivo local: {file_path}")
+                                    os.remove(resolved)
+                                    logger.info(f"Eliminado archivo local: {resolved}")
                                 except Exception as e:
-                                    print(f"⚠️ Error eliminando archivo local: {e}")
+                                    logger.error(f"Error eliminando archivo local: {e}")
                 
                 # Eliminar registro de la base de datos
                 cursor.execute("DELETE FROM historial_clinico WHERE id = %s", (historia_id,))
@@ -264,7 +277,7 @@ def delete_historia_clinica(historia_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        if "Table 'u997398721_consultorio_db.historial_clinico' doesn't exist" in str(e):
+        if _tabla_no_existe(e):
             raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -280,12 +293,13 @@ async def upload_historia_foto(
     try:
         # Verificar que la historia existe
         conn = get_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
-            if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
-        conn.close()
-        
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT id FROM historial_clinico WHERE id = %s", (historia_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=404, detail="Historia clínica no encontrada")
+
+
         # Validar tipo de archivo
         allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
         file_ext = os.path.splitext(file.filename or "unknown.jpg")[1].lower()
@@ -305,7 +319,7 @@ async def upload_historia_foto(
             )
         
         # Generar nombre: si es esquema, usar nombre original exacto; si no, agregar timestamp
-        original_name = os.path.splitext(file.filename or "")[0]
+        original_name = os.path.basename(os.path.splitext(file.filename or "")[0])
         if original_name.startswith("esquema_"):
             filename = original_name
         else:
@@ -314,14 +328,14 @@ async def upload_historia_foto(
         
         if USE_CLOUDINARY:
             # ========== CLOUDINARY ==========
-            print(f"☁️ Subiendo a Cloudinary: {filename}")
-            
+            logger.info(f"Subiendo a Cloudinary: {filename}")
+
             import tempfile
             # Crear archivo temporal
             with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
                 tmp_file.write(content)
                 tmp_path = tmp_file.name
-            
+
             try:
                 # Subir a Cloudinary
                 upload_result = cloudinary.uploader.upload(
@@ -330,33 +344,34 @@ async def upload_historia_foto(
                     public_id=filename,
                     resource_type="image"
                 )
-                
+
                 file_url = upload_result['secure_url']
-                print(f"✅ Subido a Cloudinary: {file_url}")
-                
+                logger.info(f"Subido a Cloudinary: {file_url}")
+
             finally:
                 # Limpiar archivo temporal
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
-        
+
         else:
             # ========== ALMACENAMIENTO LOCAL ==========
-            print(f"💾 Guardando localmente: {filename}{file_ext}")
+            logger.info(f"Guardando localmente: {filename}{file_ext}")
             file_path = os.path.join(HISTORIAS_DIR, f"{filename}{file_ext}")
-            
+
             with open(file_path, "wb") as buffer:
                 buffer.write(content)
-            
+
             if not os.path.exists(file_path):
                 raise HTTPException(
-                    status_code=500, 
+                    status_code=500,
                     detail="Error al guardar el archivo en el servidor"
                 )
-            
-            file_url = f"/uploads/historias/{filename}{file_ext}"
-            print(f"✅ Guardado localmente: {file_path}")
-        
-        print(f"🔗 URL final: {file_url}")
+
+            relative_path = f"historias/{filename}{file_ext}"
+            file_url = f"/uploads/{relative_path}?t={sign_file_path(relative_path)}"
+            logger.info(f"Guardado localmente: {file_path}")
+
+        logger.info(f"URL final: {file_url}")
         
         return FileUploadResponse(
             success=True,
@@ -368,6 +383,5 @@ async def upload_historia_foto(
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error subiendo archivo")
         raise HTTPException(status_code=500, detail=f"Error subiendo archivo: {str(e)}")

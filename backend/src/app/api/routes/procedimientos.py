@@ -29,8 +29,7 @@ def get_procedimientos():
                 procedimientos = cursor.fetchall()
                 return {"procedimientos": procedimientos}
     except Exception as e:
-        error_msg = str(e)
-        if "procedimiento" in error_msg.lower() or "tarifa" in error_msg.lower():
+        if isinstance(e, pymysql.MySQLError) and e.args and e.args[0] == 1146:
             try:
                 conn = get_connection()
                 with conn:
@@ -50,7 +49,7 @@ def get_procedimientos():
                         return {"procedimientos": procedimientos}
             except:
                 return {"procedimientos": []}
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{procedimiento_id}", response_model=dict)
 def get_procedimiento(procedimiento_id: int):

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime
 import pymysql
 import os
@@ -6,6 +6,9 @@ from typing import List, Dict, Any
 
 from app.core.database import get_connection
 from app.core.config import settings
+from app.api.deps import get_current_user, require_roles
+
+ROL_ADMIN = 1
 
 router = APIRouter()
 
@@ -31,7 +34,7 @@ async def health_check_fast():
             "timestamp": datetime.now().isoformat()
         }
 
-@router.get("/dashboard/quick-counts")
+@router.get("/dashboard/quick-counts", dependencies=[Depends(get_current_user)])
 def get_quick_counts():
     """Endpoint SUPER rápido solo para conteos"""
     try:
@@ -65,7 +68,7 @@ def get_quick_counts():
             "citas_hoy": 0
         }
 
-@router.get("/debug/endpoints")
+@router.get("/debug/endpoints", dependencies=[Depends(require_roles(ROL_ADMIN))])
 def debug_endpoints():
     """Devuelve todos los endpoints disponibles"""
     from fastapi import FastAPI
@@ -81,7 +84,7 @@ def debug_endpoints():
     
     return {"endpoints": routes}
 
-@router.get("/test-frontend")
+@router.get("/test-frontend", dependencies=[Depends(get_current_user)])
 def test_frontend():
     try:
         conn = get_connection()
@@ -175,7 +178,7 @@ def test_frontend():
             "timestamp": datetime.now().isoformat()
         }
 
-@router.get("/debug/database-status")
+@router.get("/debug/database-status", dependencies=[Depends(require_roles(ROL_ADMIN))])
 def debug_database_status():
     """Verifica el estado de todas las tablas importantes"""
     try:
@@ -227,7 +230,7 @@ def debug_database_status():
             "database": settings.DB_NAME
         }
 
-@router.get("/debug/connection-pool")
+@router.get("/debug/connection-pool", dependencies=[Depends(require_roles(ROL_ADMIN))])
 def debug_connection_pool():
     """Verifica el estado de las conexiones a la base de datos"""
     try:
@@ -271,7 +274,7 @@ def debug_connection_pool():
             }
         }
 
-@router.get("/debug/environment")
+@router.get("/debug/environment", dependencies=[Depends(require_roles(ROL_ADMIN))])
 def debug_environment():
     """Muestra variables de entorno (sin contraseñas)"""
     env_vars = {}
@@ -292,7 +295,7 @@ def debug_environment():
         "upload_directory_exists": os.path.exists(settings.UPLOAD_DIR)
     }
 
-@router.get("/debug/memory-usage")
+@router.get("/debug/memory-usage", dependencies=[Depends(require_roles(ROL_ADMIN))])
 def debug_memory_usage():
     """Muestra uso de memoria del servidor"""
     import psutil
@@ -325,7 +328,7 @@ def ping():
         "version": settings.VERSION
     }
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(get_current_user)])
 def system_status():
     """Estado completo del sistema"""
     try:
@@ -368,7 +371,7 @@ def system_status():
             "timestamp": datetime.now().isoformat()
         }
 
-@router.get("/info")
+@router.get("/info", dependencies=[Depends(get_current_user)])
 def system_info():
     """Información del sistema"""
     import platform

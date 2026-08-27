@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
     "lint": "next lint",
     "clean": "rm -rf .next out node_modules/.cache",
     "postbuild": "node postbuild.js && node create-htaccess.js"

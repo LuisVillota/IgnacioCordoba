@@ -126,21 +126,24 @@ const transformBackendcita = (backendcita: any): cita => {
     fecha = formatDate(new Date())
   }
 
+  // El backend ya devuelve el nombre real del estado (JOIN con estado_cita) - usarlo
+  // directamente evita tener que mantener sincronizado un mapeo numérico por separado
+  // (estado_id: 1=pendiente, 2=confirmada, 3=completada, 4=cancelada, confirmado contra la BD).
   let estado: cita["estado"] = "pendiente"
-  if (backendcita.estado_id) {
-    switch(backendcita.estado_id) {
-      case 1: estado = "cancelada"; break;
-      case 2: estado = "confirmada"; break;
-      case 3: estado = "completada"; break;
-      case 4: estado = "pendiente"; break;
-      default: estado = "pendiente";
-    }
-  } else if (backendcita.estado_nombre) {
+  if (backendcita.estado_nombre) {
     const estadoLower = backendcita.estado_nombre.toLowerCase()
     if (estadoLower.includes('confirm')) estado = "confirmada"
     else if (estadoLower.includes('complet')) estado = "completada"
     else if (estadoLower.includes('cancel')) estado = "cancelada"
     else if (estadoLower.includes('pendient')) estado = "pendiente"
+  } else if (backendcita.estado_id) {
+    switch(backendcita.estado_id) {
+      case 1: estado = "pendiente"; break;
+      case 2: estado = "confirmada"; break;
+      case 3: estado = "completada"; break;
+      case 4: estado = "cancelada"; break;
+      default: estado = "pendiente";
+    }
   } else if (backendcita.estado) {
     const estadoLower = backendcita.estado.toLowerCase()
     if (estadoLower.includes('confirm')) estado = "confirmada"
@@ -242,11 +245,11 @@ const ordenarcitasPorFechaHoraAscendente = (citasArray: cita[]): cita[] => {
 
 const getEstadoId = (estado: string): number => {
   switch(estado) {
-    case 'pendiente': return 4;
+    case 'pendiente': return 1;
     case 'confirmada': return 2;
     case 'completada': return 3;
-    case 'cancelada': return 1;
-    default: return 4;
+    case 'cancelada': return 4;
+    default: return 1;
   }
 }
 
@@ -885,6 +888,9 @@ function CitaForm({ cita, pacientes, onSave, onClose, onDelete, onPlanQuirurgico
   onDelete?: () => void
   onPlanQuirurgico?: (pacienteId: string) => void
 }) {
+  // cita puede venir como un objeto "predefinido" sin id real (al crear desde un horario
+  // específico del día) - solo se está editando de verdad si tiene un id existente.
+  const isEditing = !!(cita as any)?.id
   const [formData, setFormData] = useState<Omit<cita, "id">>({
     id_paciente: cita?.id_paciente || "",
     id_usuario: cita?.id_usuario || "1",
@@ -965,7 +971,7 @@ function CitaForm({ cita, pacientes, onSave, onClose, onDelete, onPlanQuirurgico
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold text-gray-800">
-              {cita ? "Editar cita" : "Nueva cita"}
+              {isEditing ? "Editar cita" : "Nueva cita"}
             </h3>
             <button
               onClick={onClose}
@@ -1179,7 +1185,7 @@ function CitaForm({ cita, pacientes, onSave, onClose, onDelete, onPlanQuirurgico
               </button>
               
               {/* Botón de eliminar - solo visible cuando se está editando una cita existente */}
-              {cita && onDelete && (
+              {isEditing && onDelete && (
                 <button
                   type="button"
                   onClick={onDelete}
@@ -1194,7 +1200,7 @@ function CitaForm({ cita, pacientes, onSave, onClose, onDelete, onPlanQuirurgico
                 type="submit"
                 className="px-4 py-2 bg-[#1a6b32] text-white rounded-lg hover:bg-[#155529] transition flex-1"
               >
-                {cita ? "Actualizar" : "Crear"} Cita
+                {isEditing ? "Actualizar" : "Crear"} Cita
               </button>
             </div>
           </form>
@@ -1544,27 +1550,23 @@ export default function AgendaPage() {
     setDiaSeleccionado(null)
     setEditingId(null)
     
-    // Si se pasa una hora, crear una cita predeterminada con esa hora
-    if (hora) {
-      const nuevaCitaPredefinida: Omit<cita, "id"> = {
-        id_paciente: "",
-        id_usuario: "1",
-        tipo_cita: "control",
-        fecha: fecha,
-        hora: hora,
-        duracion: 10,
-        estado: "pendiente",
-        observaciones: "",
-        paciente_nombre: "",
-        paciente_apellido: "",
-        doctor_nombre: "Dr. No Especificado"
-      };
-      
-      setSelectedcita(nuevaCitaPredefinida as any);
-    } else {
-      setSelectedcita(null);
-    }
-    
+    // Siempre precargar la fecha seleccionada (con o sin hora específica); ninguno de
+    // estos objetos tiene "id" real, así que CitaForm los sigue tratando como "Nueva cita"
+    const nuevaCitaPredefinida: Omit<cita, "id"> = {
+      id_paciente: "",
+      id_usuario: "1",
+      tipo_cita: "control",
+      fecha: fecha,
+      hora: hora || "09:00",
+      duracion: 10,
+      estado: "pendiente",
+      observaciones: "",
+      paciente_nombre: "",
+      paciente_apellido: "",
+      doctor_nombre: "Dr. No Especificado"
+    };
+
+    setSelectedcita(nuevaCitaPredefinida as any);
     setShowForm(true);
   }
 
@@ -2136,7 +2138,7 @@ export default function AgendaPage() {
               setDiaSeleccionado(null)
               router.push(`/dashboard/plan-quirurgico?paciente_id=${pacienteId}`)
             }}
-            onDelete={selectedcita ? () => solicitarEliminarCita(selectedcita) : undefined}
+            onDelete={selectedcita?.id ? () => solicitarEliminarCita(selectedcita) : undefined}
           />
         )}
 
@@ -2152,7 +2154,6 @@ export default function AgendaPage() {
             }
             onClose={() => setSelectedcita(null)}
             onEdit={() => handleEdit(selectedcita)}
-            onDelete={() => solicitarEliminarCita(selectedcita)}
             onPlanQuirurgico={(pacienteId) => {
               setSelectedcita(null)
               setDiaSeleccionado(null)

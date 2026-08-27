@@ -93,11 +93,28 @@ class PlanQuirurgicoUpdate(BaseModel):
     hora: Optional[str] = None
     fecha_programada: Optional[str] = None
     
-    # Datos médicos
+    # Datos básicos del paciente (antes solo estaban en PlanQuirurgicoCreate: al editar
+    # un plan existente se perdían silenciosamente porque el UPDATE nunca los tocaba)
+    nombre_completo: Optional[str] = None
     peso: Optional[float] = None
     altura: Optional[float] = None
+    fecha_nacimiento: Optional[str] = None
     imc: Optional[float] = None
-    
+    identificacion: Optional[str] = None
+    fecha_consulta: Optional[str] = None
+    hora_consulta: Optional[str] = None
+    categoriaIMC: Optional[str] = None
+    edad_calculada: Optional[int] = None
+    edad: Optional[int] = None
+    ocupacion: Optional[str] = None
+    telefono: Optional[str] = None
+    celular: Optional[str] = None
+    direccion: Optional[str] = None
+    email: Optional[str] = None
+    motivo_consulta: Optional[str] = None
+    entidad: Optional[str] = None
+    fecha_ultimo_procedimiento: Optional[str] = None
+
     # Antecedentes
     farmacologicos: Optional[str] = None
     traumaticos: Optional[str] = None
