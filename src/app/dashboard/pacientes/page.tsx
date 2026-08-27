@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Plus, Edit2, Eye, Loader2, RefreshCw } from "lucide-react"
+import { Search, Plus, Edit2, Eye, Loader2, RefreshCw, AlertTriangle } from "lucide-react"
 import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { PacienteForm } from "../../../components/PacienteForm"
 import { PacienteModal } from "../../../components/PacienteModal"
@@ -52,6 +52,8 @@ export default function pacientesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [saveError, setSaveError] = useState<{ message: string; pacienteExistente?: any } | null>(null)
+  const [loadingExistente, setLoadingExistente] = useState(false)
   const ITEMS_PER_PAGE = 100
 
   useEffect(() => {
@@ -97,17 +99,18 @@ export default function pacientesPage() {
       return nameA.localeCompare(nameB)
     })
 
-  const formatPacienteError = (response: any): string => {
-    const mensaje = response?.message || 'Error desconocido'
-    const existente = response?.pacienteExistente
-    if (existente) {
-      const nombreCompleto = [existente.nombre, existente.apellido].filter(Boolean).join(' ')
-      return `${mensaje}. Ya existe: ${nombreCompleto} (documento ${existente.numero_documento}` +
-        (existente.telefono ? `, tel. ${existente.telefono}` : '') +
-        (existente.email ? `, ${existente.email}` : '') +
-        `)`
+  const handleVerPacienteExistente = async (id: number) => {
+    setLoadingExistente(true)
+    try {
+      const pacienteResponse = await api.getpaciente(id)
+      setSelectedpaciente(transformpacienteLocal(pacienteResponse))
+      setSaveError(null)
+      setShowForm(false)
+    } catch (err: any) {
+      alert(`No se pudo cargar el paciente: ${handleApiError(err)}`)
+    } finally {
+      setLoadingExistente(false)
     }
-    return mensaje
   }
 
   const handleSavepaciente = async (data: Omit<paciente, "id" | "fecha_registro">) => {
@@ -129,7 +132,10 @@ export default function pacientesPage() {
         const updateResponse = await api.updatepaciente(parseInt(editingId), backendData)
 
         if (!updateResponse || updateResponse.success === false || updateResponse.error) {
-          alert(`No se pudo actualizar el paciente: ${formatPacienteError(updateResponse)}`)
+          setSaveError({
+            message: updateResponse?.message || 'No se pudo actualizar el paciente',
+            pacienteExistente: updateResponse?.pacienteExistente
+          })
           return
         }
 
@@ -157,7 +163,10 @@ export default function pacientesPage() {
         // incluso en error) - sin este chequeo, un fallo (ej. documento duplicado)
         // cerraba el formulario igual, sin mostrar ningún mensaje.
         if (!response || response.success === false || response.error) {
-          alert(`No se pudo crear el paciente: ${formatPacienteError(response)}`)
+          setSaveError({
+            message: response?.message || 'No se pudo crear el paciente',
+            pacienteExistente: response?.pacienteExistente
+          })
           return
         }
 
@@ -168,7 +177,7 @@ export default function pacientesPage() {
       }
       setShowForm(false)
     } catch (err: any) {
-      alert(`Error: ${handleApiError(err)}`)
+      setSaveError({ message: handleApiError(err) })
     }
   }
 
@@ -405,6 +414,66 @@ export default function pacientesPage() {
 
       {selectedpaciente && !showForm && (
         <PacienteModal paciente={selectedpaciente} onClose={() => setSelectedpaciente(null)} />
+      )}
+
+      {saveError && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setSaveError(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-lg max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 p-6 border-b border-gray-200">
+              <div className="bg-red-100 text-red-600 rounded-full p-2 shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">No se pudo guardar el paciente</h2>
+                <p className="text-gray-600 text-sm mt-1">{saveError.message}</p>
+              </div>
+            </div>
+
+            {saveError.pacienteExistente && (
+              <div className="p-6">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                  Paciente ya registrado
+                </p>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-1">
+                  <p className="font-semibold text-gray-800">
+                    {[saveError.pacienteExistente.nombre, saveError.pacienteExistente.apellido].filter(Boolean).join(' ')}
+                  </p>
+                  <p className="text-sm text-gray-600">Documento: {saveError.pacienteExistente.numero_documento}</p>
+                  {saveError.pacienteExistente.telefono && (
+                    <p className="text-sm text-gray-600">Teléfono: {saveError.pacienteExistente.telefono}</p>
+                  )}
+                  {saveError.pacienteExistente.email && (
+                    <p className="text-sm text-gray-600">Email: {saveError.pacienteExistente.email}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 px-6 pb-6">
+              {saveError.pacienteExistente && (
+                <button
+                  onClick={() => handleVerPacienteExistente(saveError.pacienteExistente.id)}
+                  disabled={loadingExistente}
+                  className="px-4 py-2 text-sm rounded-lg border border-[#1a6b32] text-[#1a6b32] hover:bg-[#1a6b32]/5 transition disabled:opacity-50"
+                >
+                  {loadingExistente ? "Cargando..." : "Ver paciente completo"}
+                </button>
+              )}
+              <button
+                onClick={() => setSaveError(null)}
+                className="px-4 py-2 text-sm rounded-lg bg-[#1a6b32] hover:bg-[#155529] text-white transition"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
