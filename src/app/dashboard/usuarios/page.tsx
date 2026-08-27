@@ -6,6 +6,7 @@ import { ProtectedRoute } from "../../../components/ProtectedRoute"
 import { useAuth } from "../../../hooks/useAuth"
 import { hasAnyPermission } from "../../../types/permissions"
 import { api, transformBackendToFrontend, handleApiError } from "../../../lib/api"
+import { formatFechaHora } from "../../../lib/dateUtils"
 import { UsuarioForm } from "../../../components/UsuarioForm"
 import { UsuarioModal } from "../../../components/UsuarioModal"
 
@@ -294,7 +295,7 @@ export default function UsuariosPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      {usuario.fecha_registro}
+                      {formatFechaHora(usuario.fecha_registro)}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex justify-center space-x-2">

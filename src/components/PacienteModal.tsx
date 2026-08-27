@@ -3,6 +3,7 @@
 import { X, Mail, Phone, MapPin, Calendar, Download } from "lucide-react"
 import type { paciente } from "../types/paciente"
 import { generarPDFpaciente } from "../utils/pacientePdfGenerator"
+import { formatFechaHora } from "../lib/dateUtils"
 import { useState, useEffect } from "react"
 
 interface PacienteModalProps {
@@ -121,7 +122,7 @@ export function PacienteModal({ paciente, onClose }: PacienteModalProps) {
               <Calendar size={18} className="text-blue-600 mt-1" />
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Registro</p>
-                <p className="text-gray-800 font-medium">{currentpaciente.fecha_registro}</p>
+                <p className="text-gray-800 font-medium">{formatFechaHora(currentpaciente.fecha_registro)}</p>
               </div>
             </div>
           </div>

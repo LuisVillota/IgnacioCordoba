@@ -166,13 +166,17 @@ def create_paciente(paciente: PacienteCreate):
             with conn.cursor() as cursor:
                 # Verificar si el documento ya existe
                 cursor.execute(
-                    "SELECT id FROM paciente WHERE numero_documento = %s", 
+                    "SELECT id, numero_documento, nombre, apellido, telefono, email FROM paciente WHERE numero_documento = %s",
                     (paciente.numero_documento,)
                 )
-                if cursor.fetchone():
+                paciente_existente = cursor.fetchone()
+                if paciente_existente:
                     raise HTTPException(
-                        status_code=400, 
-                        detail="El número de documento ya existe"
+                        status_code=400,
+                        detail={
+                            "message": "El número de documento ya existe",
+                            "paciente_existente": paciente_existente
+                        }
                     )
                 
                 # Insertar paciente
@@ -208,8 +212,8 @@ def create_paciente(paciente: PacienteCreate):
     except pymysql.err.IntegrityError as e:
         if "numero_documento" in str(e):
             raise HTTPException(
-                status_code=400, 
-                detail="El número de documento ya existe"
+                status_code=400,
+                detail={"message": "El número de documento ya existe"}
             )
         raise HTTPException(status_code=500, detail="Error de base de datos")
     except Exception as e:
@@ -234,14 +238,18 @@ def update_paciente(paciente_id: int, paciente: PacienteUpdate):
                 # Verificar que el documento no esté duplicado
                 if paciente.numero_documento:
                     cursor.execute("""
-                        SELECT id FROM paciente 
+                        SELECT id, numero_documento, nombre, apellido, telefono, email FROM paciente
                         WHERE numero_documento = %s AND id != %s
                     """, (paciente.numero_documento, paciente_id))
-                    
-                    if cursor.fetchone():
+
+                    paciente_existente = cursor.fetchone()
+                    if paciente_existente:
                         raise HTTPException(
-                            status_code=400, 
-                            detail="El número de documento ya está registrado en otro paciente"
+                            status_code=400,
+                            detail={
+                                "message": "El número de documento ya está registrado en otro paciente",
+                                "paciente_existente": paciente_existente
+                            }
                         )
                 
                 # Construir query dinámica

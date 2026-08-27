@@ -134,7 +134,8 @@ export const fetchAPI = async (endpoint: string, options?: RequestInit) => {
               error: true,
               status: response.status,
               message: responseData.detail.message || JSON.stringify(responseData.detail),
-              isValidationError: response.status === 400 || response.status === 422
+              isValidationError: response.status === 400 || response.status === 422,
+              pacienteExistente: responseData.detail.paciente_existente
             };
           }
         } else if (responseData.message) {

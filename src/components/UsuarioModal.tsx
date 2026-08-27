@@ -1,6 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
+import { formatFechaHora } from "../lib/dateUtils"
 
 interface UsuarioModalProps {
   usuario: {
@@ -45,7 +46,7 @@ export function UsuarioModal({ usuario, onClose }: UsuarioModalProps) {
                             {usuario.activo ? "Activo" : "Inactivo"}
                         </span>
           </p>
-          <p><strong>Fecha creación:</strong> {usuario.fecha_registro}</p>
+          <p><strong>Fecha creación:</strong> {formatFechaHora(usuario.fecha_registro)}</p>
         </div>
 
         

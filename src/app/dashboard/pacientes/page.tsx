@@ -8,6 +8,7 @@ import { PacienteModal } from "../../../components/PacienteModal"
 import { useAuth } from "../../../hooks/useAuth"
 import { hasAnyPermission } from "../../../types/permissions"
 import { api, transformBackendToFrontend, handleApiError } from "../../../lib/api"
+import { formatFechaHora } from "../../../lib/dateUtils"
 import type { paciente } from "../../../types/paciente"
 
 // Función de transformación local para asegurar el tipo correcto
@@ -96,6 +97,19 @@ export default function pacientesPage() {
       return nameA.localeCompare(nameB)
     })
 
+  const formatPacienteError = (response: any): string => {
+    const mensaje = response?.message || 'Error desconocido'
+    const existente = response?.pacienteExistente
+    if (existente) {
+      const nombreCompleto = [existente.nombre, existente.apellido].filter(Boolean).join(' ')
+      return `${mensaje}. Ya existe: ${nombreCompleto} (documento ${existente.numero_documento}` +
+        (existente.telefono ? `, tel. ${existente.telefono}` : '') +
+        (existente.email ? `, ${existente.email}` : '') +
+        `)`
+    }
+    return mensaje
+  }
+
   const handleSavepaciente = async (data: Omit<paciente, "id" | "fecha_registro">) => {
     try {
       const backendData = {
@@ -112,8 +126,13 @@ export default function pacientesPage() {
       }
 
       if (editingId) {
-        await api.updatepaciente(parseInt(editingId), backendData)
-        
+        const updateResponse = await api.updatepaciente(parseInt(editingId), backendData)
+
+        if (!updateResponse || updateResponse.success === false || updateResponse.error) {
+          alert(`No se pudo actualizar el paciente: ${formatPacienteError(updateResponse)}`)
+          return
+        }
+
         const pacienteActualizado: paciente = {
           ...data,
           id: editingId,
@@ -133,13 +152,19 @@ export default function pacientesPage() {
         setEditingId(null)
       } else {
         const response = await api.createpaciente(backendData)
-        
-        if (response.success) {
-          const newpacienteResponse = await api.getpaciente(response.paciente_id)
-          const newpaciente = transformpacienteLocal(newpacienteResponse)
-          
-          setpacientes([newpaciente, ...pacientes])
+
+        // createpaciente nunca lanza excepción (fetchAPI siempre devuelve un objeto,
+        // incluso en error) - sin este chequeo, un fallo (ej. documento duplicado)
+        // cerraba el formulario igual, sin mostrar ningún mensaje.
+        if (!response || response.success === false || response.error) {
+          alert(`No se pudo crear el paciente: ${formatPacienteError(response)}`)
+          return
         }
+
+        const newpacienteResponse = await api.getpaciente(response.paciente_id)
+        const newpaciente = transformpacienteLocal(newpacienteResponse)
+
+        setpacientes([newpaciente, ...pacientes])
       }
       setShowForm(false)
     } catch (err: any) {
@@ -308,7 +333,7 @@ export default function pacientesPage() {
                           {paciente.estado_paciente === "activo" ? "Activo" : "Inactivo"}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{paciente.fecha_registro}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{formatFechaHora(paciente.fecha_registro)}</td>
                       <td className="px-6 py-4 text-sm">
                         <div className="flex items-center justify-center space-x-2">
                           <button
