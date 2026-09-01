@@ -29,7 +29,10 @@ class Settings(BaseSettings):
     # JWT
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    # 8 horas: cubre una jornada completa. Con 30 min, formularios largos
+    # (historia clinica, plan quirurgico) expiraban la sesion a mitad de
+    # llenado y el usuario perdia todo lo escrito al ser redirigido a login.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     
     # CORS
     CORS_ORIGINS: List[str] = [
