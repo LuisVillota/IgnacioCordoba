@@ -63,6 +63,17 @@ services:
       - type: redirect
         source: /inicio
         destination: /
+      # Rutas sin barra final: Render no las resuelve a su carpeta (Apache si lo hacia),
+      # y sin estas reglas caian al index.html raiz, que manda a /login (bucle tras el login).
+      - type: rewrite
+        source: /login
+        destination: /login/index.html
+      - type: rewrite
+        source: /dashboard
+        destination: /dashboard/index.html
+      - type: rewrite
+        source: /dashboard/:page
+        destination: /dashboard/:page/index.html
       # Equivalente al fallback del .htaccess: rutas desconocidas -> index.html
       - type: rewrite
         source: /*
