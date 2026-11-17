@@ -636,6 +636,18 @@ export function CotizacionModal({ cotizacion, paciente, onClose, onEdit }: Cotiz
               </div>
             ` : ''}
             
+            <!-- MEDIOS DE PAGO -->
+            <div class="observaciones-section" style="page-break-inside: avoid;">
+              <div class="mb-5 font-bold color-green">MEDIOS DE PAGO:</div>
+              <div style="line-height: 1.5;">
+                <div>Bancolombia</div>
+                <div>Cuenta Ahorros No. 71600007747</div>
+                <div>Hernán Ignacio Córdoba SAS</div>
+                <div>NIT 901982810-0</div>
+                <div style="margin-top: 6px;">Recuerde que usted también puede hacer sus pagos de forma presencial con tarjeta crédito 💳 débito o efectivo</div>
+              </div>
+            </div>
+
             <!-- Pie de página -->
             <div class="footer">
               <div class="footer-line">Calle 5D # 38a - 35 Edificio vida Cons 814 - 815 Torre 2</div>

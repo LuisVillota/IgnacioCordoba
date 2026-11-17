@@ -1503,7 +1503,10 @@ export default function AgendaPage() {
       
       setShowForm(false)
       setDiaSeleccionado(null)
-      
+      // Limpiar la plantilla de "Nueva cita" (tipo "control", sin paciente); si no, al
+      // cerrar el formulario se abre el modal de detalles con esos datos por defecto
+      setSelectedcita(null)
+
     } catch (apiError: any) {
       const errorMsg = handleApiError(apiError)
       toast.error(`Error: ${errorMsg}`)
