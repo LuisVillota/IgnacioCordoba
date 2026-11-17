@@ -355,6 +355,26 @@ export async function generarPDFCotizacion(data: CotizacionData) {
 
     yPosition += terminos.length * 4 + 10
 
+    // Medios de pago
+    if (yPosition > pageHeight - margin - 40) {
+      doc.addPage()
+      agregarEncabezado(doc, data, pageWidth, margin, logoBase64)
+      yPosition = 50
+    }
+    addText('MEDIOS DE PAGO', 12, true, margin, 10, '#1a6b32')
+    yPosition += 2
+    doc.setFontSize(8)
+    doc.setTextColor(80, 80, 80)
+    const mediosPago = [
+      'Bancolombia - Cuenta Ahorros No. 71600007747',
+      'Hernán Ignacio Córdoba SAS - NIT 901982810-0',
+      'También puede pagar de forma presencial con tarjeta crédito, débito o efectivo.'
+    ]
+    mediosPago.forEach((linea, index) => {
+      doc.text(linea, margin + 5, yPosition + (index * 4))
+    })
+    yPosition += mediosPago.length * 4 + 10
+
     // Firmas
     const firmasY = Math.max(yPosition, pageHeight - 60)
     doc.setDrawColor(200, 200, 200)

@@ -2052,11 +2052,13 @@ export const transformBackendToFrontend = {
       }
     }
     
+    const tiposConocidos = [
+      "consulta", "control", "valoracion", "visitador_medico",
+      "valoracion_virtual", "control_virtual", "control_postquirurgico",
+    ];
     let tipoCompleto = "consulta";
     if (backendcita.tipo === "program_quir") tipoCompleto = "programacion_quirurgica";
-    else if (backendcita.tipo === "consulta") tipoCompleto = "consulta";
-    else if (backendcita.tipo === "control") tipoCompleto = "control";
-    else if (backendcita.tipo === "valoracion") tipoCompleto = "valoracion";
+    else if (tiposConocidos.includes(backendcita.tipo)) tipoCompleto = backendcita.tipo;
     
     let estadoNombre = "pendiente";
     if (backendcita.estado_id === 1) estadoNombre = "pendiente";

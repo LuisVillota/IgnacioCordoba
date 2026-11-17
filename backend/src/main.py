@@ -42,6 +42,12 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+@app.on_event("startup")
+def _migraciones_al_arrancar():
+    from app.core.migrations import ensure_cita_tipo_varchar
+    ensure_cita_tipo_varchar()
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
