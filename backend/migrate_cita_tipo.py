@@ -38,9 +38,8 @@ def main():
             print("Valores existentes:", cursor.fetchall())
 
             definicion = str(col["Type"]).lower()
-            if definicion.startswith("varchar") or definicion.startswith("text"):
-                print(f"\nLa columna ya es {col['Type']}; si el 500 persiste, la restricción "
-                      "es un CHECK. Revise: SHOW CREATE TABLE cita;")
+            if definicion.startswith("varchar(") and int(definicion[len("varchar("):-1]) >= 50:
+                print(f"\nLa columna ya es {col['Type']}; nada que hacer.")
                 return
 
             print(f"\nLa columna es {col['Type']}. Faltan valores permitidos; se convertirá a VARCHAR(50).")
